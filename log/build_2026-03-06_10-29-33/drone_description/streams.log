@@ -1,0 +1,59 @@
+[0.008s] Invoking command in '/home/j/INCSL/IICC26_ws/build/drone_description': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/j/INCSL/IICC26_ws/build/drone_description -- -j20 -l20
+[0.045s] [35m[1mConsolidate compiler generated dependencies of target plugin_wind[0m
+[0.063s] [ 66%] Built target plugin_drone
+[0.068s] [ 83%] [32mBuilding CXX object CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o[0m
+[12.739s] [100%] [32m[1mLinking CXX shared library /home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/plugins/libplugin_wind.so[0m
+[13.282s] [100%] Built target plugin_wind
+[13.288s] Invoked command in '/home/j/INCSL/IICC26_ws/build/drone_description' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/j/INCSL/IICC26_ws/build/drone_description -- -j20 -l20
+[13.294s] Invoking command in '/home/j/INCSL/IICC26_ws/build/drone_description': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/j/INCSL/IICC26_ws/build/drone_description
+[13.297s] -- Install configuration: ""
+[13.297s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include
+[13.297s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description
+[13.297s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/pid_controller.h
+[13.297s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_drone.h
+[13.298s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_wind.h
+[13.298s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_drone_private.h
+[13.298s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_drone.so
+[13.298s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so
+[13.304s] -- Set runtime path of "/home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so" to ""
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.sh
+[13.304s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.dsv
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.stl
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.dae
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/sjtu_drone.sdf
+[13.304s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/model.config
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/database.config
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/quadrotor_4.stl
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/quadrotor_4.dae
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/sjtu_drone.sdf
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/model.config
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf.xacro
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds/playground.world
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/package_run_dependencies/drone_description
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/parent_prefix_path/drone_description
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/ament_prefix_path.sh
+[13.305s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/ament_prefix_path.dsv
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/path.sh
+[13.305s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/path.dsv
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.bash
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.sh
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.zsh
+[13.305s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.dsv
+[13.305s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/package.dsv
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/packages/drone_description
+[13.305s] -- Old export file "/home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport.cmake" will be replaced.  Removing files [/home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport-noconfig.cmake].
+[13.305s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport.cmake
+[13.305s] -- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport-noconfig.cmake
+[13.305s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_include_directories-extras.cmake
+[13.306s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_libraries-extras.cmake
+[13.306s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_targets-extras.cmake
+[13.306s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/drone_descriptionConfig.cmake
+[13.306s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/drone_descriptionConfig-version.cmake
+[13.306s] -- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/package.xml
+[13.307s] Invoked command in '/home/j/INCSL/IICC26_ws/build/drone_description' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/j/INCSL/IICC26_ws/build/drone_description

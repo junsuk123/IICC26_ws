@@ -1,0 +1,146 @@
+[0.000000] (-) TimerEvent: {}
+[0.000085] (-) JobUnselected: {'identifier': 'drone'}
+[0.000099] (-) JobUnselected: {'identifier': 'sjtu_drone_control'}
+[0.000110] (drone_description) JobQueued: {'identifier': 'drone_description', 'dependencies': OrderedDict()}
+[0.000263] (drone_description) JobStarted: {'identifier': 'drone_description'}
+[0.004481] (drone_description) JobProgress: {'identifier': 'drone_description', 'progress': 'cmake'}
+[0.005045] (drone_description) JobProgress: {'identifier': 'drone_description', 'progress': 'build'}
+[0.005596] (drone_description) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/j/INCSL/IICC26_ws/build/drone_description', '--', '-j20', '-l20'], 'cwd': '/home/j/INCSL/IICC26_ws/build/drone_description', 'env': OrderedDict([('GJS_DEBUG_TOPICS', 'JS ERROR;JS LOG'), ('PYTHON_BASIC_REPL', '1'), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('LANGUAGE', 'ko:en'), ('USER', 'j'), ('LC_TIME', 'ko_KR.UTF-8'), ('FONTCONFIG_PATH', '/etc/fonts'), ('CCACHE_DIR', '/var/tmp/ccache'), ('GIO_MODULE_DIR', '/home/j/snap/code/common/.cache/gio-modules'), ('XDG_SESSION_TYPE', 'x11'), ('GIT_ASKPASS', '/snap/code/211/usr/share/code/resources/app/extensions/git/dist/askpass.sh'), ('GTK_EXE_PREFIX_VSCODE_SNAP_ORIG', ''), ('GDK_BACKEND_VSCODE_SNAP_ORIG', ''), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/usr/local/cuda-12.8/lib64:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/usr/local/cuda-12.8/lib64:'), ('HOME', '/home/j'), ('CHROME_DESKTOP', 'code.desktop'), ('CYCLONEDDS_URI', 'file:////home/j/cyclonedds.xml'), ('LOCPATH_VSCODE_SNAP_ORIG', ''), ('TERM_PROGRAM_VERSION', '1.105.1'), ('DESKTOP_SESSION', 'ubuntu'), ('GTK_PATH', '/snap/code/211/usr/lib/x86_64-linux-gnu/gtk-3.0'), ('NVM_BIN', '/home/j/.nvm/versions/node/v22.18.0/bin'), ('NVM_INC', '/home/j/.nvm/versions/node/v22.18.0/include/node'), ('XDG_DATA_HOME_VSCODE_SNAP_ORIG', ''), ('GTK_IM_MODULE_FILE', '/home/j/snap/code/common/.cache/immodules/immodules.cache'), ('GIO_LAUNCHED_DESKTOP_FILE', '/var/lib/snapd/desktop/applications/code_code.desktop'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('GSETTINGS_SCHEMA_DIR_VSCODE_SNAP_ORIG', ''), ('VSCODE_GIT_ASKPASS_MAIN', '/snap/code/211/usr/share/code/resources/app/extensions/git/dist/askpass-main.js'), ('LC_MONETARY', 'ko_KR.UTF-8'), ('VSCODE_GIT_ASKPASS_NODE', '/snap/code/211/usr/share/code/code'), ('MANAGERPID', '1207'), ('PYDEVD_DISABLE_FILE_VALIDATION', '1'), ('SYSTEMD_EXEC_PID', '3072'), ('BUNDLED_DEBUGPY_PATH', '/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/libs/debugpy'), ('VSCODE_PYTHON_AUTOACTIVATE_GUARD', '1'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1001/bus'), ('COLORTERM', 'truecolor'), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '4937'), ('NVM_DIR', '/home/j/.nvm'), ('IM_CONFIG_PHASE', '1'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'j'), ('JOURNAL_STREAM', '8:60670'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('XDG_SESSION_CLASS', 'user'), ('XDG_DATA_DIRS_VSCODE_SNAP_ORIG', '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('USERNAME', 'j'), ('TERM', 'xterm-256color'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/usr/src/tensorrt/bin:/usr/local/cuda-12.8/bin:/home/j/.local/bin:/usr/src/tensorrt/bin:/opt/ros/humble/bin:/usr/local/cuda-12.8/bin:/home/j/.nvm/versions/node/v22.18.0/bin:/home/j/.cargo/bin:/home/j/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/home/j/.local/bin:/home/j/.local/bin:/home/j/.local/bin:/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts:/home/j/.config/Code/User/globalStorage/github.copilot-chat/debugCommand:/home/j/.local/bin'), ('SESSION_MANAGER', 'local/j:@/tmp/.ICE-unix/3048,unix/j:/tmp/.ICE-unix/3048'), ('GTK_EXE_PREFIX', '/snap/code/211/usr'), ('INVOCATION_ID', 'b6c750c6bc464243ae1bf84ea5a799ae'), ('PAPERSIZE', 'a4'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'ko_KR.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1001'), ('GDK_BACKEND', 'x11'), ('DISPLAY', ':0'), ('LOCPATH', '/snap/code/211/usr/lib/locale'), ('VSCODE_DEBUGPY_ADAPTER_ENDPOINTS', '/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/.noConfigDebugAdapterEndpoints/endpoint-54f18cc83fbfc8df.txt'), ('LANG', 'ko_KR.UTF-8'), ('XDG_CURRENT_DESKTOP', 'Unity'), ('PYTHONSTARTUP', '/home/j/.config/Code/User/workspaceStorage/3d698e3c183c957157f764d83c195a23/ms-python.python/pythonrc.py'), ('LC_TELEPHONE', 'ko_KR.UTF-8'), ('RMW_IMPLEMENTATION', 'rmw_cyclonedds_cpp'), ('GIO_MODULE_DIR_VSCODE_SNAP_ORIG', ''), ('XDG_DATA_HOME', '/home/j/snap/code/211/.local/share'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1001/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('VSCODE_GIT_IPC_HANDLE', '/run/user/1001/vscode-git-19cacd70ad.sock'), ('TERM_PROGRAM', 'vscode'), ('SSH_AUTH_SOCK', '/run/user/1001/keyring/ssh'), ('GSETTINGS_SCHEMA_DIR', '/home/j/snap/code/211/.local/share/glib-2.0/schemas'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('ORIGINAL_XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('SHELL', '/bin/bash'), ('LC_NAME', 'ko_KR.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('CXX', '/usr/lib/ccache/g++'), ('GDMSESSION', 'ubuntu'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('GTK_PATH_VSCODE_SNAP_ORIG', ''), ('FONTCONFIG_FILE', '/etc/fonts/fonts.conf'), ('GTK_IM_MODULE_FILE_VSCODE_SNAP_ORIG', ''), ('LC_MEASUREMENT', 'ko_KR.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1001/gnupg/S.gpg-agent:0:1'), ('GJS_DEBUG_OUTPUT', 'stderr'), ('LC_IDENTIFICATION', 'ko_KR.UTF-8'), ('VSCODE_GIT_ASKPASS_EXTRA_ARGS', ''), ('GIT_PAGER', 'cat'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/j/INCSL/IICC26_ws/build/drone_description'), ('LC_ALL', 'en_US.UTF-8'), ('CUDA_HOME', '/usr/local/cuda-12.8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('NVM_CD_FLAGS', ''), ('XDG_DATA_DIRS', '/home/j/snap/code/211/.local/share:/home/j/snap/code/211:/snap/code/211/usr/share:/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'ko_KR.UTF-8'), ('LC_PAPER', 'ko_KR.UTF-8'), ('CC', '/usr/lib/ccache/gcc'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.033083] (drone_description) StdoutLine: {'line': b'\x1b[35m\x1b[1mConsolidate compiler generated dependencies of target plugin_wind\x1b[0m\n'}
+[0.036261] (drone_description) StdoutLine: {'line': b'\x1b[35m\x1b[1mConsolidate compiler generated dependencies of target plugin_drone\x1b[0m\n'}
+[0.055037] (drone_description) StdoutLine: {'line': b'[ 16%] \x1b[32mBuilding CXX object CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o\x1b[0m\n'}
+[0.071154] (drone_description) StdoutLine: {'line': b'[ 83%] Built target plugin_drone\n'}
+[0.099778] (-) TimerEvent: {}
+[0.200034] (-) TimerEvent: {}
+[0.300386] (-) TimerEvent: {}
+[0.400701] (-) TimerEvent: {}
+[0.501020] (-) TimerEvent: {}
+[0.601379] (-) TimerEvent: {}
+[0.701693] (-) TimerEvent: {}
+[0.802100] (-) TimerEvent: {}
+[0.902436] (-) TimerEvent: {}
+[1.002803] (-) TimerEvent: {}
+[1.103210] (-) TimerEvent: {}
+[1.203485] (-) TimerEvent: {}
+[1.303813] (-) TimerEvent: {}
+[1.404122] (-) TimerEvent: {}
+[1.504419] (-) TimerEvent: {}
+[1.604785] (-) TimerEvent: {}
+[1.705051] (-) TimerEvent: {}
+[1.805345] (-) TimerEvent: {}
+[1.905622] (-) TimerEvent: {}
+[2.005880] (-) TimerEvent: {}
+[2.106173] (-) TimerEvent: {}
+[2.206509] (-) TimerEvent: {}
+[2.306840] (-) TimerEvent: {}
+[2.407103] (-) TimerEvent: {}
+[2.507410] (-) TimerEvent: {}
+[2.607754] (-) TimerEvent: {}
+[2.708060] (-) TimerEvent: {}
+[2.808313] (-) TimerEvent: {}
+[2.908606] (-) TimerEvent: {}
+[3.008870] (-) TimerEvent: {}
+[3.109149] (-) TimerEvent: {}
+[3.209517] (-) TimerEvent: {}
+[3.309855] (-) TimerEvent: {}
+[3.410112] (-) TimerEvent: {}
+[3.510475] (-) TimerEvent: {}
+[3.610782] (-) TimerEvent: {}
+[3.711113] (-) TimerEvent: {}
+[3.811478] (-) TimerEvent: {}
+[3.911797] (-) TimerEvent: {}
+[4.012147] (-) TimerEvent: {}
+[4.112471] (-) TimerEvent: {}
+[4.212844] (-) TimerEvent: {}
+[4.313125] (-) TimerEvent: {}
+[4.413410] (-) TimerEvent: {}
+[4.513690] (-) TimerEvent: {}
+[4.614019] (-) TimerEvent: {}
+[4.714339] (-) TimerEvent: {}
+[4.814694] (-) TimerEvent: {}
+[4.915016] (-) TimerEvent: {}
+[5.015316] (-) TimerEvent: {}
+[5.115644] (-) TimerEvent: {}
+[5.215918] (-) TimerEvent: {}
+[5.316212] (-) TimerEvent: {}
+[5.416526] (-) TimerEvent: {}
+[5.516855] (-) TimerEvent: {}
+[5.617184] (-) TimerEvent: {}
+[5.717448] (-) TimerEvent: {}
+[5.817719] (-) TimerEvent: {}
+[5.918036] (-) TimerEvent: {}
+[6.018299] (-) TimerEvent: {}
+[6.118610] (-) TimerEvent: {}
+[6.218946] (-) TimerEvent: {}
+[6.319228] (-) TimerEvent: {}
+[6.419499] (-) TimerEvent: {}
+[6.519876] (-) TimerEvent: {}
+[6.620219] (-) TimerEvent: {}
+[6.720480] (-) TimerEvent: {}
+[6.820812] (-) TimerEvent: {}
+[6.921026] (-) TimerEvent: {}
+[7.021253] (-) TimerEvent: {}
+[7.121567] (-) TimerEvent: {}
+[7.221896] (-) TimerEvent: {}
+[7.322217] (-) TimerEvent: {}
+[7.410388] (drone_description) StdoutLine: {'line': b'[100%] \x1b[32m\x1b[1mLinking CXX shared library /home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/plugins/libplugin_wind.so\x1b[0m\n'}
+[7.422295] (-) TimerEvent: {}
+[7.522574] (-) TimerEvent: {}
+[7.622922] (-) TimerEvent: {}
+[7.645712] (drone_description) StdoutLine: {'line': b'[100%] Built target plugin_wind\n'}
+[7.652488] (drone_description) CommandEnded: {'returncode': 0}
+[7.653388] (drone_description) JobProgress: {'identifier': 'drone_description', 'progress': 'install'}
+[7.658573] (drone_description) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/j/INCSL/IICC26_ws/build/drone_description'], 'cwd': '/home/j/INCSL/IICC26_ws/build/drone_description', 'env': OrderedDict([('GJS_DEBUG_TOPICS', 'JS ERROR;JS LOG'), ('PYTHON_BASIC_REPL', '1'), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('LANGUAGE', 'ko:en'), ('USER', 'j'), ('LC_TIME', 'ko_KR.UTF-8'), ('FONTCONFIG_PATH', '/etc/fonts'), ('CCACHE_DIR', '/var/tmp/ccache'), ('GIO_MODULE_DIR', '/home/j/snap/code/common/.cache/gio-modules'), ('XDG_SESSION_TYPE', 'x11'), ('GIT_ASKPASS', '/snap/code/211/usr/share/code/resources/app/extensions/git/dist/askpass.sh'), ('GTK_EXE_PREFIX_VSCODE_SNAP_ORIG', ''), ('GDK_BACKEND_VSCODE_SNAP_ORIG', ''), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/usr/local/cuda-12.8/lib64:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/usr/local/cuda-12.8/lib64:'), ('HOME', '/home/j'), ('CHROME_DESKTOP', 'code.desktop'), ('CYCLONEDDS_URI', 'file:////home/j/cyclonedds.xml'), ('LOCPATH_VSCODE_SNAP_ORIG', ''), ('TERM_PROGRAM_VERSION', '1.105.1'), ('DESKTOP_SESSION', 'ubuntu'), ('GTK_PATH', '/snap/code/211/usr/lib/x86_64-linux-gnu/gtk-3.0'), ('NVM_BIN', '/home/j/.nvm/versions/node/v22.18.0/bin'), ('NVM_INC', '/home/j/.nvm/versions/node/v22.18.0/include/node'), ('XDG_DATA_HOME_VSCODE_SNAP_ORIG', ''), ('GTK_IM_MODULE_FILE', '/home/j/snap/code/common/.cache/immodules/immodules.cache'), ('GIO_LAUNCHED_DESKTOP_FILE', '/var/lib/snapd/desktop/applications/code_code.desktop'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('GSETTINGS_SCHEMA_DIR_VSCODE_SNAP_ORIG', ''), ('VSCODE_GIT_ASKPASS_MAIN', '/snap/code/211/usr/share/code/resources/app/extensions/git/dist/askpass-main.js'), ('LC_MONETARY', 'ko_KR.UTF-8'), ('VSCODE_GIT_ASKPASS_NODE', '/snap/code/211/usr/share/code/code'), ('MANAGERPID', '1207'), ('PYDEVD_DISABLE_FILE_VALIDATION', '1'), ('SYSTEMD_EXEC_PID', '3072'), ('BUNDLED_DEBUGPY_PATH', '/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/libs/debugpy'), ('VSCODE_PYTHON_AUTOACTIVATE_GUARD', '1'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1001/bus'), ('COLORTERM', 'truecolor'), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '4937'), ('NVM_DIR', '/home/j/.nvm'), ('IM_CONFIG_PHASE', '1'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'j'), ('JOURNAL_STREAM', '8:60670'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('XDG_SESSION_CLASS', 'user'), ('XDG_DATA_DIRS_VSCODE_SNAP_ORIG', '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('USERNAME', 'j'), ('TERM', 'xterm-256color'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/usr/src/tensorrt/bin:/usr/local/cuda-12.8/bin:/home/j/.local/bin:/usr/src/tensorrt/bin:/opt/ros/humble/bin:/usr/local/cuda-12.8/bin:/home/j/.nvm/versions/node/v22.18.0/bin:/home/j/.cargo/bin:/home/j/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/home/j/.local/bin:/home/j/.local/bin:/home/j/.local/bin:/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts:/home/j/.config/Code/User/globalStorage/github.copilot-chat/debugCommand:/home/j/.local/bin'), ('SESSION_MANAGER', 'local/j:@/tmp/.ICE-unix/3048,unix/j:/tmp/.ICE-unix/3048'), ('GTK_EXE_PREFIX', '/snap/code/211/usr'), ('INVOCATION_ID', 'b6c750c6bc464243ae1bf84ea5a799ae'), ('PAPERSIZE', 'a4'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'ko_KR.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1001'), ('GDK_BACKEND', 'x11'), ('DISPLAY', ':0'), ('LOCPATH', '/snap/code/211/usr/lib/locale'), ('VSCODE_DEBUGPY_ADAPTER_ENDPOINTS', '/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/.noConfigDebugAdapterEndpoints/endpoint-54f18cc83fbfc8df.txt'), ('LANG', 'ko_KR.UTF-8'), ('XDG_CURRENT_DESKTOP', 'Unity'), ('PYTHONSTARTUP', '/home/j/.config/Code/User/workspaceStorage/3d698e3c183c957157f764d83c195a23/ms-python.python/pythonrc.py'), ('LC_TELEPHONE', 'ko_KR.UTF-8'), ('RMW_IMPLEMENTATION', 'rmw_cyclonedds_cpp'), ('GIO_MODULE_DIR_VSCODE_SNAP_ORIG', ''), ('XDG_DATA_HOME', '/home/j/snap/code/211/.local/share'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1001/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('VSCODE_GIT_IPC_HANDLE', '/run/user/1001/vscode-git-19cacd70ad.sock'), ('TERM_PROGRAM', 'vscode'), ('SSH_AUTH_SOCK', '/run/user/1001/keyring/ssh'), ('GSETTINGS_SCHEMA_DIR', '/home/j/snap/code/211/.local/share/glib-2.0/schemas'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('ORIGINAL_XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('SHELL', '/bin/bash'), ('LC_NAME', 'ko_KR.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('CXX', '/usr/lib/ccache/g++'), ('GDMSESSION', 'ubuntu'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('GTK_PATH_VSCODE_SNAP_ORIG', ''), ('FONTCONFIG_FILE', '/etc/fonts/fonts.conf'), ('GTK_IM_MODULE_FILE_VSCODE_SNAP_ORIG', ''), ('LC_MEASUREMENT', 'ko_KR.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1001/gnupg/S.gpg-agent:0:1'), ('GJS_DEBUG_OUTPUT', 'stderr'), ('LC_IDENTIFICATION', 'ko_KR.UTF-8'), ('VSCODE_GIT_ASKPASS_EXTRA_ARGS', ''), ('GIT_PAGER', 'cat'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/j/INCSL/IICC26_ws/build/drone_description'), ('LC_ALL', 'en_US.UTF-8'), ('CUDA_HOME', '/usr/local/cuda-12.8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('NVM_CD_FLAGS', ''), ('XDG_DATA_DIRS', '/home/j/snap/code/211/.local/share:/home/j/snap/code/211:/snap/code/211/usr/share:/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'ko_KR.UTF-8'), ('LC_PAPER', 'ko_KR.UTF-8'), ('CC', '/usr/lib/ccache/gcc'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[7.662705] (drone_description) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[7.662783] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include\n'}
+[7.662814] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description\n'}
+[7.662858] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/pid_controller.h\n'}
+[7.662887] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_drone.h\n'}
+[7.662942] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_wind.h\n'}
+[7.662971] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_drone_private.h\n'}
+[7.663026] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_drone.so\n'}
+[7.673162] (drone_description) StdoutLine: {'line': b'-- Set runtime path of "/home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_drone.so" to ""\n'}
+[7.673241] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so\n'}
+[7.674310] (drone_description) StdoutLine: {'line': b'-- Set runtime path of "/home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so" to ""\n'}
+[7.674401] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.sh\n'}
+[7.674438] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.dsv\n'}
+[7.674470] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models\n'}
+[7.674502] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone\n'}
+[7.674556] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.stl\n'}
+[7.674585] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.dae\n'}
+[7.674638] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/sjtu_drone.sdf\n'}
+[7.674700] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/model.config\n'}
+[7.674729] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/database.config\n'}
+[7.674758] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone\n'}
+[7.674796] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/quadrotor_4.stl\n'}
+[7.674863] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/quadrotor_4.dae\n'}
+[7.674963] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/sjtu_drone.sdf\n'}
+[7.674998] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/model.config\n'}
+[7.675025] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf\n'}
+[7.675066] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf\n'}
+[7.675097] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf.xacro\n'}
+[7.675130] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds\n'}
+[7.675163] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds/playground.world\n'}
+[7.675254] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/package_run_dependencies/drone_description\n'}
+[7.675324] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/parent_prefix_path/drone_description\n'}
+[7.675377] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/ament_prefix_path.sh\n'}
+[7.675427] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/ament_prefix_path.dsv\n'}
+[7.675477] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/path.sh\n'}
+[7.675526] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/path.dsv\n'}
+[7.675580] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.bash\n'}
+[7.675635] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.sh\n'}
+[7.675686] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.zsh\n'}
+[7.675732] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.dsv\n'}
+[7.675779] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/package.dsv\n'}
+[7.675860] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/packages/drone_description\n'}
+[7.675930] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport.cmake\n'}
+[7.676002] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport-noconfig.cmake\n'}
+[7.676059] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_include_directories-extras.cmake\n'}
+[7.676112] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_libraries-extras.cmake\n'}
+[7.676166] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_targets-extras.cmake\n'}
+[7.676217] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/drone_descriptionConfig.cmake\n'}
+[7.676257] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/drone_descriptionConfig-version.cmake\n'}
+[7.676307] (drone_description) StdoutLine: {'line': b'-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/package.xml\n'}
+[7.677305] (drone_description) CommandEnded: {'returncode': 0}
+[7.686419] (drone_description) JobEnded: {'identifier': 'drone_description', 'rc': 0}
+[7.686759] (-) EventReactorShutdown: {}

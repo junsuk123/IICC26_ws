@@ -1,0 +1,4 @@
+Invoking command in '/home/j/INCSL/IICC26_ws/build/drone_description': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description -DCMAKE_INSTALL_PREFIX=/home/j/INCSL/IICC26_ws/install/drone_description
+Invoked command in '/home/j/INCSL/IICC26_ws/build/drone_description' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description -DCMAKE_INSTALL_PREFIX=/home/j/INCSL/IICC26_ws/install/drone_description
+Invoking command in '/home/j/INCSL/IICC26_ws/build/drone_description': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/j/INCSL/IICC26_ws/build/drone_description -- -j20 -l20
+Invoked command in '/home/j/INCSL/IICC26_ws/build/drone_description' returned '2': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/j/INCSL/IICC26_ws/build/drone_description -- -j20 -l20

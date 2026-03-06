@@ -1,0 +1,103 @@
+[0.006s] Invoking command in '/home/j/INCSL/IICC26_ws/build/drone_description': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/j/INCSL/IICC26_ws/build/drone_description -- -j20 -l20
+[0.025s] -- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.094s] -- Found ament_cmake_ros: 0.10.0 (/opt/ros/humble/share/ament_cmake_ros/cmake)
+[0.095s] -- Found rclcpp: 16.0.14 (/opt/ros/humble/share/rclcpp/cmake)
+[0.112s] -- Found rosidl_generator_c: 3.1.7 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.113s] -- Found rosidl_adapter: 3.1.7 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.116s] -- Found rosidl_generator_cpp: 3.1.7 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.121s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.127s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.144s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.144s] -- Found rmw_cyclonedds_cpp: 1.3.4 (/opt/ros/humble/share/rmw_cyclonedds_cpp/cmake)
+[0.153s] -- Using RMW implementation 'rmw_cyclonedds_cpp' as default
+[0.178s] -- Found gazebo_ros: 3.9.0 (/opt/ros/humble/share/gazebo_ros/cmake)
+[0.195s] -- Found DART: /usr/include (Required is at least version "6.6") found components: dart 
+[0.209s] -- Found Protobuf: /usr/lib/x86_64-linux-gnu/libprotobuf.so (found version "3.12.4") 
+[0.210s] -- Looking for ignition-math6 -- found version 6.15.1
+[0.213s] -- Searching for dependencies of ignition-math6
+[0.213s] -- Looking for OGRE...
+[0.217s] -- Found Ogre Ghadamon (1.9.0)
+[0.222s] -- Looking for OGRE_Paging...
+[0.222s] -- Found OGRE_Paging: optimized;/usr/lib/x86_64-linux-gnu/libOgrePaging.so;debug;/usr/lib/x86_64-linux-gnu/libOgrePaging.so
+[0.222s] -- Looking for OGRE_Terrain...
+[0.222s] -- Found OGRE_Terrain: optimized;/usr/lib/x86_64-linux-gnu/libOgreTerrain.so;debug;/usr/lib/x86_64-linux-gnu/libOgreTerrain.so
+[0.222s] -- Looking for OGRE_Property...
+[0.222s] -- Found OGRE_Property: optimized;/usr/lib/x86_64-linux-gnu/libOgreProperty.so;debug;/usr/lib/x86_64-linux-gnu/libOgreProperty.so
+[0.222s] -- Looking for OGRE_RTShaderSystem...
+[0.222s] -- Found OGRE_RTShaderSystem: optimized;/usr/lib/x86_64-linux-gnu/libOgreRTShaderSystem.so;debug;/usr/lib/x86_64-linux-gnu/libOgreRTShaderSystem.so
+[0.222s] -- Looking for OGRE_Volume...
+[0.222s] -- Found OGRE_Volume: optimized;/usr/lib/x86_64-linux-gnu/libOgreVolume.so;debug;/usr/lib/x86_64-linux-gnu/libOgreVolume.so
+[0.223s] -- Looking for OGRE_Overlay...
+[0.223s] -- Found OGRE_Overlay: optimized;/usr/lib/x86_64-linux-gnu/libOgreOverlay.so;debug;/usr/lib/x86_64-linux-gnu/libOgreOverlay.so
+[0.284s] -- Looking for ignition-math6 -- found version 6.15.1
+[0.284s] -- Looking for ignition-transport8 -- found version 8.2.1
+[0.285s] -- Searching for dependencies of ignition-transport8
+[0.295s] -- Found Protobuf: /usr/lib/x86_64-linux-gnu/libprotobuf.so (found suitable version "3.12.4", minimum required is "3") 
+[0.301s] -- Config-file not installed for ZeroMQ -- checking for pkg-config
+[0.304s] -- Checking for module 'libzmq >= 4'
+[0.310s] --   Found libzmq , version 4.3.4
+[0.331s] -- Checking for module 'uuid'
+[0.337s] --   Found uuid, version 2.37.2
+[0.352s] -- Looking for ignition-msgs5 -- found version 5.8.1
+[0.353s] -- Searching for dependencies of ignition-msgs5
+[0.364s] -- Looking for ignition-math6 -- found version 6.15.1
+[0.366s] -- Checking for module 'tinyxml2'
+[0.373s] --   Found tinyxml2, version 9.0.0
+[0.388s] -- Looking for ignition-msgs5 -- found version 5.8.1
+[0.389s] -- Looking for ignition-common3 -- found version 3.14.0
+[0.389s] -- Searching for dependencies of ignition-common3
+[0.389s] -- Looking for dlfcn.h - found
+[0.389s] -- Looking for libdl - found
+[0.396s] -- Searching for <ignition-common3> component [graphics]
+[0.396s] -- Looking for ignition-common3-graphics -- found version 3.14.0
+[0.396s] -- Searching for dependencies of ignition-common3-graphics
+[0.396s] -- Looking for ignition-math6 -- found version 6.15.1
+[0.397s] -- Looking for ignition-fuel_tools4 -- found version 4.4.0
+[0.397s] -- Searching for dependencies of ignition-fuel_tools4
+[0.418s] -- Checking for module 'jsoncpp'
+[0.424s] --   Found jsoncpp, version 1.9.5
+[0.442s] -- Checking for module 'libzip'
+[0.448s] --   Found libzip, version 1.7.3
+[0.464s] -- Looking for ignition-common3 -- found version 3.14.0
+[0.464s] -- Looking for ignition-math6 -- found version 6.15.1
+[0.464s] -- Looking for ignition-msgs5 -- found version 5.8.1
+[0.465s] -- Gazebo version: 11.10
+[0.466s] -- Found gazebo_plugins: 3.9.0 (/opt/ros/humble/share/gazebo_plugins/cmake)
+[0.495s] -- Found sensor_msgs: 4.9.0 (/opt/ros/humble/share/sensor_msgs/cmake)
+[0.504s] -- Found nav_msgs: 4.9.0 (/opt/ros/humble/share/nav_msgs/cmake)
+[0.512s] -- Found tf2: 0.25.16 (/opt/ros/humble/share/tf2/cmake)
+[0.514s] -- Found tf2_ros: 0.25.16 (/opt/ros/humble/share/tf2_ros/cmake)
+[0.554s] -- Found tf2_geometry_msgs: 0.25.16 (/opt/ros/humble/share/tf2_geometry_msgs/cmake)
+[0.556s] -- Found eigen3_cmake_module: 0.1.1 (/opt/ros/humble/share/eigen3_cmake_module/cmake)
+[0.557s] -- Ensuring Eigen3 include directory is part of orocos-kdl CMake target
+[0.562s] -- Found ament_lint_auto: 0.12.14 (/opt/ros/humble/share/ament_lint_auto/cmake)
+[0.605s] -- Added test 'cppcheck' to perform static code analysis on C / C++ code
+[0.605s] -- Configured cppcheck include dirs: /home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include;$<BUILD_INTERFACE:/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include>
+[0.605s] -- Configured cppcheck exclude dirs and/or files: 
+[0.606s] -- Added test 'lint_cmake' to check CMake code style
+[0.607s] -- Added test 'uncrustify' to check C / C++ code style
+[0.607s] -- Configured uncrustify additional arguments: 
+[0.607s] -- Added test 'xmllint' to check XML markup files
+[0.608s] -- Configuring done
+[0.638s] -- Generating done
+[0.642s] -- Build files have been written to: /home/j/INCSL/IICC26_ws/build/drone_description
+[0.662s] [35m[1mConsolidate compiler generated dependencies of target plugin_wind[0m
+[0.665s] [35m[1mConsolidate compiler generated dependencies of target plugin_drone[0m
+[0.683s] [ 16%] [32mBuilding CXX object CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o[0m
+[0.697s] [ 83%] Built target plugin_drone
+[9.664s] [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In destructor ‘[01m[Kvirtual sjtu_drone_description::WindPlugin::~WindPlugin()[m[K’:
+[9.665s] [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:30:7:[m[K [01;31m[Kerror: [m[K‘[01m[KrosRunning_[m[K’ was not declared in this scope
+[9.665s]    30 |       [01;31m[KrosRunning_[m[K.store(false);
+[9.665s]       |       [01;31m[K^~~~~~~~~~~[m[K
+[9.665s] [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In member function ‘[01m[Kvirtual void sjtu_drone_description::WindPlugin::Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[9.665s] [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:121:3:[m[K [01;31m[Kerror: [m[K‘[01m[KrosRunning_[m[K’ was not declared in this scope
+[9.665s]   121 |   [01;31m[KrosRunning_[m[K.store(true);
+[9.665s]       |   [01;31m[K^~~~~~~~~~~[m[K
+[9.665s] [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[9.665s] [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:123:18:[m[K [01;31m[Kerror: [m[K‘[01m[Kclass sjtu_drone_description::WindPlugin[m[K’ has no member named ‘[01m[KrosRunning_[m[K’
+[9.665s]   123 |     while (this->[01;31m[KrosRunning_[m[K.load())
+[9.665s]       |                  [01;31m[K^~~~~~~~~~~[m[K
+[9.666s] gmake[2]: *** [CMakeFiles/plugin_wind.dir/build.make:76: CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o] 오류 1
+[9.667s] gmake[1]: *** [CMakeFiles/Makefile2:165: CMakeFiles/plugin_wind.dir/all] 오류 2
+[9.667s] gmake: *** [Makefile:146: all] 오류 2
+[9.669s] Invoked command in '/home/j/INCSL/IICC26_ws/build/drone_description' returned '2': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/j/INCSL/IICC26_ws/build/drone_description -- -j20 -l20

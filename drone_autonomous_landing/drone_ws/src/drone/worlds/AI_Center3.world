@@ -9,5 +9,22 @@
       <uri>model://sun</uri>
     </include>
     <!-- 환경 요소, 오브젝트, 조명 등 필요시 추가 -->
+
+    <!-- Wind plugin: configurable from the world file -->
+    <plugin name="wind_plugin" filename="libplugin_wind.so">
+      <mean_wind>
+        <x>2.0</x>
+        <y>0.0</y>
+        <z>0.0</z>
+      </mean_wind>
+      <!-- gust standard deviation (m/s) -->
+      <gust_std>0.5</gust_std>
+      <!-- air properties and aerodynamic defaults -->
+      <air_density>1.225</air_density>
+      <drag_coef>1.0</drag_coef>
+      <area>0.5</area>
+      <!-- update rate for wind sampling -->
+      <update_rate>20.0</update_rate>
+    </plugin>
   </world>
 </sdf>

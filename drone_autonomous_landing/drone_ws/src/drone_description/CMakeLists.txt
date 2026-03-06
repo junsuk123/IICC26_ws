@@ -15,6 +15,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 find_package(gazebo_ros REQUIRED)
 find_package(gazebo_plugins REQUIRED)
 find_package(gazebo_dev REQUIRED)
@@ -102,6 +103,41 @@ set_target_properties(plugin_drone
     ${PROJECT_SOURCE_DIR}/plugins
 )
 
+################## 3. Wind world plugin #####################################
+add_library( plugin_wind SHARED
+  src/plugin_wind.cpp
+  include/sjtu_drone_description/plugin_wind.h
+)
+
+target_compile_features(plugin_wind PUBLIC cxx_std_17)
+target_include_directories(plugin_wind PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(plugin_wind
+  "gazebo_ros"
+  "gazebo_plugins"
+  "gazebo_dev"
+  "rclcpp"
+  "geometry_msgs"
+  "std_msgs"
+)
+
+target_compile_definitions(plugin_wind PRIVATE "SJTU_DRONE_BUILDING_LIBRARY")
+
+install(
+  TARGETS plugin_wind
+  EXPORT export_${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
+set_target_properties(plugin_wind
+    PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY
+    ${PROJECT_SOURCE_DIR}/plugins
+)
+
 ament_export_include_directories(
   include
 )
@@ -117,4 +153,13 @@ install(
   DIRECTORY models urdf worlds
   DESTINATION share/${PROJECT_NAME}
 )
+
+# Generate services
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/SetWind.srv"
+  "srv/GetWind.srv"
+  DEPENDENCIES geometry_msgs std_msgs
+)
+
+ament_export_dependencies(geometry_msgs std_msgs)
 ament_package()

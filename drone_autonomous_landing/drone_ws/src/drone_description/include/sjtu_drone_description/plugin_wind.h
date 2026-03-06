@@ -11,6 +11,10 @@
 #include <geometry_msgs/msg/vector3.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <atomic>
+#include <unordered_map>
+#include <string>
+#include <vector>
+#include <thread>
 
 namespace sjtu_drone_description
 {
@@ -55,9 +59,10 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr meanSub_;
   rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr gustSub_;
   std::atomic<bool> rosRunning_{false};
-  // services
-  rclcpp::Service<drone_description::srv::SetWind>::SharedPtr setService_;
-  rclcpp::Service<drone_description::srv::GetWind>::SharedPtr getService_;
+  // parameter callback handle and per-model subscriptions
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr rosParamCbHandle_;
+  std::vector<rclcpp::Subscription<geometry_msgs::msg::Vector3>::SharedPtr> perModelMeanSubs_;
+  std::vector<rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr> perModelGustSubs_;
 };
 
 } // namespace sjtu_drone_description

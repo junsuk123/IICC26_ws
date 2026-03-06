@@ -1,0 +1,340 @@
+[ 16%] [32mBuilding CXX object CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o[0m
+[ 83%] Built target plugin_drone
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:15:1:[m[K [01;31m[Kerror: [m[K‘[01m[KWindPlugin[m[K’ does not name a type
+   15 | [01;31m[KWindPlugin[m[K::WindPlugin()
+      | [01;31m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:16:31:[m[K [01;31m[Kerror: [m[Kexpected unqualified-id before ‘[01m[K)[m[K’ token
+   16 |   : rng_(std::random_device{}([01;31m[K)[m[K), gustDist_(0.0, 1.0)
+      |                               [01;31m[K^[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:20:1:[m[K [01;31m[Kerror: [m[K‘[01m[KWindPlugin[m[K’ does not name a type
+   20 | [01;31m[KWindPlugin[m[K::~WindPlugin()
+      | [01;31m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:41:6:[m[K [01;31m[Kerror: [m[K‘[01m[KWindPlugin[m[K’ has not been declared
+   41 | void [01;31m[KWindPlugin[m[K::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)
+      |      [01;31m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:43:3:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   43 |   [01;31m[Kthis[m[K->world_ = _world;
+      |   [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:48:5:[m[K [01;31m[Kerror: [m[K‘[01m[KmeanWind_[m[K’ was not declared in this scope
+   48 |     [01;31m[KmeanWind_[m[K.X(el->Get<double>("x"));
+      |     [01;31m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:53:5:[m[K [01;31m[Kerror: [m[K‘[01m[KgustStd_[m[K’ was not declared in this scope
+   53 |     [01;31m[KgustStd_[m[K = _sdf->Get<double>("gust_std");
+      |     [01;31m[K^~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:55:5:[m[K [01;31m[Kerror: [m[K‘[01m[KairDensity_[m[K’ was not declared in this scope
+   55 |     [01;31m[KairDensity_[m[K = _sdf->Get<double>("air_density");
+      |     [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:57:5:[m[K [01;31m[Kerror: [m[K‘[01m[KdragCoef_[m[K’ was not declared in this scope
+   57 |     [01;31m[KdragCoef_[m[K = _sdf->Get<double>("drag_coef");
+      |     [01;31m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:59:5:[m[K [01;31m[Kerror: [m[K‘[01m[Karea_[m[K’ was not declared in this scope
+   59 |     [01;31m[Karea_[m[K = _sdf->Get<double>("area");
+      |     [01;31m[K^~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:61:5:[m[K [01;31m[Kerror: [m[K‘[01m[KupdateRate_[m[K’ was not declared in this scope
+   61 |     [01;31m[KupdateRate_[m[K = _sdf->Get<double>("update_rate");
+      |     [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:63:3:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   63 |   [01;31m[Kthis[m[K->lastUpdate_ = this->world_->SimTime();
+      |   [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:63:23:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   63 |   this->lastUpdate_ = [01;31m[Kthis[m[K->world_->SimTime();
+      |                       [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:66:3:[m[K [01;31m[Kerror: [m[K‘[01m[KupdateConn_[m[K’ was not declared in this scope
+   66 |   [01;31m[KupdateConn_[m[K = gazebo::event::Events::ConnectWorldUpdateBegin(
+      |   [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:67:18:[m[K [01;31m[Kerror: [m[K‘[01m[KWindPlugin[m[K’ has not been declared
+   67 |       std::bind(&[01;31m[KWindPlugin[m[K::OnUpdate, this));
+      |                  [01;31m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:67:40:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   67 |       std::bind(&WindPlugin::OnUpdate, [01;31m[Kthis[m[K));
+      |                                        [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:70:18:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   70 |   for (auto &m : [01;31m[Kthis[m[K->world_->Models())
+      |                  [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:75:21:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   75 |       double area = [01;31m[Kthis[m[K->area_;
+      |                     [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:76:21:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+   76 |       double drag = [01;31m[Kthis[m[K->dragCoef_;
+      |                     [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:89:7:[m[K [01;31m[Kerror: [m[K‘[01m[KlinkAeroMap_[m[K’ was not declared in this scope
+   89 |       [01;31m[KlinkAeroMap_[m[K[link->GetScopedName()] = {area, drag};
+      |       [01;31m[K^~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:98:3:[m[K [01;31m[Kerror: [m[K‘[01m[KrosNode_[m[K’ was not declared in this scope
+   98 |   [01;31m[KrosNode_[m[K = std::make_shared<rclcpp::Node>("wind_plugin_node");
+      |   [01;31m[K^~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:99:3:[m[K [01;31m[Kerror: [m[K‘[01m[KmeanSub_[m[K’ was not declared in this scope
+   99 |   [01;31m[KmeanSub_[m[K = rosNode_->create_subscription<geometry_msgs::msg::Vector3>(
+      |   [01;31m[K^~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:99:71:[m[K [01;31m[Kerror: [m[Kexpected primary-expression before ‘[01m[K>[m[K’ token
+   99 |   meanSub_ = rosNode_->create_subscription<geometry_msgs::msg::Vector3[01;31m[K>[m[K(
+      |                                                                       [01;31m[K^[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:100:7:[m[K [01;35m[Kwarning: [m[Kleft operand of comma operator has no effect [[01;35m[K-Wunused-value[m[K]
+  100 |       [01;35m[K"/wind/mean"[m[K, rclcpp::SystemDefaultsQoS(),
+      |       [01;35m[K^~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:101:8:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  101 |       [[01;31m[Kthis[m[K](const geometry_msgs::msg::Vector3::SharedPtr msg)
+      |        [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:103:9:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  103 |         [01;31m[Kthis[m[K->meanWind_.X(msg->x);
+      |         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:104:9:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  104 |         [01;31m[Kthis[m[K->meanWind_.Y(msg->y);
+      |         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:105:9:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  105 |         [01;31m[Kthis[m[K->meanWind_.Z(msg->z);
+      |         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:106:63:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  106 |         gzmsg << "WindPlugin: updated mean wind via ROS: " << [01;31m[Kthis[m[K->meanWind_ << std::endl;
+      |                                                               [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:109:3:[m[K [01;31m[Kerror: [m[K‘[01m[KgustSub_[m[K’ was not declared in this scope
+  109 |   [01;31m[KgustSub_[m[K = rosNode_->create_subscription<std_msgs::msg::Float64>(
+      |   [01;31m[K^~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:109:66:[m[K [01;31m[Kerror: [m[Kexpected primary-expression before ‘[01m[K>[m[K’ token
+  109 |   gustSub_ = rosNode_->create_subscription<std_msgs::msg::Float64[01;31m[K>[m[K(
+      |                                                                  [01;31m[K^[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:110:7:[m[K [01;35m[Kwarning: [m[Kleft operand of comma operator has no effect [[01;35m[K-Wunused-value[m[K]
+  110 |       [01;35m[K"/wind/gust_std"[m[K, rclcpp::SystemDefaultsQoS(),
+      |       [01;35m[K^~~~~~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:111:8:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  111 |       [[01;31m[Kthis[m[K](const std_msgs::msg::Float64::SharedPtr msg)
+      |        [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:113:9:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  113 |         [01;31m[Kthis[m[K->gustStd_ = msg->data;
+      |         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:114:62:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  114 |         gzmsg << "WindPlugin: updated gust_std via ROS: " << [01;31m[Kthis[m[K->gustStd_ << std::endl;
+      |                                                              [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:118:46:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  118 |   rosNode_->declare_parameter("mean_wind.x", [01;31m[Kthis[m[K->meanWind_.X());
+      |                                              [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:119:46:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  119 |   rosNode_->declare_parameter("mean_wind.y", [01;31m[Kthis[m[K->meanWind_.Y());
+      |                                              [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:120:46:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  120 |   rosNode_->declare_parameter("mean_wind.z", [01;31m[Kthis[m[K->meanWind_.Z());
+      |                                              [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:121:43:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  121 |   rosNode_->declare_parameter("gust_std", [01;31m[Kthis[m[K->gustStd_);
+      |                                           [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:124:3:[m[K [01;31m[Kerror: [m[K‘[01m[KrosParamCbHandle_[m[K’ was not declared in this scope
+  124 |   [01;31m[KrosParamCbHandle_[m[K = rosNode_->add_on_set_parameters_callback([
+      |   [01;31m[K^~~~~~~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:125:5:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  125 |     [01;31m[Kthis[m[K](const std::vector<rclcpp::Parameter> &params)
+      |     [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:129:42:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  129 |       if (p.get_name() == "mean_wind.x") [01;31m[Kthis[m[K->meanWind_.X(p.as_double());
+      |                                          [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:130:42:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  130 |       if (p.get_name() == "mean_wind.y") [01;31m[Kthis[m[K->meanWind_.Y(p.as_double());
+      |                                          [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:131:42:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  131 |       if (p.get_name() == "mean_wind.z") [01;31m[Kthis[m[K->meanWind_.Z(p.as_double());
+      |                                          [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:132:39:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  132 |       if (p.get_name() == "gust_std") [01;31m[Kthis[m[K->gustStd_ = p.as_double();
+      |                                       [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:134:72:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  134 |     gzmsg << "WindPlugin: parameters updated via ROS params: mean=" << [01;31m[Kthis[m[K->meanWind_ << " gust=" << this->gustStd_ << std::endl;
+      |                                                                        [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:134:103:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  134 |     gzmsg << "WindPlugin: parameters updated via ROS params: mean=" << this->meanWind_ << " gust=" << [01;31m[Kthis[m[K->gustStd_ << std::endl;
+      |                                                                                                       [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:135:61:[m[K [01;31m[Kerror: [m[Kno matching function for call to ‘[01m[Krcl_interfaces::msg::SetParametersResult_<std::allocator<void> >::SetParametersResult_(<brace-enclosed initializer list>)[m[K’
+  135 |     return rcl_interfaces::msg::SetParametersResult{true, ""[01;31m[K}[m[K;
+      |                                                             [01;31m[K^[m[K
+In file included from [01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/set_parameters_result.hpp:7[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/qos_overriding_options.hpp:28[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/subscription_options.hpp:30[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/subscription.hpp:45[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/any_executable.hpp:25[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategy.hpp:25[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategies.hpp:18[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executor_options.hpp:20[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executor.hpp:37[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executors/multi_threaded_executor.hpp:25[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executors.hpp:21[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/rclcpp.hpp:155[m[K,
+                 from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:10[m[K,
+                 from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2[m[K:
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:46:12:[m[K [01;36m[Knote: [m[Kcandidate: ‘[01m[Krcl_interfaces::msg::SetParametersResult_<ContainerAllocator>::SetParametersResult_(const ContainerAllocator&, rosidl_runtime_cpp::MessageInitialization) [with ContainerAllocator = std::allocator<void>][m[K’
+   46 |   explicit [01;36m[KSetParametersResult_[m[K(const ContainerAllocator & _alloc, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
+      |            [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:46:60:[m[K [01;36m[Knote: [m[K  no known conversion for argument 1 from ‘[01m[Kbool[m[K’ to ‘[01m[Kconst std::allocator<void>&[m[K’
+   46 |   explicit SetParametersResult_([01;36m[Kconst ContainerAllocator & _alloc[m[K, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
+      |                                 [01;36m[K~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~[m[K
+In file included from [01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/set_parameters_result.hpp:7[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/qos_overriding_options.hpp:28[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/subscription_options.hpp:30[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/subscription.hpp:45[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/any_executable.hpp:25[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategy.hpp:25[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategies.hpp:18[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executor_options.hpp:20[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executor.hpp:37[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executors/multi_threaded_executor.hpp:25[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/executors.hpp:21[m[K,
+                 from [01m[K/opt/ros/humble/include/rclcpp/rclcpp/rclcpp.hpp:155[m[K,
+                 from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:10[m[K,
+                 from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2[m[K:
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:36:12:[m[K [01;36m[Knote: [m[Kcandidate: ‘[01m[Krcl_interfaces::msg::SetParametersResult_<ContainerAllocator>::SetParametersResult_(rosidl_runtime_cpp::MessageInitialization) [with ContainerAllocator = std::allocator<void>][m[K’
+   36 |   explicit [01;36m[KSetParametersResult_[m[K(rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)
+      |            [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:36:12:[m[K [01;36m[Knote: [m[K  candidate expects 1 argument, 2 provided
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:[m[K [01;36m[Knote: [m[Kcandidate: ‘[01m[Krcl_interfaces::msg::SetParametersResult_<std::allocator<void> >::SetParametersResult_(const rcl_interfaces::msg::SetParametersResult_<std::allocator<void> >&)[m[K’
+   32 | struct [01;36m[KSetParametersResult_[m[K
+      |        [01;36m[K^~~~~~~~~~~~~~~~~~~~[m[K
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:[m[K [01;36m[Knote: [m[K  candidate expects 1 argument, 2 provided
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:[m[K [01;36m[Knote: [m[Kcandidate: ‘[01m[Krcl_interfaces::msg::SetParametersResult_<std::allocator<void> >::SetParametersResult_(rcl_interfaces::msg::SetParametersResult_<std::allocator<void> >&&)[m[K’
+[01m[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:[m[K [01;36m[Knote: [m[K  candidate expects 1 argument, 2 provided
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:139:18:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  139 |   for (auto &m : [01;31m[Kthis[m[K->world_->Models())
+      |                  [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:145:78:[m[K [01;31m[Kerror: [m[Kexpected primary-expression before ‘[01m[K>[m[K’ token
+  145 |     auto mean_sub = rosNode_->create_subscription<geometry_msgs::msg::Vector3[01;31m[K>[m[K(
+      |                                                                              [01;31m[K^[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:146:7:[m[K [01;35m[Kwarning: [m[Kleft operand of comma operator has no effect [[01;35m[K-Wunused-value[m[K]
+  146 |       [01;35m[Kmean_topic[m[K, rclcpp::SystemDefaultsQoS(),
+      |       [01;35m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:147:8:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  147 |       [[01;31m[Kthis[m[K, model_name](const geometry_msgs::msg::Vector3::SharedPtr msg)
+      |        [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:149:9:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  149 |         [01;31m[Kthis[m[K->perModelWind_[model_name].mean = ignition::math::Vector3d(msg->x, msg->y, msg->z);
+      |         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:150:87:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  150 |         gzmsg << "WindPlugin: per-model mean updated for " << model_name << " -> " << [01;31m[Kthis[m[K->perModelWind_[model_name].mean << std::endl;
+      |                                                                                       [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:152:73:[m[K [01;31m[Kerror: [m[Kexpected primary-expression before ‘[01m[K>[m[K’ token
+  152 |     auto gust_sub = rosNode_->create_subscription<std_msgs::msg::Float64[01;31m[K>[m[K(
+      |                                                                         [01;31m[K^[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:153:7:[m[K [01;35m[Kwarning: [m[Kleft operand of comma operator has no effect [[01;35m[K-Wunused-value[m[K]
+  153 |       [01;35m[Kgust_topic[m[K, rclcpp::SystemDefaultsQoS(),
+      |       [01;35m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:154:8:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  154 |       [[01;31m[Kthis[m[K, model_name](const std_msgs::msg::Float64::SharedPtr msg)
+      |        [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:156:9:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  156 |         [01;31m[Kthis[m[K->perModelWind_[model_name].gust_std = msg->data;
+      |         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:160:5:[m[K [01;31m[Kerror: [m[K‘[01m[KperModelMeanSubs_[m[K’ was not declared in this scope
+  160 |     [01;31m[KperModelMeanSubs_[m[K.push_back(mean_sub);
+      |     [01;31m[K^~~~~~~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:161:5:[m[K [01;31m[Kerror: [m[K‘[01m[KperModelGustSubs_[m[K’ was not declared in this scope
+  161 |     [01;31m[KperModelGustSubs_[m[K.push_back(gust_sub);
+      |     [01;31m[K^~~~~~~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:164:3:[m[K [01;31m[Kerror: [m[K‘[01m[KrosExecutor_[m[K’ was not declared in this scope
+  164 |   [01;31m[KrosExecutor_[m[K = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
+      |   [01;31m[K^~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:167:3:[m[K [01;31m[Kerror: [m[K‘[01m[KrosRunning_[m[K’ was not declared in this scope
+  167 |   [01;31m[KrosRunning_[m[K.store(true);
+      |   [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:168:3:[m[K [01;31m[Kerror: [m[K‘[01m[KrosSpinThread_[m[K’ was not declared in this scope
+  168 |   [01;31m[KrosSpinThread_[m[K = std::thread([this]() {
+      |   [01;31m[K^~~~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:168:33:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  168 |   rosSpinThread_ = std::thread([[01;31m[Kthis[m[K]() {
+      |                                 [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In lambda function:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:169:12:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  169 |     while ([01;31m[Kthis[m[K->rosRunning_.load())
+      |            [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:171:7:[m[K [01;31m[Kerror: [m[K‘[01m[Kthis[m[K’ was not captured for this lambda function
+  171 |       [01;31m[Kthis[m[K->rosExecutor_->spin_some(std::chrono::milliseconds(10));
+      |       [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:176:46:[m[K [01;31m[Kerror: [m[K‘[01m[KmeanWind_[m[K’ was not declared in this scope
+  176 |   gzmsg << "WindPlugin loaded: meanWind=" << [01;31m[KmeanWind_[m[K << " gustStd=" << gustStd_ << " updateRate=" << updateRate_ << std::endl;
+      |                                              [01;31m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:176:74:[m[K [01;31m[Kerror: [m[K‘[01m[KgustStd_[m[K’ was not declared in this scope
+  176 |   gzmsg << "WindPlugin loaded: meanWind=" << meanWind_ << " gustStd=" << [01;31m[KgustStd_[m[K << " updateRate=" << updateRate_ << std::endl;
+      |                                                                          [01;31m[K^~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:176:104:[m[K [01;31m[Kerror: [m[K‘[01m[KupdateRate_[m[K’ was not declared in this scope
+  176 |   gzmsg << "WindPlugin loaded: meanWind=" << meanWind_ << " gustStd=" << gustStd_ << " updateRate=" << [01;31m[KupdateRate_[m[K << std::endl;
+      |                                                                                                        [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K At global scope:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:179:6:[m[K [01;31m[Kerror: [m[K‘[01m[KWindPlugin[m[K’ has not been declared
+  179 | void [01;31m[KWindPlugin[m[K::OnUpdate()
+      |      [01;31m[K^~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kvoid OnUpdate()[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:181:30:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  181 |   gazebo::common::Time now = [01;31m[Kthis[m[K->world_->SimTime();
+      |                              [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:182:22:[m[K [01;31m[Kerror: [m[K‘[01m[KlastUpdate_[m[K’ was not declared in this scope
+  182 |   double dt = (now - [01;31m[KlastUpdate_[m[K).Double();
+      |                      [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:186:7:[m[K [01;31m[Kerror: [m[K‘[01m[KupdateRate_[m[K’ was not declared in this scope
+  186 |   if ([01;31m[KupdateRate_[m[K > 0.0 && dt < 1.0/updateRate_)
+      |       [01;31m[K^~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:190:25:[m[K [01;31m[Kerror: [m[K‘[01m[Krng_[m[K’ was not declared in this scope
+  190 |   double gx = gustDist_([01;31m[Krng_[m[K) * gustStd_;
+      |                         [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:190:15:[m[K [01;31m[Kerror: [m[K‘[01m[KgustDist_[m[K’ was not declared in this scope
+  190 |   double gx = [01;31m[KgustDist_[m[K(rng_) * gustStd_;
+      |               [01;31m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:190:33:[m[K [01;31m[Kerror: [m[K‘[01m[KgustStd_[m[K’ was not declared in this scope
+  190 |   double gx = gustDist_(rng_) * [01;31m[KgustStd_[m[K;
+      |                                 [01;31m[K^~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:193:35:[m[K [01;31m[Kerror: [m[K‘[01m[KmeanWind_[m[K’ was not declared in this scope
+  193 |   ignition::math::Vector3d wind = [01;31m[KmeanWind_[m[K + ignition::math::Vector3d(gx, gy, gz);
+      |                                   [01;31m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:196:17:[m[K [01;31m[Kerror: [m[Kinvalid use of ‘[01m[Kthis[m[K’ in non-member function
+  196 |   auto models = [01;31m[Kthis[m[K->world_->Models();
+      |                 [01;31m[K^~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:212:21:[m[K [01;31m[Kerror: [m[K‘[01m[Karea_[m[K’ was not declared in this scope; did you mean ‘[01m[Karea[m[K’?
+  212 |       double area = [01;31m[Karea_[m[K;
+      |                     [01;31m[K^~~~~[m[K
+      |                     [32m[Karea[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:213:25:[m[K [01;31m[Kerror: [m[K‘[01m[KdragCoef_[m[K’ was not declared in this scope; did you mean ‘[01m[KdragCoef[m[K’?
+  213 |       double dragCoef = [01;31m[KdragCoef_[m[K;
+      |                         [01;31m[K^~~~~~~~~[m[K
+      |                         [32m[KdragCoef[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:214:17:[m[K [01;31m[Kerror: [m[K‘[01m[KlinkAeroMap_[m[K’ was not declared in this scope
+  214 |       auto it = [01;31m[KlinkAeroMap_[m[K.find(link->GetScopedName());
+      |                 [01;31m[K^~~~~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:220:26:[m[K [01;31m[Kerror: [m[K‘[01m[KairDensity_[m[K’ was not declared in this scope
+  220 |       double mag = 0.5 * [01;31m[KairDensity_[m[K * dragCoef * area * speed * speed;
+      |                          [01;31m[K^~~~~~~~~~~[m[K
+In file included from [01m[K/usr/include/gazebo-11/gazebo/common/common.hh:36[m[K,
+                 from [01m[K/usr/include/gazebo-11/gazebo/gazebo_core.hh:19[m[K,
+                 from [01m[K/usr/include/gazebo-11/gazebo/gazebo.hh:20[m[K,
+                 from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:5[m[K,
+                 from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2[m[K:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:[m[K In function ‘[01m[Kgazebo::WorldPlugin* RegisterPlugin()[m[K’:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:230:26:[m[K [01;31m[Kerror: [m[Kexpected type-specifier before ‘[01m[KWindPlugin[m[K’
+  230 | GZ_REGISTER_WORLD_PLUGIN([01;31m[KWindPlugin[m[K)
+      |                          [01;31m[K^~~~~~~~~~[m[K
+[01m[K/usr/include/gazebo-11/gazebo/common/Plugin.hh:470:16:[m[K [01;36m[Knote: [m[Kin definition of macro ‘[01m[KGZ_REGISTER_WORLD_PLUGIN[m[K’
+  470 |     return new [01;36m[Kclassname[m[K();\
+      |                [01;36m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:230:26:[m[K [01;31m[Kerror: [m[Kexpected ‘[01m[K;[m[K’ before ‘[01m[KWindPlugin[m[K’
+  230 | GZ_REGISTER_WORLD_PLUGIN([01;31m[KWindPlugin[m[K)
+      |                          [01;31m[K^~~~~~~~~~[m[K
+[01m[K/usr/include/gazebo-11/gazebo/common/Plugin.hh:470:16:[m[K [01;36m[Knote: [m[Kin definition of macro ‘[01m[KGZ_REGISTER_WORLD_PLUGIN[m[K’
+  470 |     return new [01;36m[Kclassname[m[K();\
+      |                [01;36m[K^~~~~~~~~[m[K
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:230:26:[m[K [01;31m[Kerror: [m[K‘[01m[KWindPlugin[m[K’ was not declared in this scope; did you mean ‘[01m[Ksjtu_drone_description::WindPlugin[m[K’?
+  230 | GZ_REGISTER_WORLD_PLUGIN([01;31m[KWindPlugin[m[K)
+      |                          [01;31m[K^~~~~~~~~~[m[K
+[01m[K/usr/include/gazebo-11/gazebo/common/Plugin.hh:470:16:[m[K [01;36m[Knote: [m[Kin definition of macro ‘[01m[KGZ_REGISTER_WORLD_PLUGIN[m[K’
+  470 |     return new [01;36m[Kclassname[m[K();\
+      |                [01;36m[K^~~~~~~~~[m[K
+In file included from [01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2[m[K:
+[01m[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:21:7:[m[K [01;36m[Knote: [m[K‘[01m[Ksjtu_drone_description::WindPlugin[m[K’ declared here
+   21 | class [01;36m[KWindPlugin[m[K : public gazebo::WorldPlugin
+      |       [01;36m[K^~~~~~~~~~[m[K
+gmake[2]: *** [CMakeFiles/plugin_wind.dir/build.make:76: CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o] 오류 1
+gmake[1]: *** [CMakeFiles/Makefile2:165: CMakeFiles/plugin_wind.dir/all] 오류 2
+gmake: *** [Makefile:146: all] 오류 2

@@ -1,0 +1,20 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from drone_description/srv/GetWind.srv
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Vector3.idl"
+
+module drone_description {
+  module srv {
+    struct GetWind_Request {
+      string model_name;
+    };
+    struct GetWind_Response {
+      geometry_msgs::msg::Vector3 mean;
+
+      double gust_std;
+
+      boolean found;
+    };
+  };
+};

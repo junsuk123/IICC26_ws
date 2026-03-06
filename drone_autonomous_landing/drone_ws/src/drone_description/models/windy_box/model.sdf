@@ -22,11 +22,7 @@
           <box><size>0.5 0.5 0.2</size></box>
         </geometry>
       </visual>
-      <!-- Aerodynamics block for per-link parameters -->
-      <aerodynamics>
-        <area>0.25</area>
-        <drag_coef>1.05</drag_coef>
-      </aerodynamics>
+      <!-- No custom aerodynamics here; per-link aerodynamics are provided in the world plugin's configuration -->
     </link>
   </model>
 </sdf>

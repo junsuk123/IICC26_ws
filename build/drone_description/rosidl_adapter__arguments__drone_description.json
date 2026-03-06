@@ -1,0 +1,7 @@
+{
+  "package_name": "drone_description",
+  "non_idl_tuples": [
+    "/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description:srv/SetWind.srv",
+    "/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description:srv/GetWind.srv"
+  ]
+}

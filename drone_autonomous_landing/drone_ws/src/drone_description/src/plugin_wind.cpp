@@ -10,8 +10,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include <std_msgs/msg/float64.hpp>
-#include "drone_description/srv/set_wind.hpp"
-#include "drone_description/srv/get_wind.hpp"
+#include <vector>
 
 using namespace sjtu_drone_description;
 
@@ -70,26 +69,49 @@ void WindPlugin::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)
       std::bind(&WindPlugin::OnUpdate, this));
 
   // Read per-model/link aerodynamics at load time
+  // initialize link aero defaults (from world-level defaults)
   for (auto &m : this->world_->Models())
   {
     for (auto &link : m->GetLinks())
     {
-      // defaults
-      double area = this->area_;
-      double drag = this->dragCoef_;
-      // try to read from link SDF: <aerodynamics><area> <drag_coef>
-      if (link->GetSDF())
+      linkAeroMap_[link->GetScopedName()] = {this->area_, this->dragCoef_};
+    }
+  }
+
+  // parse per-model overrides from the plugin SDF under <model_overrides>
+  if (_sdf->HasElement("model_overrides"))
+  {
+    sdf::ElementPtr mo = _sdf->GetElement("model_overrides");
+    while (mo && mo->HasElement("model"))
+    {
+      sdf::ElementPtr modelEl = mo->GetElement("model");
+      std::string modelName = modelEl->Get<std::string>("name");
+      // iterate links
+      if (modelEl->HasElement("link"))
       {
-        sdf::ElementPtr aer = link->GetSDF()->GetElement("aerodynamics");
-        if (aer)
+        sdf::ElementPtr linkEl = modelEl->GetElement("link");
+        while (linkEl)
         {
-          if (aer->HasElement("area"))
-            area = aer->Get<double>("area");
-          if (aer->HasElement("drag_coef"))
-            drag = aer->Get<double>("drag_coef");
+          std::string linkName = linkEl->Get<std::string>("name");
+          double a = this->area_;
+          double d = this->dragCoef_;
+          if (linkEl->HasElement("area")) a = linkEl->Get<double>("area");
+          if (linkEl->HasElement("drag_coef")) d = linkEl->Get<double>("drag_coef");
+          // find the scoped name for model::link
+          std::string scoped = modelName + "::" + linkName;
+          // store override if link exists
+          auto it = linkAeroMap_.find(scoped);
+          if (it != linkAeroMap_.end())
+            it->second = {a, d};
+          // next link sibling
+          linkEl = linkEl->GetNextElement("link");
         }
       }
-      linkAeroMap_[link->GetScopedName()] = {area, drag};
+      // move to next model sibling if any
+      if (mo->HasElement("model"))
+        mo = mo->GetNextElement("model");
+      else
+        break;
     }
   }
 
@@ -117,62 +139,55 @@ void WindPlugin::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)
         gzmsg << "WindPlugin: updated gust_std via ROS: " << this->gustStd_ << std::endl;
       });
 
-  // Services: SetWind and GetWind
-  using SetWind = drone_description::srv::SetWind;
-  using GetWind = drone_description::srv::GetWind;
+  // Declare ROS parameters for control (mean_wind and gust_std)
+  rosNode_->declare_parameter("mean_wind.x", this->meanWind_.X());
+  rosNode_->declare_parameter("mean_wind.y", this->meanWind_.Y());
+  rosNode_->declare_parameter("mean_wind.z", this->meanWind_.Z());
+  rosNode_->declare_parameter("gust_std", this->gustStd_);
 
-  auto set_cb = [this](const std::shared_ptr<SetWind::Request> req, std::shared_ptr<SetWind::Response> res)
+  // watch for parameter changes
+  rosParamCbHandle_ = rosNode_->add_on_set_parameters_callback([
+    this](const std::vector<rclcpp::Parameter> &params)
   {
-    std::string model = req->model_name;
-    ignition::math::Vector3d m(req->mean.x, req->mean.y, req->mean.z);
-    double g = req->gust_std;
-    if (model.empty())
+    for (auto &p : params)
     {
-      this->meanWind_ = m;
-      this->gustStd_ = g;
-      res->success = true;
-      res->message = "Global wind set";
-      gzmsg << "WindPlugin: Set global wind via service: " << this->meanWind_ << " g=" << this->gustStd_ << std::endl;
+      if (p.get_name() == "mean_wind.x") this->meanWind_.X(p.as_double());
+      if (p.get_name() == "mean_wind.y") this->meanWind_.Y(p.as_double());
+      if (p.get_name() == "mean_wind.z") this->meanWind_.Z(p.as_double());
+      if (p.get_name() == "gust_std") this->gustStd_ = p.as_double();
     }
-    else
-    {
-      this->perModelWind_[model] = {m, g};
-      res->success = true;
-      res->message = "Per-model wind set for " + model;
-      gzmsg << "WindPlugin: Set wind for model " << model << " => " << m << " g=" << g << std::endl;
-    }
-  };
-  setService_ = rosNode_->create_service<SetWind> ("/wind/set_wind", set_cb);
+    gzmsg << "WindPlugin: parameters updated via ROS params: mean=" << this->meanWind_ << " gust=" << this->gustStd_ << std::endl;
+    rcl_interfaces::msg::SetParametersResult res;
+    res.successful = true;
+    res.reason = "";
+    return res;
+  });
 
-  auto get_cb = [this](const std::shared_ptr<GetWind::Request> req, std::shared_ptr<GetWind::Response> res)
+  // Per-model topic subscriptions: /wind/<model>/mean and /wind/<model>/gust_std
+  for (auto &m : this->world_->Models())
   {
-    std::string model = req->model_name;
-    if (model.empty())
-    {
-      res->mean.x = this->meanWind_.X();
-      res->mean.y = this->meanWind_.Y();
-      res->mean.z = this->meanWind_.Z();
-      res->gust_std = this->gustStd_;
-      res->found = true;
-    }
-    else
-    {
-      auto it = this->perModelWind_.find(model);
-      if (it!= this->perModelWind_.end())
+    std::string model_name = m->GetName();
+    std::string mean_topic = "/wind/" + model_name + "/mean";
+    std::string gust_topic = "/wind/" + model_name + "/gust_std";
+
+    auto mean_sub = rosNode_->create_subscription<geometry_msgs::msg::Vector3>(
+      mean_topic, rclcpp::SystemDefaultsQoS(),
+      [this, model_name](const geometry_msgs::msg::Vector3::SharedPtr msg)
       {
-        res->mean.x = it->second.mean.X();
-        res->mean.y = it->second.mean.Y();
-        res->mean.z = it->second.mean.Z();
-        res->gust_std = it->second.gust_std;
-        res->found = true;
-      }
-      else
+        this->perModelWind_[model_name].mean = ignition::math::Vector3d(msg->x, msg->y, msg->z);
+        gzmsg << "WindPlugin: per-model mean updated for " << model_name << " -> " << this->perModelWind_[model_name].mean << std::endl;
+      });
+    auto gust_sub = rosNode_->create_subscription<std_msgs::msg::Float64>(
+      gust_topic, rclcpp::SystemDefaultsQoS(),
+      [this, model_name](const std_msgs::msg::Float64::SharedPtr msg)
       {
-        res->found = false;
-      }
-    }
-  };
-  getService_ = rosNode_->create_service<GetWind>("/wind/get_wind", get_cb);
+        this->perModelWind_[model_name].gust_std = msg->data;
+        gzmsg << "WindPlugin: per-model gust updated for " << model_name << " -> " << msg->data << std::endl;
+      });
+
+    perModelMeanSubs_.push_back(mean_sub);
+    perModelGustSubs_.push_back(gust_sub);
+  }
 
   rosExecutor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
   rosExecutor_->add_node(rosNode_);

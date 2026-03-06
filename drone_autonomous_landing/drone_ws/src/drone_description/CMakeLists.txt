@@ -15,7 +15,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
 find_package(gazebo_ros REQUIRED)
 find_package(gazebo_plugins REQUIRED)
 find_package(gazebo_dev REQUIRED)
@@ -154,12 +153,5 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Generate services
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "srv/SetWind.srv"
-  "srv/GetWind.srv"
-  DEPENDENCIES geometry_msgs std_msgs
-)
-
-ament_export_dependencies(geometry_msgs std_msgs)
+# (No custom ROS interfaces generated here)
 ament_package()

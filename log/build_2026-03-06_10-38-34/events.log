@@ -1,0 +1,430 @@
+[0.000000] (-) TimerEvent: {}
+[0.000455] (-) JobUnselected: {'identifier': 'drone'}
+[0.000587] (-) JobUnselected: {'identifier': 'sjtu_drone_control'}
+[0.000655] (drone_description) JobQueued: {'identifier': 'drone_description', 'dependencies': OrderedDict()}
+[0.000667] (drone_description) JobStarted: {'identifier': 'drone_description'}
+[0.004816] (drone_description) JobProgress: {'identifier': 'drone_description', 'progress': 'cmake'}
+[0.006132] (drone_description) JobProgress: {'identifier': 'drone_description', 'progress': 'build'}
+[0.006420] (drone_description) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/j/INCSL/IICC26_ws/build/drone_description', '--', '-j20', '-l20'], 'cwd': '/home/j/INCSL/IICC26_ws/build/drone_description', 'env': OrderedDict([('GJS_DEBUG_TOPICS', 'JS ERROR;JS LOG'), ('PYTHON_BASIC_REPL', '1'), ('LESSOPEN', '| /usr/bin/lesspipe %s'), ('LANGUAGE', 'ko:en'), ('USER', 'j'), ('LC_TIME', 'ko_KR.UTF-8'), ('FONTCONFIG_PATH', '/etc/fonts'), ('CCACHE_DIR', '/var/tmp/ccache'), ('GIO_MODULE_DIR', '/home/j/snap/code/common/.cache/gio-modules'), ('XDG_SESSION_TYPE', 'x11'), ('GIT_ASKPASS', '/snap/code/211/usr/share/code/resources/app/extensions/git/dist/askpass.sh'), ('GTK_EXE_PREFIX_VSCODE_SNAP_ORIG', ''), ('GDK_BACKEND_VSCODE_SNAP_ORIG', ''), ('SHLVL', '1'), ('LD_LIBRARY_PATH', '/usr/local/cuda-12.8/lib64:/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib:/usr/local/cuda-12.8/lib64:'), ('HOME', '/home/j'), ('CHROME_DESKTOP', 'code.desktop'), ('CYCLONEDDS_URI', 'file:////home/j/cyclonedds.xml'), ('LOCPATH_VSCODE_SNAP_ORIG', ''), ('TERM_PROGRAM_VERSION', '1.105.1'), ('DESKTOP_SESSION', 'ubuntu'), ('GTK_PATH', '/snap/code/211/usr/lib/x86_64-linux-gnu/gtk-3.0'), ('NVM_BIN', '/home/j/.nvm/versions/node/v22.18.0/bin'), ('NVM_INC', '/home/j/.nvm/versions/node/v22.18.0/include/node'), ('XDG_DATA_HOME_VSCODE_SNAP_ORIG', ''), ('GTK_IM_MODULE_FILE', '/home/j/snap/code/common/.cache/immodules/immodules.cache'), ('GIO_LAUNCHED_DESKTOP_FILE', '/var/lib/snapd/desktop/applications/code_code.desktop'), ('ROS_PYTHON_VERSION', '3'), ('GNOME_SHELL_SESSION_MODE', 'ubuntu'), ('GTK_MODULES', 'gail:atk-bridge'), ('GSETTINGS_SCHEMA_DIR_VSCODE_SNAP_ORIG', ''), ('VSCODE_GIT_ASKPASS_MAIN', '/snap/code/211/usr/share/code/resources/app/extensions/git/dist/askpass-main.js'), ('LC_MONETARY', 'ko_KR.UTF-8'), ('VSCODE_GIT_ASKPASS_NODE', '/snap/code/211/usr/share/code/code'), ('MANAGERPID', '1207'), ('PYDEVD_DISABLE_FILE_VALIDATION', '1'), ('SYSTEMD_EXEC_PID', '3072'), ('BUNDLED_DEBUGPY_PATH', '/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/libs/debugpy'), ('VSCODE_PYTHON_AUTOACTIVATE_GUARD', '1'), ('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/run/user/1001/bus'), ('COLORTERM', 'truecolor'), ('GIO_LAUNCHED_DESKTOP_FILE_PID', '4937'), ('NVM_DIR', '/home/j/.nvm'), ('IM_CONFIG_PHASE', '1'), ('ROS_DISTRO', 'humble'), ('GTK_IM_MODULE', 'ibus'), ('LOGNAME', 'j'), ('JOURNAL_STREAM', '8:60670'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('XDG_CONFIG_DIRS_VSCODE_SNAP_ORIG', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('XDG_SESSION_CLASS', 'user'), ('XDG_DATA_DIRS_VSCODE_SNAP_ORIG', '/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('USERNAME', 'j'), ('TERM', 'xterm-256color'), ('GNOME_DESKTOP_SESSION_ID', 'this-is-deprecated'), ('ROS_LOCALHOST_ONLY', '0'), ('WINDOWPATH', '2'), ('PATH', '/usr/src/tensorrt/bin:/usr/local/cuda-12.8/bin:/home/j/.local/bin:/usr/src/tensorrt/bin:/opt/ros/humble/bin:/usr/local/cuda-12.8/bin:/home/j/.nvm/versions/node/v22.18.0/bin:/home/j/.cargo/bin:/home/j/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/snap/bin:/home/j/.local/bin:/home/j/.local/bin:/home/j/.local/bin:/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/scripts/noConfigScripts:/home/j/.config/Code/User/globalStorage/github.copilot-chat/debugCommand:/home/j/.local/bin'), ('SESSION_MANAGER', 'local/j:@/tmp/.ICE-unix/3048,unix/j:/tmp/.ICE-unix/3048'), ('GTK_EXE_PREFIX', '/snap/code/211/usr'), ('INVOCATION_ID', 'b6c750c6bc464243ae1bf84ea5a799ae'), ('PAPERSIZE', 'a4'), ('XDG_MENU_PREFIX', 'gnome-'), ('LC_ADDRESS', 'ko_KR.UTF-8'), ('XDG_RUNTIME_DIR', '/run/user/1001'), ('GDK_BACKEND', 'x11'), ('DISPLAY', ':0'), ('LOCPATH', '/snap/code/211/usr/lib/locale'), ('VSCODE_DEBUGPY_ADAPTER_ENDPOINTS', '/home/j/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/.noConfigDebugAdapterEndpoints/endpoint-54f18cc83fbfc8df.txt'), ('LANG', 'ko_KR.UTF-8'), ('XDG_CURRENT_DESKTOP', 'Unity'), ('PYTHONSTARTUP', '/home/j/.config/Code/User/workspaceStorage/3d698e3c183c957157f764d83c195a23/ms-python.python/pythonrc.py'), ('LC_TELEPHONE', 'ko_KR.UTF-8'), ('RMW_IMPLEMENTATION', 'rmw_cyclonedds_cpp'), ('GIO_MODULE_DIR_VSCODE_SNAP_ORIG', ''), ('XDG_DATA_HOME', '/home/j/snap/code/211/.local/share'), ('XMODIFIERS', '@im=ibus'), ('XDG_SESSION_DESKTOP', 'ubuntu'), ('XAUTHORITY', '/run/user/1001/gdm/Xauthority'), ('LS_COLORS', 'rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:'), ('VSCODE_GIT_IPC_HANDLE', '/run/user/1001/vscode-git-19cacd70ad.sock'), ('TERM_PROGRAM', 'vscode'), ('SSH_AUTH_SOCK', '/run/user/1001/keyring/ssh'), ('GSETTINGS_SCHEMA_DIR', '/home/j/snap/code/211/.local/share/glib-2.0/schemas'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('ORIGINAL_XDG_CURRENT_DESKTOP', 'ubuntu:GNOME'), ('SHELL', '/bin/bash'), ('LC_NAME', 'ko_KR.UTF-8'), ('QT_ACCESSIBILITY', '1'), ('CXX', '/usr/lib/ccache/g++'), ('GDMSESSION', 'ubuntu'), ('LESSCLOSE', '/usr/bin/lesspipe %s %s'), ('GTK_PATH_VSCODE_SNAP_ORIG', ''), ('FONTCONFIG_FILE', '/etc/fonts/fonts.conf'), ('GTK_IM_MODULE_FILE_VSCODE_SNAP_ORIG', ''), ('LC_MEASUREMENT', 'ko_KR.UTF-8'), ('GPG_AGENT_INFO', '/run/user/1001/gnupg/S.gpg-agent:0:1'), ('GJS_DEBUG_OUTPUT', 'stderr'), ('LC_IDENTIFICATION', 'ko_KR.UTF-8'), ('VSCODE_GIT_ASKPASS_EXTRA_ARGS', ''), ('GIT_PAGER', 'cat'), ('QT_IM_MODULE', 'ibus'), ('PWD', '/home/j/INCSL/IICC26_ws/build/drone_description'), ('LC_ALL', 'en_US.UTF-8'), ('CUDA_HOME', '/usr/local/cuda-12.8'), ('XDG_CONFIG_DIRS', '/etc/xdg/xdg-ubuntu:/etc/xdg'), ('NVM_CD_FLAGS', ''), ('XDG_DATA_DIRS', '/home/j/snap/code/211/.local/share:/home/j/snap/code/211:/snap/code/211/usr/share:/usr/share/ubuntu:/usr/share/gnome:/usr/local/share/:/usr/share/:/var/lib/snapd/desktop'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('LC_NUMERIC', 'ko_KR.UTF-8'), ('LC_PAPER', 'ko_KR.UTF-8'), ('CC', '/usr/lib/ccache/gcc'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.050765] (drone_description) StdoutLine: {'line': b'[ 16%] \x1b[32mBuilding CXX object CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o\x1b[0m\n'}
+[0.054714] (drone_description) StdoutLine: {'line': b'[ 83%] Built target plugin_drone\n'}
+[0.100019] (-) TimerEvent: {}
+[0.200308] (-) TimerEvent: {}
+[0.300544] (-) TimerEvent: {}
+[0.400834] (-) TimerEvent: {}
+[0.501073] (-) TimerEvent: {}
+[0.601295] (-) TimerEvent: {}
+[0.701530] (-) TimerEvent: {}
+[0.801795] (-) TimerEvent: {}
+[0.902100] (-) TimerEvent: {}
+[1.002325] (-) TimerEvent: {}
+[1.102641] (-) TimerEvent: {}
+[1.202906] (-) TimerEvent: {}
+[1.303208] (-) TimerEvent: {}
+[1.403429] (-) TimerEvent: {}
+[1.503718] (-) TimerEvent: {}
+[1.603953] (-) TimerEvent: {}
+[1.704254] (-) TimerEvent: {}
+[1.804475] (-) TimerEvent: {}
+[1.904761] (-) TimerEvent: {}
+[2.005071] (-) TimerEvent: {}
+[2.105294] (-) TimerEvent: {}
+[2.205520] (-) TimerEvent: {}
+[2.305833] (-) TimerEvent: {}
+[2.406146] (-) TimerEvent: {}
+[2.506466] (-) TimerEvent: {}
+[2.606777] (-) TimerEvent: {}
+[2.707084] (-) TimerEvent: {}
+[2.807340] (-) TimerEvent: {}
+[2.907635] (-) TimerEvent: {}
+[3.007884] (-) TimerEvent: {}
+[3.108212] (-) TimerEvent: {}
+[3.208513] (-) TimerEvent: {}
+[3.308810] (-) TimerEvent: {}
+[3.409038] (-) TimerEvent: {}
+[3.509291] (-) TimerEvent: {}
+[3.609534] (-) TimerEvent: {}
+[3.709751] (-) TimerEvent: {}
+[3.810049] (-) TimerEvent: {}
+[3.910360] (-) TimerEvent: {}
+[4.010675] (-) TimerEvent: {}
+[4.111011] (-) TimerEvent: {}
+[4.211325] (-) TimerEvent: {}
+[4.311687] (-) TimerEvent: {}
+[4.412003] (-) TimerEvent: {}
+[4.512220] (-) TimerEvent: {}
+[4.612457] (-) TimerEvent: {}
+[4.712686] (-) TimerEvent: {}
+[4.813013] (-) TimerEvent: {}
+[4.913250] (-) TimerEvent: {}
+[5.013479] (-) TimerEvent: {}
+[5.113770] (-) TimerEvent: {}
+[5.214071] (-) TimerEvent: {}
+[5.314422] (-) TimerEvent: {}
+[5.414725] (-) TimerEvent: {}
+[5.515046] (-) TimerEvent: {}
+[5.615383] (-) TimerEvent: {}
+[5.715795] (-) TimerEvent: {}
+[5.816124] (-) TimerEvent: {}
+[5.916425] (-) TimerEvent: {}
+[6.016757] (-) TimerEvent: {}
+[6.117102] (-) TimerEvent: {}
+[6.217364] (-) TimerEvent: {}
+[6.317678] (-) TimerEvent: {}
+[6.417997] (-) TimerEvent: {}
+[6.518213] (-) TimerEvent: {}
+[6.618525] (-) TimerEvent: {}
+[6.718815] (-) TimerEvent: {}
+[6.819057] (-) TimerEvent: {}
+[6.919345] (-) TimerEvent: {}
+[7.019589] (-) TimerEvent: {}
+[7.119825] (-) TimerEvent: {}
+[7.220139] (-) TimerEvent: {}
+[7.320352] (-) TimerEvent: {}
+[7.420668] (-) TimerEvent: {}
+[7.520972] (-) TimerEvent: {}
+[7.621303] (-) TimerEvent: {}
+[7.721545] (-) TimerEvent: {}
+[7.821763] (-) TimerEvent: {}
+[7.922030] (-) TimerEvent: {}
+[7.936182] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:15:1:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99 does not name a type\n'}
+[7.936306] (drone_description) StderrLine: {'line': b'   15 | \x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K::WindPlugin()\n'}
+[7.936343] (drone_description) StderrLine: {'line': b'      | \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.936371] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:16:31:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected unqualified-id before \xe2\x80\x98\x1b[01m\x1b[K)\x1b[m\x1b[K\xe2\x80\x99 token\n'}
+[7.936400] (drone_description) StderrLine: {'line': b'   16 |   : rng_(std::random_device{}(\x1b[01;31m\x1b[K)\x1b[m\x1b[K), gustDist_(0.0, 1.0)\n'}
+[7.936428] (drone_description) StderrLine: {'line': b'      |                               \x1b[01;31m\x1b[K^\x1b[m\x1b[K\n'}
+[7.936455] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:20:1:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99 does not name a type\n'}
+[7.936484] (drone_description) StderrLine: {'line': b'   20 | \x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K::~WindPlugin()\n'}
+[7.936756] (drone_description) StderrLine: {'line': b'      | \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.936844] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:41:6:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99 has not been declared\n'}
+[7.936875] (drone_description) StderrLine: {'line': b'   41 | void \x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)\n'}
+[7.936910] (drone_description) StderrLine: {'line': b'      |      \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937082] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.937126] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:43:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.937154] (drone_description) StderrLine: {'line': b'   43 |   \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->world_ = _world;\n'}
+[7.937180] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.937204] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:48:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KmeanWind_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937228] (drone_description) StderrLine: {'line': b'   48 |     \x1b[01;31m\x1b[KmeanWind_\x1b[m\x1b[K.X(el->Get<double>("x"));\n'}
+[7.937252] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937275] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:53:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KgustStd_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937298] (drone_description) StderrLine: {'line': b'   53 |     \x1b[01;31m\x1b[KgustStd_\x1b[m\x1b[K = _sdf->Get<double>("gust_std");\n'}
+[7.937321] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~\x1b[m\x1b[K\n'}
+[7.937343] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:55:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KairDensity_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937370] (drone_description) StderrLine: {'line': b'   55 |     \x1b[01;31m\x1b[KairDensity_\x1b[m\x1b[K = _sdf->Get<double>("air_density");\n'}
+[7.937393] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937415] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:57:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KdragCoef_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937438] (drone_description) StderrLine: {'line': b'   57 |     \x1b[01;31m\x1b[KdragCoef_\x1b[m\x1b[K = _sdf->Get<double>("drag_coef");\n'}
+[7.937461] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937484] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:59:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Karea_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937511] (drone_description) StderrLine: {'line': b'   59 |     \x1b[01;31m\x1b[Karea_\x1b[m\x1b[K = _sdf->Get<double>("area");\n'}
+[7.937534] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~\x1b[m\x1b[K\n'}
+[7.937557] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:61:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KupdateRate_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937584] (drone_description) StderrLine: {'line': b'   61 |     \x1b[01;31m\x1b[KupdateRate_\x1b[m\x1b[K = _sdf->Get<double>("update_rate");\n'}
+[7.937607] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937630] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:63:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.937653] (drone_description) StderrLine: {'line': b'   63 |   \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->lastUpdate_ = this->world_->SimTime();\n'}
+[7.937675] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.937697] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:63:23:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.937723] (drone_description) StderrLine: {'line': b'   63 |   this->lastUpdate_ = \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->world_->SimTime();\n'}
+[7.937745] (drone_description) StderrLine: {'line': b'      |                       \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.937768] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:66:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KupdateConn_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.937790] (drone_description) StderrLine: {'line': b'   66 |   \x1b[01;31m\x1b[KupdateConn_\x1b[m\x1b[K = gazebo::event::Events::ConnectWorldUpdateBegin(\n'}
+[7.937812] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937834] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:67:18:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99 has not been declared\n'}
+[7.937857] (drone_description) StderrLine: {'line': b'   67 |       std::bind(&\x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K::OnUpdate, this));\n'}
+[7.937879] (drone_description) StderrLine: {'line': b'      |                  \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.937900] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:67:40:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.937921] (drone_description) StderrLine: {'line': b'   67 |       std::bind(&WindPlugin::OnUpdate, \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K));\n'}
+[7.937943] (drone_description) StderrLine: {'line': b'      |                                        \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.937964] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:70:18:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.937988] (drone_description) StderrLine: {'line': b'   70 |   for (auto &m : \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->world_->Models())\n'}
+[7.938010] (drone_description) StderrLine: {'line': b'      |                  \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938031] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:75:21:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.938053] (drone_description) StderrLine: {'line': b'   75 |       double area = \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->area_;\n'}
+[7.938074] (drone_description) StderrLine: {'line': b'      |                     \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938096] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:76:21:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.938118] (drone_description) StderrLine: {'line': b'   76 |       double drag = \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->dragCoef_;\n'}
+[7.938139] (drone_description) StderrLine: {'line': b'      |                     \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938161] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:89:7:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KlinkAeroMap_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.938183] (drone_description) StderrLine: {'line': b'   89 |       \x1b[01;31m\x1b[KlinkAeroMap_\x1b[m\x1b[K[link->GetScopedName()] = {area, drag};\n'}
+[7.938205] (drone_description) StderrLine: {'line': b'      |       \x1b[01;31m\x1b[K^~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.938226] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:98:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KrosNode_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.938248] (drone_description) StderrLine: {'line': b'   98 |   \x1b[01;31m\x1b[KrosNode_\x1b[m\x1b[K = std::make_shared<rclcpp::Node>("wind_plugin_node");\n'}
+[7.938270] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~\x1b[m\x1b[K\n'}
+[7.938291] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:99:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KmeanSub_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.938314] (drone_description) StderrLine: {'line': b'   99 |   \x1b[01;31m\x1b[KmeanSub_\x1b[m\x1b[K = rosNode_->create_subscription<geometry_msgs::msg::Vector3>(\n'}
+[7.938335] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~\x1b[m\x1b[K\n'}
+[7.938357] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:99:71:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected primary-expression before \xe2\x80\x98\x1b[01m\x1b[K>\x1b[m\x1b[K\xe2\x80\x99 token\n'}
+[7.938380] (drone_description) StderrLine: {'line': b'   99 |   meanSub_ = rosNode_->create_subscription<geometry_msgs::msg::Vector3\x1b[01;31m\x1b[K>\x1b[m\x1b[K(\n'}
+[7.938402] (drone_description) StderrLine: {'line': b'      |                                                                       \x1b[01;31m\x1b[K^\x1b[m\x1b[K\n'}
+[7.938423] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:100:7:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kleft operand of comma operator has no effect [\x1b[01;35m\x1b[K-Wunused-value\x1b[m\x1b[K]\n'}
+[7.938447] (drone_description) StderrLine: {'line': b'  100 |       \x1b[01;35m\x1b[K"/wind/mean"\x1b[m\x1b[K, rclcpp::SystemDefaultsQoS(),\n'}
+[7.938469] (drone_description) StderrLine: {'line': b'      |       \x1b[01;35m\x1b[K^~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.938490] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:101:8:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.938516] (drone_description) StderrLine: {'line': b'  101 |       [\x1b[01;31m\x1b[Kthis\x1b[m\x1b[K](const geometry_msgs::msg::Vector3::SharedPtr msg)\n'}
+[7.938537] (drone_description) StderrLine: {'line': b'      |        \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938559] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In lambda function:\n'}
+[7.938581] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:103:9:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.938602] (drone_description) StderrLine: {'line': b'  103 |         \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.X(msg->x);\n'}
+[7.938625] (drone_description) StderrLine: {'line': b'      |         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938647] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:104:9:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.938669] (drone_description) StderrLine: {'line': b'  104 |         \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.Y(msg->y);\n'}
+[7.938691] (drone_description) StderrLine: {'line': b'      |         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938713] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:105:9:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.938740] (drone_description) StderrLine: {'line': b'  105 |         \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.Z(msg->z);\n'}
+[7.938762] (drone_description) StderrLine: {'line': b'      |         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938784] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:106:63:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.938808] (drone_description) StderrLine: {'line': b'  106 |         gzmsg << "WindPlugin: updated mean wind via ROS: " << \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_ << std::endl;\n'}
+[7.938831] (drone_description) StderrLine: {'line': b'      |                                                               \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.938853] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.938877] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:109:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KgustSub_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.938900] (drone_description) StderrLine: {'line': b'  109 |   \x1b[01;31m\x1b[KgustSub_\x1b[m\x1b[K = rosNode_->create_subscription<std_msgs::msg::Float64>(\n'}
+[7.938925] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~\x1b[m\x1b[K\n'}
+[7.938983] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:109:66:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected primary-expression before \xe2\x80\x98\x1b[01m\x1b[K>\x1b[m\x1b[K\xe2\x80\x99 token\n'}
+[7.939010] (drone_description) StderrLine: {'line': b'  109 |   gustSub_ = rosNode_->create_subscription<std_msgs::msg::Float64\x1b[01;31m\x1b[K>\x1b[m\x1b[K(\n'}
+[7.939032] (drone_description) StderrLine: {'line': b'      |                                                                  \x1b[01;31m\x1b[K^\x1b[m\x1b[K\n'}
+[7.939053] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:110:7:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kleft operand of comma operator has no effect [\x1b[01;35m\x1b[K-Wunused-value\x1b[m\x1b[K]\n'}
+[7.939075] (drone_description) StderrLine: {'line': b'  110 |       \x1b[01;35m\x1b[K"/wind/gust_std"\x1b[m\x1b[K, rclcpp::SystemDefaultsQoS(),\n'}
+[7.939097] (drone_description) StderrLine: {'line': b'      |       \x1b[01;35m\x1b[K^~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.939121] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:111:8:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.939144] (drone_description) StderrLine: {'line': b'  111 |       [\x1b[01;31m\x1b[Kthis\x1b[m\x1b[K](const std_msgs::msg::Float64::SharedPtr msg)\n'}
+[7.939166] (drone_description) StderrLine: {'line': b'      |        \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939186] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In lambda function:\n'}
+[7.939210] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:113:9:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.939233] (drone_description) StderrLine: {'line': b'  113 |         \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->gustStd_ = msg->data;\n'}
+[7.939255] (drone_description) StderrLine: {'line': b'      |         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939276] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:114:62:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.939297] (drone_description) StderrLine: {'line': b'  114 |         gzmsg << "WindPlugin: updated gust_std via ROS: " << \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->gustStd_ << std::endl;\n'}
+[7.939339] (drone_description) StderrLine: {'line': b'      |                                                              \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939363] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.939400] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:118:46:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.939519] (drone_description) StderrLine: {'line': b'  118 |   rosNode_->declare_parameter("mean_wind.x", \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.X());\n'}
+[7.939543] (drone_description) StderrLine: {'line': b'      |                                              \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939567] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:119:46:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.939591] (drone_description) StderrLine: {'line': b'  119 |   rosNode_->declare_parameter("mean_wind.y", \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.Y());\n'}
+[7.939615] (drone_description) StderrLine: {'line': b'      |                                              \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939638] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:120:46:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.939662] (drone_description) StderrLine: {'line': b'  120 |   rosNode_->declare_parameter("mean_wind.z", \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.Z());\n'}
+[7.939686] (drone_description) StderrLine: {'line': b'      |                                              \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939709] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:121:43:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.939731] (drone_description) StderrLine: {'line': b'  121 |   rosNode_->declare_parameter("gust_std", \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->gustStd_);\n'}
+[7.939754] (drone_description) StderrLine: {'line': b'      |                                           \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939775] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:124:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KrosParamCbHandle_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.939801] (drone_description) StderrLine: {'line': b'  124 |   \x1b[01;31m\x1b[KrosParamCbHandle_\x1b[m\x1b[K = rosNode_->add_on_set_parameters_callback([\n'}
+[7.939822] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.939843] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:125:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.939866] (drone_description) StderrLine: {'line': b'  125 |     \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K](const std::vector<rclcpp::Parameter> &params)\n'}
+[7.939888] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.939910] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In lambda function:\n'}
+[7.939932] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:129:42:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.939955] (drone_description) StderrLine: {'line': b'  129 |       if (p.get_name() == "mean_wind.x") \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.X(p.as_double());\n'}
+[7.939977] (drone_description) StderrLine: {'line': b'      |                                          \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.940000] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:130:42:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.940023] (drone_description) StderrLine: {'line': b'  130 |       if (p.get_name() == "mean_wind.y") \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.Y(p.as_double());\n'}
+[7.940045] (drone_description) StderrLine: {'line': b'      |                                          \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.940068] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:131:42:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.940090] (drone_description) StderrLine: {'line': b'  131 |       if (p.get_name() == "mean_wind.z") \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_.Z(p.as_double());\n'}
+[7.940113] (drone_description) StderrLine: {'line': b'      |                                          \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.940135] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:132:39:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.940157] (drone_description) StderrLine: {'line': b'  132 |       if (p.get_name() == "gust_std") \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->gustStd_ = p.as_double();\n'}
+[7.940180] (drone_description) StderrLine: {'line': b'      |                                       \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.940206] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:134:72:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.940230] (drone_description) StderrLine: {'line': b'  134 |     gzmsg << "WindPlugin: parameters updated via ROS params: mean=" << \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->meanWind_ << " gust=" << this->gustStd_ << std::endl;\n'}
+[7.940253] (drone_description) StderrLine: {'line': b'      |                                                                        \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.940276] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:134:103:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.940299] (drone_description) StderrLine: {'line': b'  134 |     gzmsg << "WindPlugin: parameters updated via ROS params: mean=" << this->meanWind_ << " gust=" << \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->gustStd_ << std::endl;\n'}
+[7.940323] (drone_description) StderrLine: {'line': b'      |                                                                                                       \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.940345] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:135:61:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kno matching function for call to \xe2\x80\x98\x1b[01m\x1b[Krcl_interfaces::msg::SetParametersResult_<std::allocator<void> >::SetParametersResult_(<brace-enclosed initializer list>)\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.940369] (drone_description) StderrLine: {'line': b'  135 |     return rcl_interfaces::msg::SetParametersResult{true, ""\x1b[01;31m\x1b[K}\x1b[m\x1b[K;\n'}
+[7.940441] (drone_description) StderrLine: {'line': b'      |                                                             \x1b[01;31m\x1b[K^\x1b[m\x1b[K\n'}
+[7.940472] (drone_description) StderrLine: {'line': b'In file included from \x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/set_parameters_result.hpp:7\x1b[m\x1b[K,\n'}
+[7.940526] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/qos_overriding_options.hpp:28\x1b[m\x1b[K,\n'}
+[7.940555] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/subscription_options.hpp:30\x1b[m\x1b[K,\n'}
+[7.940581] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/subscription.hpp:45\x1b[m\x1b[K,\n'}
+[7.940607] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/any_executable.hpp:25\x1b[m\x1b[K,\n'}
+[7.940634] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategy.hpp:25\x1b[m\x1b[K,\n'}
+[7.940658] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategies.hpp:18\x1b[m\x1b[K,\n'}
+[7.940682] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executor_options.hpp:20\x1b[m\x1b[K,\n'}
+[7.940706] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executor.hpp:37\x1b[m\x1b[K,\n'}
+[7.940730] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executors/multi_threaded_executor.hpp:25\x1b[m\x1b[K,\n'}
+[7.940804] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executors.hpp:21\x1b[m\x1b[K,\n'}
+[7.940851] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/rclcpp.hpp:155\x1b[m\x1b[K,\n'}
+[7.940906] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:10\x1b[m\x1b[K,\n'}
+[7.941384] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2\x1b[m\x1b[K:\n'}
+[7.941462] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:46:12:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kcandidate: \xe2\x80\x98\x1b[01m\x1b[Krcl_interfaces::msg::SetParametersResult_<ContainerAllocator>::SetParametersResult_(const ContainerAllocator&, rosidl_runtime_cpp::MessageInitialization) [with ContainerAllocator = std::allocator<void>]\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.941569] (drone_description) StderrLine: {'line': b'   46 |   explicit \x1b[01;36m\x1b[KSetParametersResult_\x1b[m\x1b[K(const ContainerAllocator & _alloc, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)\n'}
+[7.942032] (drone_description) StderrLine: {'line': b'      |            \x1b[01;36m\x1b[K^~~~~~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.942345] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:46:60:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[K  no known conversion for argument 1 from \xe2\x80\x98\x1b[01m\x1b[Kbool\x1b[m\x1b[K\xe2\x80\x99 to \xe2\x80\x98\x1b[01m\x1b[Kconst std::allocator<void>&\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.942498] (drone_description) StderrLine: {'line': b'   46 |   explicit SetParametersResult_(\x1b[01;36m\x1b[Kconst ContainerAllocator & _alloc\x1b[m\x1b[K, rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)\n'}
+[7.942631] (drone_description) StderrLine: {'line': b'      |                                 \x1b[01;36m\x1b[K~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~\x1b[m\x1b[K\n'}
+[7.942726] (drone_description) StderrLine: {'line': b'In file included from \x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/set_parameters_result.hpp:7\x1b[m\x1b[K,\n'}
+[7.942879] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/qos_overriding_options.hpp:28\x1b[m\x1b[K,\n'}
+[7.942998] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/subscription_options.hpp:30\x1b[m\x1b[K,\n'}
+[7.943091] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/subscription.hpp:45\x1b[m\x1b[K,\n'}
+[7.943228] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/any_executable.hpp:25\x1b[m\x1b[K,\n'}
+[7.943384] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategy.hpp:25\x1b[m\x1b[K,\n'}
+[7.943501] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/memory_strategies.hpp:18\x1b[m\x1b[K,\n'}
+[7.943593] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executor_options.hpp:20\x1b[m\x1b[K,\n'}
+[7.943685] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executor.hpp:37\x1b[m\x1b[K,\n'}
+[7.943774] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executors/multi_threaded_executor.hpp:25\x1b[m\x1b[K,\n'}
+[7.944098] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/executors.hpp:21\x1b[m\x1b[K,\n'}
+[7.944187] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/opt/ros/humble/include/rclcpp/rclcpp/rclcpp.hpp:155\x1b[m\x1b[K,\n'}
+[7.944299] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:10\x1b[m\x1b[K,\n'}
+[7.944406] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2\x1b[m\x1b[K:\n'}
+[7.944497] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:36:12:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kcandidate: \xe2\x80\x98\x1b[01m\x1b[Krcl_interfaces::msg::SetParametersResult_<ContainerAllocator>::SetParametersResult_(rosidl_runtime_cpp::MessageInitialization) [with ContainerAllocator = std::allocator<void>]\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.944635] (drone_description) StderrLine: {'line': b'   36 |   explicit \x1b[01;36m\x1b[KSetParametersResult_\x1b[m\x1b[K(rosidl_runtime_cpp::MessageInitialization _init = rosidl_runtime_cpp::MessageInitialization::ALL)\n'}
+[7.944714] (drone_description) StderrLine: {'line': b'      |            \x1b[01;36m\x1b[K^~~~~~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.944783] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:36:12:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[K  candidate expects 1 argument, 2 provided\n'}
+[7.944854] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kcandidate: \xe2\x80\x98\x1b[01m\x1b[Krcl_interfaces::msg::SetParametersResult_<std::allocator<void> >::SetParametersResult_(const rcl_interfaces::msg::SetParametersResult_<std::allocator<void> >&)\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.944931] (drone_description) StderrLine: {'line': b'   32 | struct \x1b[01;36m\x1b[KSetParametersResult_\x1b[m\x1b[K\n'}
+[7.945005] (drone_description) StderrLine: {'line': b'      |        \x1b[01;36m\x1b[K^~~~~~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.945072] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[K  candidate expects 1 argument, 2 provided\n'}
+[7.945148] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kcandidate: \xe2\x80\x98\x1b[01m\x1b[Krcl_interfaces::msg::SetParametersResult_<std::allocator<void> >::SetParametersResult_(rcl_interfaces::msg::SetParametersResult_<std::allocator<void> >&&)\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.945223] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/opt/ros/humble/include/rcl_interfaces/rcl_interfaces/msg/detail/set_parameters_result__struct.hpp:32:8:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[K  candidate expects 1 argument, 2 provided\n'}
+[7.945303] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.945379] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:139:18:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.945477] (drone_description) StderrLine: {'line': b'  139 |   for (auto &m : \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->world_->Models())\n'}
+[7.945714] (drone_description) StderrLine: {'line': b'      |                  \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.946001] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:145:78:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected primary-expression before \xe2\x80\x98\x1b[01m\x1b[K>\x1b[m\x1b[K\xe2\x80\x99 token\n'}
+[7.946134] (drone_description) StderrLine: {'line': b'  145 |     auto mean_sub = rosNode_->create_subscription<geometry_msgs::msg::Vector3\x1b[01;31m\x1b[K>\x1b[m\x1b[K(\n'}
+[7.946353] (drone_description) StderrLine: {'line': b'      |                                                                              \x1b[01;31m\x1b[K^\x1b[m\x1b[K\n'}
+[7.946491] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:146:7:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kleft operand of comma operator has no effect [\x1b[01;35m\x1b[K-Wunused-value\x1b[m\x1b[K]\n'}
+[7.946758] (drone_description) StderrLine: {'line': b'  146 |       \x1b[01;35m\x1b[Kmean_topic\x1b[m\x1b[K, rclcpp::SystemDefaultsQoS(),\n'}
+[7.946980] (drone_description) StderrLine: {'line': b'      |       \x1b[01;35m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.947144] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:147:8:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.947378] (drone_description) StderrLine: {'line': b'  147 |       [\x1b[01;31m\x1b[Kthis\x1b[m\x1b[K, model_name](const geometry_msgs::msg::Vector3::SharedPtr msg)\n'}
+[7.947559] (drone_description) StderrLine: {'line': b'      |        \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.947763] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In lambda function:\n'}
+[7.947839] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:149:9:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.947902] (drone_description) StderrLine: {'line': b'  149 |         \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->perModelWind_[model_name].mean = ignition::math::Vector3d(msg->x, msg->y, msg->z);\n'}
+[7.948053] (drone_description) StderrLine: {'line': b'      |         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.948214] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:150:87:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.948791] (drone_description) StderrLine: {'line': b'  150 |         gzmsg << "WindPlugin: per-model mean updated for " << model_name << " -> " << \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->perModelWind_[model_name].mean << std::endl;\n'}
+[7.949254] (drone_description) StderrLine: {'line': b'      |                                                                                       \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.949572] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.949650] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:152:73:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected primary-expression before \xe2\x80\x98\x1b[01m\x1b[K>\x1b[m\x1b[K\xe2\x80\x99 token\n'}
+[7.949756] (drone_description) StderrLine: {'line': b'  152 |     auto gust_sub = rosNode_->create_subscription<std_msgs::msg::Float64\x1b[01;31m\x1b[K>\x1b[m\x1b[K(\n'}
+[7.950094] (drone_description) StderrLine: {'line': b'      |                                                                         \x1b[01;31m\x1b[K^\x1b[m\x1b[K\n'}
+[7.950167] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:153:7:\x1b[m\x1b[K \x1b[01;35m\x1b[Kwarning: \x1b[m\x1b[Kleft operand of comma operator has no effect [\x1b[01;35m\x1b[K-Wunused-value\x1b[m\x1b[K]\n'}
+[7.950308] (drone_description) StderrLine: {'line': b'  153 |       \x1b[01;35m\x1b[Kgust_topic\x1b[m\x1b[K, rclcpp::SystemDefaultsQoS(),\n'}
+[7.950607] (drone_description) StderrLine: {'line': b'      |       \x1b[01;35m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.950748] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:154:8:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.951031] (drone_description) StderrLine: {'line': b'  154 |       [\x1b[01;31m\x1b[Kthis\x1b[m\x1b[K, model_name](const std_msgs::msg::Float64::SharedPtr msg)\n'}
+[7.951162] (drone_description) StderrLine: {'line': b'      |        \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.951312] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In lambda function:\n'}
+[7.951372] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:156:9:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.951432] (drone_description) StderrLine: {'line': b'  156 |         \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->perModelWind_[model_name].gust_std = msg->data;\n'}
+[7.951487] (drone_description) StderrLine: {'line': b'      |         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.951543] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.951601] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:160:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KperModelMeanSubs_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.951661] (drone_description) StderrLine: {'line': b'  160 |     \x1b[01;31m\x1b[KperModelMeanSubs_\x1b[m\x1b[K.push_back(mean_sub);\n'}
+[7.951716] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.951771] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:161:5:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KperModelGustSubs_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.951827] (drone_description) StderrLine: {'line': b'  161 |     \x1b[01;31m\x1b[KperModelGustSubs_\x1b[m\x1b[K.push_back(gust_sub);\n'}
+[7.951882] (drone_description) StderrLine: {'line': b'      |     \x1b[01;31m\x1b[K^~~~~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.951935] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:164:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KrosExecutor_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.951991] (drone_description) StderrLine: {'line': b'  164 |   \x1b[01;31m\x1b[KrosExecutor_\x1b[m\x1b[K = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();\n'}
+[7.952045] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.952099] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:167:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KrosRunning_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.952155] (drone_description) StderrLine: {'line': b'  167 |   \x1b[01;31m\x1b[KrosRunning_\x1b[m\x1b[K.store(true);\n'}
+[7.952210] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.952265] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:168:3:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KrosSpinThread_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.952319] (drone_description) StderrLine: {'line': b'  168 |   \x1b[01;31m\x1b[KrosSpinThread_\x1b[m\x1b[K = std::thread([this]() {\n'}
+[7.952373] (drone_description) StderrLine: {'line': b'      |   \x1b[01;31m\x1b[K^~~~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.952428] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:168:33:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.952485] (drone_description) StderrLine: {'line': b'  168 |   rosSpinThread_ = std::thread([\x1b[01;31m\x1b[Kthis\x1b[m\x1b[K]() {\n'}
+[7.952540] (drone_description) StderrLine: {'line': b'      |                                 \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.952597] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In lambda function:\n'}
+[7.952652] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:169:12:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.952706] (drone_description) StderrLine: {'line': b'  169 |     while (\x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->rosRunning_.load())\n'}
+[7.952761] (drone_description) StderrLine: {'line': b'      |            \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.952815] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:171:7:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 was not captured for this lambda function\n'}
+[7.952869] (drone_description) StderrLine: {'line': b'  171 |       \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->rosExecutor_->spin_some(std::chrono::milliseconds(10));\n'}
+[7.952927] (drone_description) StderrLine: {'line': b'      |       \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.952985] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid Load(gazebo::physics::WorldPtr, sdf::v9::ElementPtr)\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.953057] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:176:46:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KmeanWind_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953092] (drone_description) StderrLine: {'line': b'  176 |   gzmsg << "WindPlugin loaded: meanWind=" << \x1b[01;31m\x1b[KmeanWind_\x1b[m\x1b[K << " gustStd=" << gustStd_ << " updateRate=" << updateRate_ << std::endl;\n'}
+[7.953119] (drone_description) StderrLine: {'line': b'      |                                              \x1b[01;31m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953143] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:176:74:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KgustStd_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953168] (drone_description) StderrLine: {'line': b'  176 |   gzmsg << "WindPlugin loaded: meanWind=" << meanWind_ << " gustStd=" << \x1b[01;31m\x1b[KgustStd_\x1b[m\x1b[K << " updateRate=" << updateRate_ << std::endl;\n'}
+[7.953191] (drone_description) StderrLine: {'line': b'      |                                                                          \x1b[01;31m\x1b[K^~~~~~~~\x1b[m\x1b[K\n'}
+[7.953214] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:176:104:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KupdateRate_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953238] (drone_description) StderrLine: {'line': b'  176 |   gzmsg << "WindPlugin loaded: meanWind=" << meanWind_ << " gustStd=" << gustStd_ << " updateRate=" << \x1b[01;31m\x1b[KupdateRate_\x1b[m\x1b[K << std::endl;\n'}
+[7.953264] (drone_description) StderrLine: {'line': b'      |                                                                                                        \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953288] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K At global scope:\n'}
+[7.953311] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:179:6:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99 has not been declared\n'}
+[7.953334] (drone_description) StderrLine: {'line': b'  179 | void \x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K::OnUpdate()\n'}
+[7.953358] (drone_description) StderrLine: {'line': b'      |      \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953380] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kvoid OnUpdate()\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.953404] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:181:30:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.953427] (drone_description) StderrLine: {'line': b'  181 |   gazebo::common::Time now = \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->world_->SimTime();\n'}
+[7.953449] (drone_description) StderrLine: {'line': b'      |                              \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.953471] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:182:22:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KlastUpdate_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953493] (drone_description) StderrLine: {'line': b'  182 |   double dt = (now - \x1b[01;31m\x1b[KlastUpdate_\x1b[m\x1b[K).Double();\n'}
+[7.953515] (drone_description) StderrLine: {'line': b'      |                      \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953542] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:186:7:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KupdateRate_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953566] (drone_description) StderrLine: {'line': b'  186 |   if (\x1b[01;31m\x1b[KupdateRate_\x1b[m\x1b[K > 0.0 && dt < 1.0/updateRate_)\n'}
+[7.953589] (drone_description) StderrLine: {'line': b'      |       \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953612] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:190:25:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Krng_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953634] (drone_description) StderrLine: {'line': b'  190 |   double gx = gustDist_(\x1b[01;31m\x1b[Krng_\x1b[m\x1b[K) * gustStd_;\n'}
+[7.953655] (drone_description) StderrLine: {'line': b'      |                         \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.953677] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:190:15:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KgustDist_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953699] (drone_description) StderrLine: {'line': b'  190 |   double gx = \x1b[01;31m\x1b[KgustDist_\x1b[m\x1b[K(rng_) * gustStd_;\n'}
+[7.953720] (drone_description) StderrLine: {'line': b'      |               \x1b[01;31m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953741] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:190:33:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KgustStd_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953764] (drone_description) StderrLine: {'line': b'  190 |   double gx = gustDist_(rng_) * \x1b[01;31m\x1b[KgustStd_\x1b[m\x1b[K;\n'}
+[7.953785] (drone_description) StderrLine: {'line': b'      |                                 \x1b[01;31m\x1b[K^~~~~~~~\x1b[m\x1b[K\n'}
+[7.953806] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:193:35:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KmeanWind_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.953827] (drone_description) StderrLine: {'line': b'  193 |   ignition::math::Vector3d wind = \x1b[01;31m\x1b[KmeanWind_\x1b[m\x1b[K + ignition::math::Vector3d(gx, gy, gz);\n'}
+[7.953848] (drone_description) StderrLine: {'line': b'      |                                   \x1b[01;31m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.953869] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:196:17:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kinvalid use of \xe2\x80\x98\x1b[01m\x1b[Kthis\x1b[m\x1b[K\xe2\x80\x99 in non-member function\n'}
+[7.953890] (drone_description) StderrLine: {'line': b'  196 |   auto models = \x1b[01;31m\x1b[Kthis\x1b[m\x1b[K->world_->Models();\n'}
+[7.953911] (drone_description) StderrLine: {'line': b'      |                 \x1b[01;31m\x1b[K^~~~\x1b[m\x1b[K\n'}
+[7.953932] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:212:21:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Karea_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope; did you mean \xe2\x80\x98\x1b[01m\x1b[Karea\x1b[m\x1b[K\xe2\x80\x99?\n'}
+[7.953955] (drone_description) StderrLine: {'line': b'  212 |       double area = \x1b[01;31m\x1b[Karea_\x1b[m\x1b[K;\n'}
+[7.953976] (drone_description) StderrLine: {'line': b'      |                     \x1b[01;31m\x1b[K^~~~~\x1b[m\x1b[K\n'}
+[7.953998] (drone_description) StderrLine: {'line': b'      |                     \x1b[32m\x1b[Karea\x1b[m\x1b[K\n'}
+[7.954019] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:213:25:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KdragCoef_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope; did you mean \xe2\x80\x98\x1b[01m\x1b[KdragCoef\x1b[m\x1b[K\xe2\x80\x99?\n'}
+[7.954043] (drone_description) StderrLine: {'line': b'  213 |       double dragCoef = \x1b[01;31m\x1b[KdragCoef_\x1b[m\x1b[K;\n'}
+[7.954064] (drone_description) StderrLine: {'line': b'      |                         \x1b[01;31m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954088] (drone_description) StderrLine: {'line': b'      |                         \x1b[32m\x1b[KdragCoef\x1b[m\x1b[K\n'}
+[7.954109] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:214:17:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KlinkAeroMap_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.954131] (drone_description) StderrLine: {'line': b'  214 |       auto it = \x1b[01;31m\x1b[KlinkAeroMap_\x1b[m\x1b[K.find(link->GetScopedName());\n'}
+[7.954152] (drone_description) StderrLine: {'line': b'      |                 \x1b[01;31m\x1b[K^~~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954172] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:220:26:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KairDensity_\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope\n'}
+[7.954195] (drone_description) StderrLine: {'line': b'  220 |       double mag = 0.5 * \x1b[01;31m\x1b[KairDensity_\x1b[m\x1b[K * dragCoef * area * speed * speed;\n'}
+[7.954218] (drone_description) StderrLine: {'line': b'      |                          \x1b[01;31m\x1b[K^~~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954240] (drone_description) StderrLine: {'line': b'In file included from \x1b[01m\x1b[K/usr/include/gazebo-11/gazebo/common/common.hh:36\x1b[m\x1b[K,\n'}
+[7.954262] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/usr/include/gazebo-11/gazebo/gazebo_core.hh:19\x1b[m\x1b[K,\n'}
+[7.954285] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/usr/include/gazebo-11/gazebo/gazebo.hh:20\x1b[m\x1b[K,\n'}
+[7.954309] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:5\x1b[m\x1b[K,\n'}
+[7.954330] (drone_description) StderrLine: {'line': b'                 from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2\x1b[m\x1b[K:\n'}
+[7.954352] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:\x1b[m\x1b[K In function \xe2\x80\x98\x1b[01m\x1b[Kgazebo::WorldPlugin* RegisterPlugin()\x1b[m\x1b[K\xe2\x80\x99:\n'}
+[7.954374] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:230:26:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected type-specifier before \xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.954396] (drone_description) StderrLine: {'line': b'  230 | GZ_REGISTER_WORLD_PLUGIN(\x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K)\n'}
+[7.954417] (drone_description) StderrLine: {'line': b'      |                          \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954438] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/usr/include/gazebo-11/gazebo/common/Plugin.hh:470:16:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kin definition of macro \xe2\x80\x98\x1b[01m\x1b[KGZ_REGISTER_WORLD_PLUGIN\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.954459] (drone_description) StderrLine: {'line': b'  470 |     return new \x1b[01;36m\x1b[Kclassname\x1b[m\x1b[K();\\\n'}
+[7.954481] (drone_description) StderrLine: {'line': b'      |                \x1b[01;36m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954502] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:230:26:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[Kexpected \xe2\x80\x98\x1b[01m\x1b[K;\x1b[m\x1b[K\xe2\x80\x99 before \xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.954524] (drone_description) StderrLine: {'line': b'  230 | GZ_REGISTER_WORLD_PLUGIN(\x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K)\n'}
+[7.954545] (drone_description) StderrLine: {'line': b'      |                          \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954566] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/usr/include/gazebo-11/gazebo/common/Plugin.hh:470:16:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kin definition of macro \xe2\x80\x98\x1b[01m\x1b[KGZ_REGISTER_WORLD_PLUGIN\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.954587] (drone_description) StderrLine: {'line': b'  470 |     return new \x1b[01;36m\x1b[Kclassname\x1b[m\x1b[K();\\\n'}
+[7.954608] (drone_description) StderrLine: {'line': b'      |                \x1b[01;36m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954629] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:230:26:\x1b[m\x1b[K \x1b[01;31m\x1b[Kerror: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[KWindPlugin\x1b[m\x1b[K\xe2\x80\x99 was not declared in this scope; did you mean \xe2\x80\x98\x1b[01m\x1b[Ksjtu_drone_description::WindPlugin\x1b[m\x1b[K\xe2\x80\x99?\n'}
+[7.954651] (drone_description) StderrLine: {'line': b'  230 | GZ_REGISTER_WORLD_PLUGIN(\x1b[01;31m\x1b[KWindPlugin\x1b[m\x1b[K)\n'}
+[7.954674] (drone_description) StderrLine: {'line': b'      |                          \x1b[01;31m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954695] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/usr/include/gazebo-11/gazebo/common/Plugin.hh:470:16:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[Kin definition of macro \xe2\x80\x98\x1b[01m\x1b[KGZ_REGISTER_WORLD_PLUGIN\x1b[m\x1b[K\xe2\x80\x99\n'}
+[7.954717] (drone_description) StderrLine: {'line': b'  470 |     return new \x1b[01;36m\x1b[Kclassname\x1b[m\x1b[K();\\\n'}
+[7.954738] (drone_description) StderrLine: {'line': b'      |                \x1b[01;36m\x1b[K^~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954759] (drone_description) StderrLine: {'line': b'In file included from \x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/src/plugin_wind.cpp:2\x1b[m\x1b[K:\n'}
+[7.954781] (drone_description) StderrLine: {'line': b'\x1b[01m\x1b[K/home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/include/sjtu_drone_description/plugin_wind.h:21:7:\x1b[m\x1b[K \x1b[01;36m\x1b[Knote: \x1b[m\x1b[K\xe2\x80\x98\x1b[01m\x1b[Ksjtu_drone_description::WindPlugin\x1b[m\x1b[K\xe2\x80\x99 declared here\n'}
+[7.954803] (drone_description) StderrLine: {'line': b'   21 | class \x1b[01;36m\x1b[KWindPlugin\x1b[m\x1b[K : public gazebo::WorldPlugin\n'}
+[7.954824] (drone_description) StderrLine: {'line': b'      |       \x1b[01;36m\x1b[K^~~~~~~~~~\x1b[m\x1b[K\n'}
+[7.954845] (drone_description) StderrLine: {'line': b'gmake[2]: *** [CMakeFiles/plugin_wind.dir/build.make:76: CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o] \xec\x98\xa4\xeb\xa5\x98 1\n'}
+[7.954866] (drone_description) StderrLine: {'line': b'gmake[1]: *** [CMakeFiles/Makefile2:165: CMakeFiles/plugin_wind.dir/all] \xec\x98\xa4\xeb\xa5\x98 2\n'}
+[7.954888] (drone_description) StderrLine: {'line': b'gmake: *** [Makefile:146: all] \xec\x98\xa4\xeb\xa5\x98 2\n'}
+[7.954912] (drone_description) CommandEnded: {'returncode': 2}
+[7.955082] (drone_description) JobEnded: {'identifier': 'drone_description', 'rc': 2}
+[7.961669] (-) EventReactorShutdown: {}

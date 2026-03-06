@@ -6,6 +6,7 @@
 /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.sh
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.dsv
+/home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/windy_box/model.sdf
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.stl
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.dae
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/sjtu_drone.sdf
@@ -17,6 +18,7 @@
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/model.config
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf.xacro
+/home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds/AI_Center3_windy.world
 /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds/playground.world
 /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/package_run_dependencies/drone_description
 /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/parent_prefix_path/drone_description

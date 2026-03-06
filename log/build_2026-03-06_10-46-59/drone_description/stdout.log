@@ -1,0 +1,57 @@
+[35m[1mConsolidate compiler generated dependencies of target plugin_wind[0m
+[ 66%] Built target plugin_drone
+[ 83%] [32mBuilding CXX object CMakeFiles/plugin_wind.dir/src/plugin_wind.cpp.o[0m
+[100%] [32m[1mLinking CXX shared library /home/j/INCSL/IICC26_ws/drone_autonomous_landing/drone_ws/src/drone_description/plugins/libplugin_wind.so[0m
+[100%] Built target plugin_wind
+-- Install configuration: ""
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/pid_controller.h
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_drone.h
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_wind.h
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/include/sjtu_drone_description/plugin_drone_private.h
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_drone.so
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so
+-- Set runtime path of "/home/j/INCSL/IICC26_ws/install/drone_description/lib/libplugin_wind.so" to ""
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.sh
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/library_path.dsv
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/windy_box
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/windy_box/model.sdf
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.stl
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/quadrotor_4.dae
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/sjtu_drone.sdf
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/sjtu_drone/model.config
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/database.config
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/quadrotor_4.stl
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/quadrotor_4.dae
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/sjtu_drone.sdf
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/models/drone/model.config
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/urdf/sjtu_drone.urdf.xacro
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds/AI_Center3_windy.world
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/worlds/playground.world
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/package_run_dependencies/drone_description
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/parent_prefix_path/drone_description
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/ament_prefix_path.sh
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/path.sh
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/environment/path.dsv
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.bash
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.sh
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.zsh
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/local_setup.dsv
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/package.dsv
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/ament_index/resource_index/packages/drone_description
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport.cmake
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/export_drone_descriptionExport-noconfig.cmake
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_include_directories-extras.cmake
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_libraries-extras.cmake
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/ament_cmake_export_targets-extras.cmake
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/drone_descriptionConfig.cmake
+-- Up-to-date: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/cmake/drone_descriptionConfig-version.cmake
+-- Installing: /home/j/INCSL/IICC26_ws/install/drone_description/share/drone_description/package.xml

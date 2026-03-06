@@ -118,17 +118,18 @@
 			<update_rate> 100 </update_rate>
 			<pose> 0 0 0 0 0 0 </pose>
 			<imu>
-				<noise>
-					<type>gaussian</type>
-					<rate>
-						<mean> 0 </mean>
-						<stddev> 0.01 </stddev>
-					</rate>
-					<accel>
-						<mean> 0 </mean>
-						<stddev> 0.01 </stddev>
-					</accel>
-				</noise>
+				<angular_velocity>
+					<noise type="gaussian">
+						<mean>0.0</mean>
+						<stddev>0.01</stddev>
+					</noise>
+				</angular_velocity>
+				<linear_acceleration>
+					<noise type="gaussian">
+						<mean>0.0</mean>
+						<stddev>0.01</stddev>
+					</noise>
+				</linear_acceleration>
 			</imu>
 			<plugin name='imu' filename='libgazebo_ros_imu_sensor.so'>
 				<ros>

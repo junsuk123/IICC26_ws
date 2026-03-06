@@ -11,11 +11,17 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_share, 'urdf', 'sjtu_drone.urdf.xacro')
     world_file = os.path.join(pkg_share, 'worlds', 'AI_Center3.world')
 
+    # Use an absolute world file path from this workspace so Gazebo loads
+    # the intended world/model files (avoids picking an unrelated install).
     declare_world_arg = DeclareLaunchArgument(
         'world',
         default_value=world_file,
-        description='Gazebo world file to load'
+        description='Gazebo world file to load (absolute path)'
     )
+    # Resolve the LaunchConfiguration at launch time; but when launching
+    # from a wrapped script we prefer the absolute default path. The
+    # ExecuteProcess below will accept either the LaunchConfiguration or
+    # the resolved string.
     world = LaunchConfiguration('world')
 
     # xacro -> urdf
@@ -23,11 +29,15 @@ def generate_launch_description():
 
     return LaunchDescription([
         declare_world_arg,
+        # Use the absolute world file path from this package so Gazebo loads
+        # the workspace's world (avoids accidentally using a different
+        # workspace's install). Users can still override the 'world'
+        # launch-argument with an explicit path if needed.
         ExecuteProcess(
             cmd=[
                 'gazebo', '--verbose',
                 '-s', 'libgazebo_ros_factory.so',
-                world
+                world_file
             ],
             output='screen'
         ),

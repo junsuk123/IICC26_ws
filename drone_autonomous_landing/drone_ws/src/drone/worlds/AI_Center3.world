@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="AI_Center3">
+    <!-- 복사본: my_robot_description/worlds/AI_Center3.world -->
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <!-- 환경 요소, 오브젝트, 조명 등 필요시 추가 -->
+  </world>
+</sdf>

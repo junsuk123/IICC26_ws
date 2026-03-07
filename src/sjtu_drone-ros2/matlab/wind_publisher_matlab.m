@@ -98,7 +98,22 @@ gust_rate_per_sec = opts.GustRate/60;
 % Create node and publisher. Users must have ROS2 network ready.
 try
     node = ros2node("matlab_wind_publisher_node");
-    pub = ros2publisher(node,'/environment/wind','geometry_msgs/msg/Vector3');
+    pub = ros2publisher(node,'/environment/wind','geometry_msgs/Vector3');
+    % Also publish legacy topic /wind_condition and command topic /wind_command
+    try
+        pub2 = ros2publisher(node,'/wind_condition','std_msgs/Float32MultiArray');
+        msg2 = ros2message(pub2);
+        publish_wind_condition = true;
+    catch
+        publish_wind_condition = false;
+    end
+    try
+        pub_cmd = ros2publisher(node,'/wind_command','std_msgs/Float32MultiArray');
+        msg_cmd = ros2message(pub_cmd);
+        publish_wind_command = true;
+    catch
+        publish_wind_command = false;
+    end
 catch ME
     error('Failed to create ROS2 node/publisher. Ensure MATLAB ROS2 is installed and configured.\nOriginal error: %s', ME.message);
 end
@@ -257,7 +272,7 @@ while true
     w = w_mean + w_turb + gust_w;
 
     % Publish to ROS2 topic
-    % geometry_msgs/msg/Vector3 fields are X, Y, Z in MATLAB
+    % geometry_msgs/Vector3 fields are X, Y, Z in MATLAB
     msg.X = u;
     msg.Y = v;
     msg.Z = w;
@@ -265,6 +280,30 @@ while true
         publish(pub,msg);
     catch err
         warning('Publish failed: %s', err.message);
+    end
+
+    % Also publish legacy /wind_condition as [speed, direction_deg]
+    speed = sqrt(u^2 + v^2);
+    dir_rad = atan2(v, u);
+    dir_deg = mod(rad2deg(dir_rad),360);
+    if publish_wind_condition
+        try
+            % std_msgs/Float32MultiArray.data expects single precision
+            msg2.data = single([speed; dir_deg]);
+            publish(pub2, msg2);
+        catch err
+            warning('Publish to /wind_condition failed: %s', err.message);
+        end
+    end
+
+    % Publish command to plugin on /wind_command so Gazebo plugin updates runtime wind
+    if exist('publish_wind_command','var') && publish_wind_command
+        try
+            msg_cmd.data = single([speed; dir_deg]);
+            publish(pub_cmd, msg_cmd);
+        catch err
+            warning('Publish to /wind_command failed: %s', err.message);
+        end
     end
 
     % Optional: print a low-rate status

@@ -18,6 +18,11 @@ clear; clc; close all;
 %% Configuration
 cfg.use_launch = false; % if true the script will attempt to start the configured launch command
 cfg.launchCMD = '';
+% Optionally start the MATLAB wind publisher as a separate background process
+cfg.start_wind_publisher = true; % if true, attempt to launch wind_publisher_matlab in background
+cfg.wind_publisher_rate = 10;    % Hz for wind publisher
+cfg.wind_publisher_duration = inf; % seconds; inf means run until manually stopped
+cfg.matlab_executable = 'matlab'; % command to start MATLAB (must be on PATH)
 % Example if you want MATLAB to start the ros2 launch (adjust paths):
 % cfg.launchCMD = 'bash -lc "source /opt/ros/humble/setup.bash; source /home/user/INCSL/IICC26_ws/install/setup.bash; ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py use_gui:=false &"';
 
@@ -51,6 +56,35 @@ if cfg.use_launch && ~isempty(cfg.launchCMD)
     end
 end
 
+%% Optionally start wind publisher as a separate MATLAB process
+if cfg.start_wind_publisher
+    try
+        % Determine folder of this script and path to wind_publisher_matlab.m
+        thisFile = mfilename('fullpath'); thisFolder = fileparts(thisFile);
+        windFile = fullfile(thisFolder,'wind_publisher_matlab.m');
+        if ~isfile(windFile)
+            warning('Wind publisher file not found at %s. Skipping auto-start.', windFile);
+        else
+            % Build a matlab -batch command that cd's to the folder and runs the function
+            % Use -batch for non-interactive runs (R2019a+). Quote paths carefully.
+            bp = thisFolder;
+            rateArg = cfg.wind_publisher_rate;
+            durArg = cfg.wind_publisher_duration;
+            % Create the -batch command string
+            cmdBatch = sprintf('cd(''%s''); try, wind_publisher_matlab(''Rate'',%d,''Duration'',%g); catch ME, disp(getReport(ME)); end', bp, rateArg, durArg);
+            syscmd = sprintf('%s -batch "%s" > /dev/null 2>&1 &', cfg.matlab_executable, cmdBatch);
+            [st,out] = system(syscmd);
+            if st ~= 0
+                warning('Failed to start wind publisher via system call (status %d). Command output: %s', st, out);
+            else
+                fprintf('[MATLAB] Launched wind_publisher_matlab in background (rate=%d Hz)\n', rateArg);
+            end
+        end
+    catch err
+        warning('Auto-start of wind publisher failed: %s', err.message);
+    end
+end
+
 %% ROS2 node and pubs/subs
 try
     node = ros2node('/matlab_landing_decision');
@@ -59,7 +93,7 @@ catch ME
 end
 
 sub_wind = ros2subscriber(node, topic_wind, 'std_msgs/Float32MultiArray');
-sub_env_wind = ros2subscriber(node, topic_env_wind, 'geometry_msgs/msg/Vector3');
+sub_env_wind = ros2subscriber(node, topic_env_wind, 'geometry_msgs/Vector3');
 sub_pose = ros2subscriber(node, topic_pose, 'geometry_msgs/Pose');
 pub_dec = ros2publisher(node, topic_decision, 'std_msgs/String');
 

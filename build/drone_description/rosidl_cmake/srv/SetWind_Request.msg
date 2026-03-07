@@ -1,3 +1,0 @@
-string model_name
-geometry_msgs/Vector3 mean
-float64 gust_std

@@ -11,6 +11,7 @@ setup.py
 config/drone.yaml
 launch/sjtu_drone_bringup.launch.py
 launch/sjtu_drone_gazebo.launch.py
+launch/wind_publisher_launch.py
 resource/sjtu_drone_bringup
 rviz/rviz.rviz
 sjtu_drone_bringup/__init__.py

@@ -1,1 +1,1 @@
-gazebo_dev:gazebo_plugins:gazebo_ros:geometry_msgs:rclcpp:sensor_msgs:std_msgs
+gazebo_dev:gazebo_plugins:gazebo_ros:geometry_msgs:rclcpp:rosidl_default_runtime:sensor_msgs:sjtu_drone_interfaces:std_msgs

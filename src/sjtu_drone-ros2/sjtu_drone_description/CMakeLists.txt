@@ -25,7 +25,9 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-
+find_package(rosidl_default_generators REQUIRED)
+find_package(rosidl_default_runtime REQUIRED)
+find_package(sjtu_drone_interfaces REQUIRED)
 
 link_directories(${GAZEBO_LIBRARY_DIRS} ${Boost_LIBRARIES} ${PROTOBUF_LIBRARIES} ${OGRE_LIBRARY_DIRS})
 include_directories(${OpenCV_INCLUDE_DIR}
@@ -103,6 +105,11 @@ set_target_properties(plugin_drone
 )
 
 ################## 3. Wind world plugin for applying wind forces #################
+# Generate service interfaces (SetWind)
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/SetWind.srv"
+)
+
 add_library( wind_plugin SHARED
   src/wind_plugin.cpp
   include/sjtu_drone_description/wind_plugin.h
@@ -117,6 +124,8 @@ ament_target_dependencies(wind_plugin
   "rclcpp"
   "gazebo_ros"
   "std_msgs"
+  "rosidl_default_runtime"
+  "sjtu_drone_interfaces"
 )
 
 set_target_properties(wind_plugin
@@ -141,7 +150,6 @@ ament_export_libraries(
 ament_export_targets(
   export_${PROJECT_NAME}
 )
-
 
 install(
   DIRECTORY models urdf worlds

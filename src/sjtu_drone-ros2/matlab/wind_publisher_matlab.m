@@ -1,320 +1,194 @@
-function wind_publisher_matlab(varargin)
-% wind_publisher_matlab  Publish a realistic near-surface wind field to ROS2
+function timerHandle = startWindPublisher(pubCfg)
+% startWindPublisher Starts a MATLAB-based wind generator and publisher.
 %
-% Usage:
-%   wind_publisher_matlab()                % run with defaults, infinite loop
-%   wind_publisher_matlab('Rate',10)       % publish at 10 Hz
-%   wind_publisher_matlab('Duration',60)   % run for 60 seconds
+% timerHandle = startWindPublisher(pubCfg)
 %
-% This script simulates a near-surface wind vector (u,v,w) (m/s) using:
-% - A slowly time-varying mean wind (base + diurnal cycle)
-% - Turbulence as band-limited (AR(1)) filtered white noise
-% - Intermittent gust events (Poisson arrivals, Gaussian time shape)
-% - Slowly-varying wind direction
+% pubCfg fields (all optional, sensible defaults provided):
+%  rate - publish rate Hz (default 10)
+%  steady_speed - steady wind speed (m/s)
+%  steady_dir - steady wind direction (deg, 0 = +X)
+%  dryden.Lu, dryden.Lv - length scales (m)
+%  dryden.sigma_u, dryden.sigma_v - turbulence intensities (m/s)
+%  shear.z_ref - reference height for shear (m)
+%  shear.alpha - power-law exponent
+%  gust.prob - probability per second to start a gust
+%  gust.amp - typical gust amplitude (m/s)
+%  pose_topic - pose topic to read altitude for shear (default '/drone/gt_pose')
 %
-% The generated wind is published as geometry_msgs/msg/Vector3 on
-% topic '/environment/wind' with fields X=u, Y=v, Z=w.
-%
-% Assumptions/Notes:
-% - Parameters (mean speed, turbulence intensity, gust rate) are set to
-%   reasonable near-surface defaults for temperate coastal/urban areas in
-%   South Korea. If you need site-specific statistics, tune them.
-% - Requires MATLAB ROS2 support package (ros2node, ros2publisher, ros2message).
-% - Ensure ROS2 network/domain is configured consistently between MATLAB and
-%   your ROS2 system.
+% Returns a MATLAB timer handle. To stop: stop(timerHandle); delete(timerHandle);
 
-% Inputs (name-value):
-%   'Rate'       - publish rate in Hz (default 10)
-%   'Duration'   - duration in seconds; empty/inf for continuous (default inf)
-%   'BaseMean'   - base mean wind speed (m/s) (default 4.0)
-%   'TI'         - turbulence intensity (ratio of sigma_u / mean) (default 0.20)
-%   'GustRate'   - average gust arrivals per minute (default 1.0)
-%   'Seed'       - RNG seed (default shuffled)
+if nargin < 1, pubCfg = struct(); end
+cfg = pubCfg;
+if ~isfield(cfg,'rate'), cfg.rate = 10; end
+if ~isfield(cfg,'steady_speed'), cfg.steady_speed = 2.0; end
+if ~isfield(cfg,'steady_dir'), cfg.steady_dir = 0.0; end
+if ~isfield(cfg,'dryden'), cfg.dryden = struct(); end
+if ~isfield(cfg.dryden,'Lu'), cfg.dryden.Lu = 200.0; end
+if ~isfield(cfg.dryden,'Lv'), cfg.dryden.Lv = 200.0; end
+if ~isfield(cfg.dryden,'sigma_u'), cfg.dryden.sigma_u = 0.5; end
+if ~isfield(cfg.dryden,'sigma_v'), cfg.dryden.sigma_v = 0.5; end
+if ~isfield(cfg,'shear'), cfg.shear = struct(); end
+if ~isfield(cfg.shear,'z_ref'), cfg.shear.z_ref = 10.0; end
+if ~isfield(cfg.shear,'alpha'), cfg.shear.alpha = 0.14; end
+if ~isfield(cfg,'gust'), cfg.gust = struct(); end
+if ~isfield(cfg.gust,'prob'), cfg.gust.prob = 0.02; end
+if ~isfield(cfg.gust,'amp'), cfg.gust.amp = 3.0; end
+if ~isfield(cfg,'pose_topic'), cfg.pose_topic = '/drone/gt_pose'; end
 
-% Returns: none (publishes until Duration elapses or interrupted)
+% service client connection params
+if ~isfield(cfg,'service_wait_timeout'), cfg.service_wait_timeout = 10.0; end % total seconds to wait for service
+if ~isfield(cfg,'service_retry_max'), cfg.service_retry_max = 8; end
+if ~isfield(cfg,'service_retry_interval'), cfg.service_retry_interval = 0.5; end % initial interval (sec), exponential backoff applied
 
-% Example:
-%   wind_publisher_matlab('Rate',20,'Duration',300,'BaseMean',5)
-
-% Author: Generated helper
-% Date: 2026-03-07
-
-%% Parse inputs
-p = inputParser;
-addParameter(p,'Rate',10,@(x)isnumeric(x)&&x>0);
-addParameter(p,'Duration',inf,@(x)isnumeric(x)&&x>0);
-addParameter(p,'BaseMean',4.0,@(x)isnumeric(x)&&x>=0);
-addParameter(p,'TI',0.20,@(x)isnumeric(x)&&x>=0);
-addParameter(p,'GustRate',1.0,@(x)isnumeric(x)&&x>=0); % per minute
-addParameter(p,'Seed',[],@(x)isnumeric(x)&&isscalar(x));
-addParameter(p,'Height',10.0,@(x)isnumeric(x)&&x>=0); % vehicle height (m)
-addParameter(p,'ShearExponent',0.14,@(x)isnumeric(x)&&x>=0); % power law exponent (alpha)
-addParameter(p,'Lu',200,@(x)isnumeric(x)&&x>0); % Dryden length scales (m)
-addParameter(p,'Lv',50,@(x)isnumeric(x)&&x>0);
-addParameter(p,'Lw',15,@(x)isnumeric(x)&&x>0);
-parse(p,varargin{:});
-opts = p.Results;
-
-if ~isempty(opts.Seed)
-    rng(opts.Seed);
-end
-
-rate_hz = opts.Rate;
-dt = 1/ rate_hz;
-T = opts.Duration;
-
-height = opts.Height;
-alpha = opts.ShearExponent;
-Lu = opts.Lu; Lv = opts.Lv; Lw = opts.Lw;
-
-%% Wind model parameters (tunable)
-base_mean = opts.BaseMean;    % m/s (reference at z_ref)
-z_ref = 10;                   % reference height for base_mean (m)
-diurnal_amp = 1.2;            % amplitude of diurnal variation (m/s)
-diurnal_phase = 0;            % phase offset (radians)
-
-ti = opts.TI;                 % turbulence intensity (sigma_u / mean)
-
-gust_rate_per_sec = opts.GustRate/60; % convert to per second
-gust_amp_mean = 3.0;         % mean gust amplitude (m/s)
-gust_amp_std = 1.5;          % gust amplitude variability
-gust_tau = 4.0;              % gust duration scale (seconds)
-
-%% Direction model
-dir_change_fc = 0.01;  % Hz (slow variation in wind direction)
-dir_a = exp(-2*pi*dir_change_fc*dt);
-dir_sigma = 0.3;       % standard deviation of direction increments (rad)
-
-%% Dryden turbulence: will try to build continuous-time Dryden filters and
-%% discretize them (using Control System Toolbox). If unavailable, fall back
-%% to the simple AR(1) approximation.
-hasControl = license('test','Control_Toolbox') && exist('tf','file') && exist('c2d','file');
-use_dryden = hasControl;
-
-%% Gust/random seed already handled
-gust_rate_per_sec = opts.GustRate/60;
-
-%% Prepare ROS2 publisher
-% Create node and publisher. Users must have ROS2 network ready.
+% create a ROS2 node and service client
 try
-    node = ros2node("matlab_wind_publisher_node");
-    pub = ros2publisher(node,'/environment/wind','geometry_msgs/Vector3');
-    % Also publish legacy topic /wind_condition and command topic /wind_command
-    try
-        pub2 = ros2publisher(node,'/wind_condition','std_msgs/Float32MultiArray');
-        msg2 = ros2message(pub2);
-        publish_wind_condition = true;
-    catch
-        publish_wind_condition = false;
-    end
-    try
-        pub_cmd = ros2publisher(node,'/wind_command','std_msgs/Float32MultiArray');
-        msg_cmd = ros2message(pub_cmd);
-        publish_wind_command = true;
-    catch
-        publish_wind_command = false;
-    end
+	node = ros2node('/matlab_wind_publisher');
+catch
+	error('Failed to create ros2 node for wind publisher. Ensure MATLAB ROS2 support and env are available.');
+end
+% create a service client for /set_wind (srv: sjtu_drone_description/srv/SetWind)
+try
+	client = ros2serviceclient(node, '/set_wind', 'sjtu_drone_interfaces/srv/SetWind');
+catch
+    error('Failed to create ros2 service client for /set_wind. Ensure service type is built and available.');
+end
+
+% Wait for service to become available / responsive (simple retry with backoff)
+service_ready = false;
+try
+	tstart = tic;
+	retry = 0;
+	interval = cfg.service_retry_interval;
+	while true
+		% prepare a small probe request (uses steady values but will be overwritten by real ticks)
+		try
+			probe = ros2message(client);
+			probe.speed = single(cfg.steady_speed);
+			probe.direction = single(cfg.steady_dir);
+			resp = call(client, probe);
+			if isstruct(resp) || (isobject(resp) && isprop(resp,'success'))
+				service_ready = true;
+				fprintf('[MATLAB] /set_wind service is available (responded after %d attempts).\n', retry+1);
+				break;
+			end
+		catch
+			% service not available yet or call failed
+		end
+
+		retry = retry + 1;
+		if retry >= cfg.service_retry_max || toc(tstart) > cfg.service_wait_timeout
+			break;
+		end
+		pause(interval);
+		interval = min(5.0, interval * 2.0); % exponential backoff cap
+	end
+	if ~service_ready
+		fprintf('[MATLAB] Warning: /set_wind service did not respond within timeout. Wind publisher will start and attempt calls; service calls will be ignored until available.\n');
+	end
 catch ME
-    error('Failed to create ROS2 node/publisher. Ensure MATLAB ROS2 is installed and configured.\nOriginal error: %s', ME.message);
+	warning('Error while waiting for /set_wind service: %s', ME.message);
+	service_ready = false;
 end
 
-msg = ros2message(pub);
-
-%% Initialize states
-t = 0.0;
-
-% Turbulence filter state initializations
-u_turb_prev = 0.0; v_turb_prev = 0.0; w_turb_prev = 0.0;
-wind_dir = deg2rad(0); % initial direction (rad) from which wind blows
-
-% For gusts: maintain active gusts as struct array with fields t0, amp, dir
-active_gusts = struct('t0',{},'amp',{},'dir',{});
-
-% Rate controller
-rateObj = ros2rate(rate_hz);
-
-% If using Dryden, build discrete-time filters once (or rebuild when mean
-% speed changes significantly). We'll build initial filters here and update
-% adaptively if mean speed changes a lot.
-if use_dryden
-    % default length scales Lu, Lv, Lw used above
-    dryden_filters_valid = false;
-    zi_u = [];
-    zi_v = [];
-    zi_w = [];
-else
-    % fallback AR(1) filter params
-    fc_turb = 0.3;                % turbulence cutoff frequency (Hz) for AR(1)
-    turba = exp(-2*pi*fc_turb*dt);
-    turb_b = sqrt(1 - turba^2);
+% optionally subscribe to pose to read altitude for shear
+poseSub = [];
+try
+	poseSub = ros2subscriber(node, cfg.pose_topic, 'geometry_msgs/Pose');
+catch
+	% if subscription fails, shear will use z=cfg.shear.z_ref
+	poseSub = [];
 end
 
-start_time = tic;
-fprintf('Starting wind publisher at %g Hz. Press Ctrl-C to stop.\n', rate_hz);
+% internal state for Dryden filters and gust
+state.u_t = 0.0; state.v_t = 0.0; state.gust_amp = 0.0; state.gust_time = 0.0;
+state.last_time = tic;
 
-while true
-    elapsed = toc(start_time);
-    if elapsed >= T
-        break;
-    end
+% timer callback
+function tick(~,~)
+	dt = toc(state.last_time);
+	if dt <= 0, dt = 1.0/cfg.rate; end
+	state.last_time = tic;
 
-    % --- mean wind with diurnal cycle ---
-    diurnal = diurnal_amp * sin(2*pi*(elapsed/86400) + diurnal_phase);
-    mean_speed_ref = max(0, base_mean + diurnal); % mean at reference height z_ref
+	% get altitude for shear
+	z = cfg.shear.z_ref;
+	if ~isempty(poseSub)
+		try
+			pmsg = receive(poseSub, 0.0);
+			if ~isempty(pmsg)
+				z = double(pmsg.position.z);
+				if isnan(z) || ~isfinite(z), z = cfg.shear.z_ref; end
+			end
+		catch
+			% ignore
+		end
+	end
 
-    % Apply shear (power law) to compute mean at vehicle height
-    if height <= 0
-        mean_speed = mean_speed_ref;
-    else
-        mean_speed = mean_speed_ref * (height / z_ref)^alpha;
-    end
+	% steady wind (apply shear power law)
+	Uref = cfg.steady_speed;
+	zref = cfg.shear.z_ref;
+	alpha = cfg.shear.alpha;
+	if z <= 0, z = 0.1; end
+	Usteady = Uref * (z / zref)^alpha;
+	theta = cfg.steady_dir * pi/180.0;
+	Ux = Usteady * cos(theta);
+	Uy = Usteady * sin(theta);
 
+	% approximate Dryden using exponential filter on white noise
+	% a = exp(-U*dt/L)
+	Uabs = max(0.1, Usteady);
+	a_u = exp(-Uabs*dt / cfg.dryden.Lu);
+	a_v = exp(-Uabs*dt / cfg.dryden.Lv);
+	b_u = sqrt(1 - a_u^2) * cfg.dryden.sigma_u;
+	b_v = sqrt(1 - a_v^2) * cfg.dryden.sigma_v;
+	wn_u = randn()*1.0; wn_v = randn()*1.0;
+	state.u_t = a_u * state.u_t + b_u * wn_u;
+	state.v_t = a_v * state.v_t + b_v * wn_v;
 
-    % --- slowly varying wind direction (random walk lowpass) ---
-    % AR(1) update for small-angle increments
-    dir_noise = dir_sigma * sqrt(1 - dir_a^2) * randn();
-    wind_dir = dir_a * wind_dir + dir_noise;
+	% gust: random Poisson events that create an exponentially decaying pulse
+	if state.gust_time <= 0
+		if rand() < cfg.gust.prob * dt
+			state.gust_amp = cfg.gust.amp * (0.5 + rand());
+			% random direction for gust relative to steady wind
+			gdir = theta + (rand()-0.5)*pi/3;
+			state.gust_vx = state.gust_amp * cos(gdir);
+			state.gust_vy = state.gust_amp * sin(gdir);
+			state.gust_time = 1.5 + rand()*1.5; % seconds duration
+		end
+	end
+	gust_x = 0.0; gust_y = 0.0;
+	if state.gust_time > 0
+		% exponential decay
+		decay = exp(-dt*1.5);
+		state.gust_vx = state.gust_vx * decay;
+		state.gust_vy = state.gust_vy * decay;
+		gust_x = state.gust_vx; gust_y = state.gust_vy;
+		state.gust_time = state.gust_time - dt;
+	end
 
-    % Convert mean to components (wind from direction wind_dir)
-    % Convention: u is East (positive), v is North (positive). If wind_dir is
-    % direction FROM which wind blows, then wind vector = -mean_speed * [cos(dir), sin(dir)]
-    u_mean = -mean_speed * cos(wind_dir);
-    v_mean = -mean_speed * sin(wind_dir);
-    w_mean = 0.0;
+	% total wind vector
+	Wx = Ux + state.u_t + gust_x;
+	Wy = Uy + state.v_t + gust_y;
+	w_speed = sqrt(Wx^2 + Wy^2);
+	w_dir = atan2(Wy, Wx) * 180.0 / pi; % degrees
 
-    % --- turbulence: Dryden shaping (preferred) or AR(1) fallback ---
-    sigma_u = max(0.01, ti * mean_speed);
-    sigma_v = 0.8 * sigma_u;
-    sigma_w = 0.5 * sigma_u;
-
-    if use_dryden
-        % Rebuild discrete Dryden filters if mean speed changed enough to
-        % affect the time constants (tau = L / U). We check relative change.
-        U = max(mean_speed, 0.1);
-        rebuild_threshold = 0.05; % rebuild if >5% change
-        if ~dryden_filters_valid || abs(U - last_U)/last_U > rebuild_threshold
-            last_U = U;
-            % Continuous-time Dryden transfer functions using tau = L / U
-            s = tf('s');
-            tau_u = Lu / U;
-            Gu = sigma_u * sqrt(2*Lu/pi) * (1 / (1 + tau_u * s));
-
-            tau_v = Lv / U;
-            Gv = sigma_v * sqrt(Lv/pi) * (1 + (tau_v * s)/sqrt(3)) / (1 + (2 * tau_v * s)/sqrt(3) + (tau_v^2 * s^2)/3);
-
-            tau_w = Lw / U;
-            Gw = sigma_w * sqrt(Lw/pi) * (1 + (tau_w * s)/sqrt(3)) / (1 + (2 * tau_w * s)/sqrt(3) + (tau_w^2 * s^2)/3);
-
-            try
-                Gd_u = c2d(Gu,dt,'tustin');
-                Gd_v = c2d(Gv,dt,'tustin');
-                Gd_w = c2d(Gw,dt,'tustin');
-                [bu,au] = tfdata(Gd_u,'v'); [bv,av] = tfdata(Gd_v,'v'); [bw,aw] = tfdata(Gd_w,'v');
-                zi_u = zeros(max(length(au),length(bu))-1,1);
-                zi_v = zeros(max(length(av),length(bv))-1,1);
-                zi_w = zeros(max(length(aw),length(bw))-1,1);
-                dryden_filters_valid = true;
-            catch err
-                % If c2d/tfdata fails, fall back to AR(1)
-                warning('Dryden discretization failed, falling back to AR(1): %s', err.message);
-                use_dryden = false;
-                fc_turb = 0.3;
-                turba = exp(-2*pi*fc_turb*dt);
-                turb_b = sqrt(1 - turba^2);
-            end
-        end
-    end
-
-    if use_dryden && dryden_filters_valid
-        % drive discrete filters with unit white noise; filter output is turb component
-        [u_turb, zi_u] = filter(bu,au,randn(1,1),zi_u);
-        [v_turb, zi_v] = filter(bv,av,randn(1,1),zi_v);
-        [w_turb, zi_w] = filter(bw,aw,randn(1,1),zi_w);
-        % outputs are in m/s already because filters were scaled by sigma
-    else
-        % fallback AR(1)
-        u_turb = turba * u_turb_prev + turb_b * sigma_u * randn();
-        v_turb = turba * v_turb_prev + turb_b * sigma_v * randn();
-        w_turb = turba * w_turb_prev + turb_b * sigma_w * randn();
-        u_turb_prev = u_turb; v_turb_prev = v_turb; w_turb_prev = w_turb;
-    end
-
-    % --- gust arrivals (Poisson) ---
-    if rand() < gust_rate_per_sec * dt
-        % spawn a new gust
-        gamp = max(0, gust_amp_mean + gust_amp_std*randn());
-        gdir = wind_dir + (randn()*0.3); % gust direction slightly different
-        active_gusts(end+1) = struct('t0',elapsed,'amp',gamp,'dir',gdir); %#ok<AGROW>
-    end
-
-    % Evaluate gust contributions and remove finished gusts
-    gust_u = 0.0; gust_v = 0.0; gust_w = 0.0;
-    if ~isempty(active_gusts)
-        keep = false(size(active_gusts));
-        for k = 1:numel(active_gusts)
-            age = elapsed - active_gusts(k).t0;
-            if age < 6*gust_tau
-                % Gaussian-shaped gust in time
-                g = active_gusts(k).amp * exp(-0.5*(age/gust_tau)^2);
-                gust_u = gust_u - g * cos(active_gusts(k).dir);
-                gust_v = gust_v - g * sin(active_gusts(k).dir);
-                keep(k) = true;
-            else
-                keep(k) = false;
-            end
-        end
-        active_gusts = active_gusts(keep);
-    end
-
-    % --- total wind vector (m/s) ---
-    u = u_mean + u_turb + gust_u;
-    v = v_mean + v_turb + gust_v;
-    w = w_mean + w_turb + gust_w;
-
-    % Publish to ROS2 topic
-    % geometry_msgs/Vector3 fields are X, Y, Z in MATLAB
-    msg.X = u;
-    msg.Y = v;
-    msg.Z = w;
-    try
-        publish(pub,msg);
-    catch err
-        warning('Publish failed: %s', err.message);
-    end
-
-    % Also publish legacy /wind_condition as [speed, direction_deg]
-    speed = sqrt(u^2 + v^2);
-    dir_rad = atan2(v, u);
-    dir_deg = mod(rad2deg(dir_rad),360);
-    if publish_wind_condition
-        try
-            % std_msgs/Float32MultiArray.data expects single precision
-            msg2.data = single([speed; dir_deg]);
-            publish(pub2, msg2);
-        catch err
-            warning('Publish to /wind_condition failed: %s', err.message);
-        end
-    end
-
-    % Publish command to plugin on /wind_command so Gazebo plugin updates runtime wind
-    if exist('publish_wind_command','var') && publish_wind_command
-        try
-            msg_cmd.data = single([speed; dir_deg]);
-            publish(pub_cmd, msg_cmd);
-        catch err
-            warning('Publish to /wind_command failed: %s', err.message);
-        end
-    end
-
-    % Optional: print a low-rate status
-    if mod(round(elapsed/dt), round(rate_hz*5)) == 0
-        fprintf('t=%.1fs mean=%.2fm/s dir=%.1fdeg u=%.2f v=%.2f w=%.2f active_gusts=%d\n', ...
-            elapsed, mean_speed, rad2deg(wind_dir), u, v, w, numel(active_gusts));
-    end
-
-    % Wait for next cycle
-    waitfor(rateObj);
+		% call service /set_wind with generated values
+		try
+			req = ros2message(client);
+			% service fields: speed (float32), direction (float32)
+			req.speed = single(w_speed);
+			req.direction = single(w_dir);
+			% call the service (non-blocking/may throw if unavailable)
+			resp = call(client, req);
+			% optionally inspect resp.success / resp.message
+		catch
+			% ignore service call errors (service may not be up yet)
+		end
 end
 
-fprintf('Wind publisher finished (elapsed %.1fs).\n', toc(start_time));
+% create and start timer
+period = 1.0 / cfg.rate;
+timerHandle = timer('ExecutionMode','fixedRate','Period',period,'TimerFcn',@tick,'BusyMode','drop');
+start(timerHandle);
+
+fprintf('[MATLAB] Wind service-client running: /set_wind @ %.1f Hz (steady=%.2f m/s dir=%.1f deg)\n', cfg.rate, cfg.steady_speed, cfg.steady_dir);
 end

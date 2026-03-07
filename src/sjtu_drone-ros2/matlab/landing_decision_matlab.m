@@ -18,18 +18,12 @@ clear; clc; close all;
 %% Configuration
 cfg.use_launch = false; % if true the script will attempt to start the configured launch command
 cfg.launchCMD = '';
-% Optionally start the MATLAB wind publisher as a separate background process
-cfg.start_wind_publisher = true; % if true, attempt to launch wind_publisher_matlab in background
-cfg.wind_publisher_rate = 10;    % Hz for wind publisher
-cfg.wind_publisher_duration = inf; % seconds; inf means run until manually stopped
-cfg.matlab_executable = 'matlab'; % command to start MATLAB (must be on PATH)
 % Example if you want MATLAB to start the ros2 launch (adjust paths):
 % cfg.launchCMD = 'bash -lc "source /opt/ros/humble/setup.bash; source /home/user/INCSL/IICC26_ws/install/setup.bash; ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py use_gui:=false &"';
 
 % Topics (tune if your namespace differs)
 ns = '/drone'; % model namespace used by the bringup launch
 topic_wind = '/wind_condition';                     % Float32MultiArray [speed, direction]
-topic_env_wind = '/environment/wind';               % geometry_msgs/Vector3 (X=u, Y=v, Z=w)
 topic_pose = [ns '/gt_pose'];                       % geometry_msgs/Pose
 topic_decision = '/landing_decision';               % std_msgs/String
 
@@ -39,6 +33,10 @@ params.wind_speed_caution = 4.0;  % m/s between caution and unsafe
 params.max_attitude = deg2rad(10);% roll/pitch limit
 params.max_vz_land = 0.5;         % vertical speed limit for safe landing
 params.decision_rate = 2.0;       % Hz
+
+% Wind publisher integration: if true, MATLAB will generate and publish wind to /wind_command
+cfg.start_wind_publisher = false; % set true to enable built-in wind generator
+cfg.wind_pub_params = struct();   % see wind_publisher_matlab.startWindPublisher options (rate, steady_speed, etc.)
 
 % Bayesian model params (simple Gaussian assumptions)
 bayes.mu_safe = [0.0, 0.0];        % mean [wind_speed, attitude_score]
@@ -56,35 +54,6 @@ if cfg.use_launch && ~isempty(cfg.launchCMD)
     end
 end
 
-%% Optionally start wind publisher as a separate MATLAB process
-if cfg.start_wind_publisher
-    try
-        % Determine folder of this script and path to wind_publisher_matlab.m
-        thisFile = mfilename('fullpath'); thisFolder = fileparts(thisFile);
-        windFile = fullfile(thisFolder,'wind_publisher_matlab.m');
-        if ~isfile(windFile)
-            warning('Wind publisher file not found at %s. Skipping auto-start.', windFile);
-        else
-            % Build a matlab -batch command that cd's to the folder and runs the function
-            % Use -batch for non-interactive runs (R2019a+). Quote paths carefully.
-            bp = thisFolder;
-            rateArg = cfg.wind_publisher_rate;
-            durArg = cfg.wind_publisher_duration;
-            % Create the -batch command string
-            cmdBatch = sprintf('cd(''%s''); try, wind_publisher_matlab(''Rate'',%d,''Duration'',%g); catch ME, disp(getReport(ME)); end', bp, rateArg, durArg);
-            syscmd = sprintf('%s -batch "%s" > /dev/null 2>&1 &', cfg.matlab_executable, cmdBatch);
-            [st,out] = system(syscmd);
-            if st ~= 0
-                warning('Failed to start wind publisher via system call (status %d). Command output: %s', st, out);
-            else
-                fprintf('[MATLAB] Launched wind_publisher_matlab in background (rate=%d Hz)\n', rateArg);
-            end
-        end
-    catch err
-        warning('Auto-start of wind publisher failed: %s', err.message);
-    end
-end
-
 %% ROS2 node and pubs/subs
 try
     node = ros2node('/matlab_landing_decision');
@@ -93,14 +62,26 @@ catch ME
 end
 
 sub_wind = ros2subscriber(node, topic_wind, 'std_msgs/Float32MultiArray');
-sub_env_wind = ros2subscriber(node, topic_env_wind, 'geometry_msgs/Vector3');
 sub_pose = ros2subscriber(node, topic_pose, 'geometry_msgs/Pose');
 pub_dec = ros2publisher(node, topic_decision, 'std_msgs/String');
+
+% Optionally start the MATLAB wind publisher which will publish to /wind_command
+windTimer = [];
+if cfg.start_wind_publisher
+    try
+        % ensure wind_publisher_matlab is on path
+        windTimer = startWindPublisher(cfg.wind_pub_params);
+        % ensure cleanup on exit
+        cleanupWind = onCleanup(@() safeStopWind(windTimer));
+    catch ME
+        warning('Failed to start MATLAB wind publisher: %s', ME.message);
+    end
+end
 
 % Template message
 msg_dec = ros2message(pub_dec);
 
-fprintf('[MATLAB] Node ready. Subscribed to %s and %s and %s. Publishing decisions to %s\n', topic_wind, topic_env_wind, topic_pose, topic_decision);
+fprintf('[MATLAB] Node ready. Subscribed to %s and %s. Publishing decisions to %s\n', topic_wind, topic_pose, topic_decision);
 
 %% Minimal ontology constructors
 makeWind = @(speed,dir) struct('wind_speed',double(speed),'wind_direction',double(dir));
@@ -171,26 +152,15 @@ rate = rateControl(params.decision_rate);
 
 fprintf('[MATLAB] Entering decision loop (method=%s). Ctrl-C to stop.\n', dec_method);
 while true
-    % get latest wind: prefer /environment/wind (Vector3) if available,
-    % otherwise fall back to /wind_condition (Float32MultiArray [speed,dir])
-    env_msg = tryReceive(sub_env_wind, 0.01);
-    if ~isempty(env_msg)
-        % geometry_msgs/Vector3: X=u (east), Y=v (north), Z=w (vertical)
-        u = double(env_msg.X); v = double(env_msg.Y);
-        speed = sqrt(u.^2 + v.^2);
-        dir_rad = atan2(v, u); % radians
-        dir_deg = mod(rad2deg(dir_rad), 360);
-        wind = makeWind(speed, dir_deg);
+    % get latest wind
+    wind_msg = tryReceive(sub_wind, 0.1);
+    if isempty(wind_msg)
+        wind = makeWind(0.0, 0.0);
     else
-        wind_msg = tryReceive(sub_wind, 0.1);
-        if isempty(wind_msg)
-            wind = makeWind(0.0, 0.0);
-        else
-            % expect at least two values [speed, direction]
-            dat = double(wind_msg.data);
-            if numel(dat) < 2, dat = [dat(:); zeros(2-numel(dat),1)]; end
-            wind = makeWind(dat(1), dat(2));
-        end
+        % expect at least two values [speed, direction]
+        dat = double(wind_msg.data);
+        if numel(dat) < 2, dat = [dat(:); zeros(2-numel(dat),1)]; end
+        wind = makeWind(dat(1), dat(2));
     end
 
     % get latest pose
@@ -243,6 +213,19 @@ function r = rateControl(freq)
         towait = r.period - elapsed;
         if towait > 0, pause(towait); end
         r.tlast = tic;
+    end
+end
+
+function safeStopWind(timerHandle)
+    % Stop and delete a MATLAB timer safely
+    try
+        if ~isempty(timerHandle) && isvalid(timerHandle)
+            stop(timerHandle);
+            delete(timerHandle);
+            fprintf('[MATLAB] Wind publisher stopped and timer deleted.\n');
+        end
+    catch
+        % ignore cleanup errors
     end
 end
 

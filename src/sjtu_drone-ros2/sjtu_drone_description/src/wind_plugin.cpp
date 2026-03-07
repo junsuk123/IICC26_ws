@@ -71,6 +71,11 @@ void WindPlugin::Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf)
     10,
     std::bind(&WindPlugin::WindCommandCb, this, std::placeholders::_1)
   );
+  // create service to allow setting wind via /set_wind (srv: sjtu_drone_description/srv/SetWind)
+  srv_ = node_->create_service<sjtu_drone_interfaces::srv::SetWind>(
+    "/set_wind",
+    std::bind(&WindPlugin::SetWindCb, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)
+  );
   last_pub_time_ = node_->now();
 
   // create executor and spin it in a background thread so callbacks run
@@ -103,6 +108,25 @@ void WindPlugin::WindCommandCb(const std_msgs::msg::Float32MultiArray::SharedPtr
   }
   RCLCPP_INFO(node_->get_logger(), "WindPlugin: set wind_speed=%.2f wind_direction=%.1f", wind_speed_, wind_direction_);
   gzdbg << "WindPlugin: received command -> speed=" << wind_speed_ << " dir=" << wind_direction_ << "\n";
+}
+
+void WindPlugin::SetWindCb(const std::shared_ptr<rmw_request_id_t> request_header,
+                           const std::shared_ptr<sjtu_drone_interfaces::srv::SetWind::Request> request,
+                           std::shared_ptr<sjtu_drone_interfaces::srv::SetWind::Response> response)
+{
+  (void)request_header;
+  if (!request) {
+    response->success = false;
+    response->message = "empty request";
+    return;
+  }
+  std::lock_guard<std::mutex> lock(mutex_);
+  wind_speed_ = static_cast<double>(request->speed);
+  wind_direction_ = static_cast<double>(request->direction);
+  response->success = true;
+  response->message = "wind set";
+  RCLCPP_INFO(node_->get_logger(), "WindPlugin service: set wind_speed=%.2f wind_direction=%.1f", wind_speed_, wind_direction_);
+  gzdbg << "WindPlugin service: received set_wind -> speed=" << wind_speed_ << " dir=" << wind_direction_ << "\n";
 }
 
 void WindPlugin::OnUpdate()

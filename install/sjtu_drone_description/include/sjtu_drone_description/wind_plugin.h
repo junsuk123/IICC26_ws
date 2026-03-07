@@ -8,6 +8,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 
+#include "sjtu_drone_interfaces/srv/set_wind.hpp"
+
 #include <rclcpp/executors/single_threaded_executor.hpp>
 #include <thread>
 
@@ -41,9 +43,13 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_;
   rclcpp::Node::SharedPtr node_;
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_;
+  rclcpp::Service<sjtu_drone_interfaces::srv::SetWind>::SharedPtr srv_;
 
   // callback to receive runtime wind commands [speed, direction]
   void WindCommandCb(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
+  void SetWindCb(const std::shared_ptr<rmw_request_id_t> request_header,
+                 const std::shared_ptr<sjtu_drone_interfaces::srv::SetWind::Request> request,
+                 std::shared_ptr<sjtu_drone_interfaces::srv::SetWind::Response> response);
   rclcpp::Time last_pub_time_;
 
   std::mutex mutex_;

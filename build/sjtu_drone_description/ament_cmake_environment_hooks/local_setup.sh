@@ -154,6 +154,7 @@ fi
 ament_append_value AMENT_ENVIRONMENT_HOOKS "$AMENT_CURRENT_PREFIX/share/sjtu_drone_description/environment/ament_prefix_path.sh"
 ament_append_value AMENT_ENVIRONMENT_HOOKS "$AMENT_CURRENT_PREFIX/share/sjtu_drone_description/environment/library_path.sh"
 ament_append_value AMENT_ENVIRONMENT_HOOKS "$AMENT_CURRENT_PREFIX/share/sjtu_drone_description/environment/path.sh"
+ament_append_value AMENT_ENVIRONMENT_HOOKS "$AMENT_CURRENT_PREFIX/share/sjtu_drone_description/environment/pythonpath.sh"
 
 # source all shell-specific environment hooks of this package
 # if not returning them

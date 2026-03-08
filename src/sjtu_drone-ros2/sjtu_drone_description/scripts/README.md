@@ -30,6 +30,11 @@ What it does
 - Launches `gzserver` with that world and records messages published on `/wind_condition` for the requested duration.
 - Saves a CSV of recorded wind messages and gzserver logs per experiment in `--out`.
 
+Integration notes for this workspace
+- MATLAB landing script consumes `/wind_condition` and publishes `/landing_decision`.
+- AprilTag detector pipeline can run in parallel from bringup and publishes `/drone/bottom/tags`.
+- A bridge node (`apriltag_state_bridge`) publishes `/landing_tag_state` so MATLAB can use tag stability without custom `apriltag_msgs` registration.
+
 Notes / next steps
 - This script records only the `/wind_condition` topic. For a full tuning loop that measures actual landing performance you can extend it to:
   - subscribe to model pose topics (e.g. Gazebo model state topics) or use a ROS2 node that monitors landing success

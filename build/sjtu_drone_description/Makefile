@@ -328,17 +328,17 @@ sjtu_drone_description__rosidl_typesupport_cpp/fast:
 .PHONY : sjtu_drone_description__rosidl_typesupport_cpp/fast
 
 #=============================================================================
-# Target rules for targets named ament_cmake_python_symlink_sjtu_drone_description
+# Target rules for targets named ament_cmake_python_copy_sjtu_drone_description
 
 # Build rule for target.
-ament_cmake_python_symlink_sjtu_drone_description: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ament_cmake_python_symlink_sjtu_drone_description
-.PHONY : ament_cmake_python_symlink_sjtu_drone_description
+ament_cmake_python_copy_sjtu_drone_description: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ament_cmake_python_copy_sjtu_drone_description
+.PHONY : ament_cmake_python_copy_sjtu_drone_description
 
 # fast build rule for target.
-ament_cmake_python_symlink_sjtu_drone_description/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ament_cmake_python_symlink_sjtu_drone_description.dir/build.make CMakeFiles/ament_cmake_python_symlink_sjtu_drone_description.dir/build
-.PHONY : ament_cmake_python_symlink_sjtu_drone_description/fast
+ament_cmake_python_copy_sjtu_drone_description/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ament_cmake_python_copy_sjtu_drone_description.dir/build.make CMakeFiles/ament_cmake_python_copy_sjtu_drone_description.dir/build
+.PHONY : ament_cmake_python_copy_sjtu_drone_description/fast
 
 #=============================================================================
 # Target rules for targets named ament_cmake_python_build_sjtu_drone_description_egg
@@ -805,7 +805,7 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... ament_cmake_python_build_sjtu_drone_description_egg"
-	@echo "... ament_cmake_python_symlink_sjtu_drone_description"
+	@echo "... ament_cmake_python_copy_sjtu_drone_description"
 	@echo "... sjtu_drone_description"
 	@echo "... sjtu_drone_description__cpp"
 	@echo "... sjtu_drone_description__py"

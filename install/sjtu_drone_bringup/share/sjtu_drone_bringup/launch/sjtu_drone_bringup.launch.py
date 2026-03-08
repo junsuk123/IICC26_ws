@@ -16,9 +16,9 @@
 import os
 
 import yaml
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
@@ -84,8 +84,26 @@ def get_apriltag_nodes(context, *_, **__):
     tags_topic = LaunchConfiguration("apriltag_tags").perform(context)
     detector_type = LaunchConfiguration("apriltag_type").perform(context)
     bridge_topic = LaunchConfiguration("apriltag_bridge_topic").perform(context)
+    bridge_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'apriltag_state_bridge')
 
-    return [
+    bridge_action = None
+    if os.path.exists(bridge_exe):
+        bridge_action = ExecuteProcess(
+            cmd=[
+                bridge_exe,
+                '--ros-args',
+                '-p', f'input_topic:={camera_ns}/{tags_topic}',
+                '-p', f'output_topic:={bridge_topic}',
+                '-p', 'target_id:=0',
+                '-p', 'use_target_id:=true',
+            ],
+            output='screen',
+            condition=IfCondition(LaunchConfiguration("use_apriltag")),
+        )
+    else:
+        print(f"[bringup] apriltag_state_bridge executable not found at {bridge_exe}. Skipping bridge node.")
+
+    actions = [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(apriltag_share, "launch", "detect.launch.py")
@@ -98,20 +116,12 @@ def get_apriltag_nodes(context, *_, **__):
             }.items(),
             condition=IfCondition(LaunchConfiguration("use_apriltag")),
         ),
-        Node(
-            package='sjtu_drone_bringup',
-            executable='apriltag_state_bridge',
-            name='apriltag_state_bridge',
-            output='screen',
-            parameters=[{
-                'input_topic': f"{camera_ns}/{tags_topic}",
-                'output_topic': bridge_topic,
-                'target_id': 0,
-                'use_target_id': True,
-            }],
-            condition=IfCondition(LaunchConfiguration("use_apriltag")),
-        ),
     ]
+
+    if bridge_action is not None:
+        actions.append(bridge_action)
+
+    return actions
 
 
 def generate_launch_description():

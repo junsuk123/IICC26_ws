@@ -112,9 +112,8 @@ catch ME
         sub_tags = ros2subscriber(node, topic_tags, 'apriltag_msgs/AprilTagDetectionArray');
         fprintf('[MATLAB] AprilTag subscriber enabled on %s (type=apriltag_msgs/AprilTagDetectionArray)\n', topic_tags);
     catch ME2
-        warning(['AprilTag custom subscriber disabled (%s | %s). ', ...
-                 'Trying bridge topic %s with std_msgs/Float32MultiArray.'], ...
-                 ME.message, ME2.message, topic_tag_state);
+        fprintf('[MATLAB] AprilTag custom subscriber unavailable (%s | %s). Trying bridge topic %s.\n', ...
+                ME.message, ME2.message, topic_tag_state);
         try
             sub_tag_state = ros2subscriber(node, topic_tag_state, 'std_msgs/Float32MultiArray');
             fprintf('[MATLAB] AprilTag bridge subscriber enabled on %s\n', topic_tag_state);

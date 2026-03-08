@@ -1,0 +1,526 @@
+{
+	"artifacts" : 
+	[
+		{
+			"path" : "libsjtu_drone_description__rosidl_generator_c.so"
+		}
+	],
+	"backtrace" : 5,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"include",
+			"ament_execute_extensions",
+			"rosidl_generate_interfaces",
+			"install",
+			"link_directories",
+			"target_link_libraries",
+			"set_target_properties",
+			"add_definitions",
+			"dart_traverse_components",
+			"dart_package_init",
+			"find_package",
+			"include_directories",
+			"target_include_directories"
+		],
+		"files" : 
+		[
+			"/opt/ros/humble/share/rosidl_generator_c/cmake/rosidl_generator_c_generate_interfaces.cmake",
+			"/opt/ros/humble/share/ament_cmake_core/cmake/core/ament_execute_extensions.cmake",
+			"/opt/ros/humble/share/rosidl_cmake/cmake/rosidl_generate_interfaces.cmake",
+			"CMakeLists.txt",
+			"/usr/share/dart/cmake/DARTFindBoost.cmake",
+			"/usr/share/dart/cmake/dart_dartComponent.cmake",
+			"/usr/share/dart/cmake/DARTConfig.cmake",
+			"/usr/lib/x86_64-linux-gnu/cmake/gazebo/gazebo-config.cmake",
+			"/opt/ros/humble/share/gazebo_dev/cmake/gazebo_dev-extras.cmake",
+			"/opt/ros/humble/share/gazebo_dev/cmake/gazebo_devConfig.cmake",
+			"/opt/ros/humble/share/gazebo_ros/cmake/ament_cmake_export_dependencies-extras.cmake",
+			"/opt/ros/humble/share/gazebo_ros/cmake/gazebo_rosConfig.cmake",
+			"/opt/ros/humble/share/ament_cmake_ros/cmake/ament_cmake_ros-extras.cmake",
+			"/opt/ros/humble/share/ament_cmake_ros/cmake/ament_cmake_rosConfig.cmake"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 3
+			},
+			{
+				"command" : 3,
+				"file" : 3,
+				"line" : 109,
+				"parent" : 0
+			},
+			{
+				"command" : 2,
+				"file" : 2,
+				"line" : 286,
+				"parent" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 48,
+				"parent" : 2
+			},
+			{
+				"file" : 0,
+				"parent" : 3
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 110,
+				"parent" : 4
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 164,
+				"parent" : 4
+			},
+			{
+				"command" : 5,
+				"file" : 3,
+				"line" : 32,
+				"parent" : 0
+			},
+			{
+				"command" : 6,
+				"file" : 0,
+				"line" : 137,
+				"parent" : 4
+			},
+			{
+				"command" : 7,
+				"file" : 0,
+				"line" : 119,
+				"parent" : 4
+			},
+			{
+				"command" : 11,
+				"file" : 3,
+				"line" : 18,
+				"parent" : 0
+			},
+			{
+				"file" : 11,
+				"parent" : 10
+			},
+			{
+				"command" : 1,
+				"file" : 11,
+				"line" : 41,
+				"parent" : 11
+			},
+			{
+				"file" : 10,
+				"parent" : 12
+			},
+			{
+				"command" : 11,
+				"file" : 10,
+				"line" : 21,
+				"parent" : 13
+			},
+			{
+				"file" : 9,
+				"parent" : 14
+			},
+			{
+				"command" : 1,
+				"file" : 9,
+				"line" : 41,
+				"parent" : 15
+			},
+			{
+				"file" : 8,
+				"parent" : 16
+			},
+			{
+				"command" : 11,
+				"file" : 8,
+				"line" : 3,
+				"parent" : 17
+			},
+			{
+				"file" : 7,
+				"parent" : 18
+			},
+			{
+				"command" : 11,
+				"file" : 7,
+				"line" : 166,
+				"parent" : 19
+			},
+			{
+				"file" : 6,
+				"parent" : 20
+			},
+			{
+				"command" : 10,
+				"file" : 6,
+				"line" : 181,
+				"parent" : 21
+			},
+			{
+				"command" : 9,
+				"file" : 6,
+				"line" : 133,
+				"parent" : 22
+			},
+			{
+				"command" : 1,
+				"file" : 6,
+				"line" : 73,
+				"parent" : 23
+			},
+			{
+				"file" : 5,
+				"parent" : 24
+			},
+			{
+				"command" : 1,
+				"file" : 5,
+				"line" : 6,
+				"parent" : 25
+			},
+			{
+				"file" : 4,
+				"parent" : 26
+			},
+			{
+				"command" : 8,
+				"file" : 4,
+				"line" : 13,
+				"parent" : 27
+			},
+			{
+				"command" : 8,
+				"file" : 7,
+				"line" : 142,
+				"parent" : 19
+			},
+			{
+				"command" : 8,
+				"file" : 7,
+				"line" : 148,
+				"parent" : 19
+			},
+			{
+				"command" : 11,
+				"file" : 3,
+				"line" : 16,
+				"parent" : 0
+			},
+			{
+				"file" : 13,
+				"parent" : 31
+			},
+			{
+				"command" : 1,
+				"file" : 13,
+				"line" : 41,
+				"parent" : 32
+			},
+			{
+				"file" : 12,
+				"parent" : 33
+			},
+			{
+				"command" : 8,
+				"file" : 12,
+				"line" : 25,
+				"parent" : 34
+			},
+			{
+				"command" : 12,
+				"file" : 3,
+				"line" : 33,
+				"parent" : 0
+			},
+			{
+				"command" : 13,
+				"file" : 0,
+				"line" : 125,
+				"parent" : 4
+			}
+		]
+	},
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : "-fPIC"
+				},
+				{
+					"backtrace" : 9,
+					"fragment" : "-Wall"
+				},
+				{
+					"fragment" : "-std=gnu11"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 28,
+					"define" : "BOOST_TEST_DYN_LINK"
+				},
+				{
+					"backtrace" : 29,
+					"define" : "LIBBULLET_VERSION=3.05"
+				},
+				{
+					"backtrace" : 30,
+					"define" : "LIBBULLET_VERSION_GT_282"
+				},
+				{
+					"backtrace" : 8,
+					"define" : "RCUTILS_ENABLE_FAULT_INJECTION"
+				},
+				{
+					"define" : "ROSIDL_GENERATOR_C_BUILDING_DLL_sjtu_drone_description"
+				},
+				{
+					"backtrace" : 35,
+					"define" : "ROS_PACKAGE_NAME=\"sjtu_drone_description\""
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/gazebo-11"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/bullet"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/simbody"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/sdformat-9.7"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/ignition/math6"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/OGRE"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/OGRE/Terrain"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/OGRE/Paging"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/ignition/transport8"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/ignition/msgs5"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/ignition/common3"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/usr/include/ignition/fuel_tools4"
+				},
+				{
+					"backtrace" : 36,
+					"path" : "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/include"
+				},
+				{
+					"backtrace" : 37,
+					"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c"
+				},
+				{
+					"backtrace" : 8,
+					"isSystem" : true,
+					"path" : "/opt/ros/humble/include/rosidl_runtime_c"
+				},
+				{
+					"backtrace" : 8,
+					"isSystem" : true,
+					"path" : "/opt/ros/humble/include/rcutils"
+				},
+				{
+					"backtrace" : 8,
+					"isSystem" : true,
+					"path" : "/opt/ros/humble/include/rosidl_typesupport_interface"
+				}
+			],
+			"language" : "C",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					9
+				],
+				"standard" : "11"
+			},
+			"sourceIndexes" : 
+			[
+				4
+			]
+		}
+	],
+	"id" : "sjtu_drone_description__rosidl_generator_c::@6890427a1f51a3e7e1df",
+	"install" : 
+	{
+		"destinations" : 
+		[
+			{
+				"backtrace" : 6,
+				"path" : "lib"
+			},
+			{
+				"backtrace" : 6,
+				"path" : "lib"
+			}
+		],
+		"prefix" : 
+		{
+			"path" : "/home/j/INCSL/IICC26_ws/install/sjtu_drone_description"
+		}
+	},
+	"link" : 
+	{
+		"commandFragments" : 
+		[
+			{
+				"fragment" : "",
+				"role" : "flags"
+			},
+			{
+				"backtrace" : 7,
+				"fragment" : "-L/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+				"role" : "libraryPath"
+			},
+			{
+				"backtrace" : 7,
+				"fragment" : "-L/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/Boost::thread",
+				"role" : "libraryPath"
+			},
+			{
+				"backtrace" : 7,
+				"fragment" : "-L/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/Boost::date_time",
+				"role" : "libraryPath"
+			},
+			{
+				"backtrace" : 7,
+				"fragment" : "-L/usr/lib/x86_64-linux-gnu/libprotobuf.so",
+				"role" : "libraryPath"
+			},
+			{
+				"fragment" : "-Wl,-rpath,/usr/lib/x86_64-linux-gnu/gazebo-11/plugins:/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/Boost::thread:/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/Boost::date_time:/usr/lib/x86_64-linux-gnu/libprotobuf.so:/opt/ros/humble/lib:",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 8,
+				"fragment" : "/opt/ros/humble/lib/librosidl_runtime_c.so",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 8,
+				"fragment" : "/opt/ros/humble/lib/librcutils.so",
+				"role" : "libraries"
+			},
+			{
+				"fragment" : "-ldl",
+				"role" : "libraries"
+			}
+		],
+		"language" : "C"
+	},
+	"name" : "sjtu_drone_description__rosidl_generator_c",
+	"nameOnDisk" : "libsjtu_drone_description__rosidl_generator_c.so",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Header Files",
+			"sourceIndexes" : 
+			[
+				0,
+				1,
+				2,
+				3
+			]
+		},
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				4
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				5
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 5,
+			"isGenerated" : true,
+			"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/srv/set_wind.h",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 5,
+			"isGenerated" : true,
+			"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/srv/detail/set_wind__functions.h",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 5,
+			"isGenerated" : true,
+			"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/srv/detail/set_wind__struct.h",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 5,
+			"isGenerated" : true,
+			"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/srv/detail/set_wind__type_support.h",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 5,
+			"compileGroupIndex" : 0,
+			"isGenerated" : true,
+			"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/srv/detail/set_wind__functions.c",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/srv/set_wind.h.rule",
+			"sourceGroupIndex" : 2
+		}
+	],
+	"type" : "SHARED_LIBRARY"
+}

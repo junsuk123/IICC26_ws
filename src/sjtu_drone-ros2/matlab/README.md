@@ -14,7 +14,7 @@ This folder contains MATLAB nodes for:
 - `startWindPublisher.m`
   - public entrypoint to start dynamic wind publishing loop
 - `wind_publisher_matlab.m`
-  - source implementation for wind synthesis and publish logic
+  - same publisher implementation is mirrored here (function name is also `startWindPublisher`)
 
 ## ROS Interfaces
 
@@ -179,6 +179,14 @@ ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
 run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/landing_decision_matlab.m')
 ```
 
+4. Optional quick interface checks:
+
+```bash
+ros2 topic echo /landing_decision
+ros2 topic echo /landing_tag_state --once
+ros2 topic echo /wind_condition --once
+```
+
 ## Practical Tuning Tips
 
 - If decision is too conservative:
@@ -201,7 +209,7 @@ run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/landing_decision_matlab.
 - `params.pre_takeoff_tag_center_tolerance = 0.03`
 - `params.pre_takeoff_tag_center_hold_sec = 1.0`
 - `params.xy_pid_kp = 1.2`
-- `params.xy_control_center_deadband = 0.05`
+- `params.xy_control_center_deadband = 0.005`
 - `params.flying_altitude_threshold = 0.20`
 - `params.state_stale_timeout_sec = 1.0`
 - `cfg.wind_start_delay_after_hover_sec = 5.0`

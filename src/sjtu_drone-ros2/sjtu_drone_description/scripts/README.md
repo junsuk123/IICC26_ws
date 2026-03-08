@@ -11,18 +11,26 @@ source /home/j/INCSL/IICC26_ws/install/setup.bash
 
 Ensure `sjtu_drone_description` is built and `libwind_plugin.so` is installed.
 
+Run from workspace root (`/home/j/INCSL/IICC26_ws`) or use absolute paths.
+
 ## Example
 
 ```bash
-python3 scripts/wind_tuner.py \
-  --world src/sjtu_drone_description/worlds/playground.world \
+python3 src/sjtu_drone-ros2/sjtu_drone_description/scripts/wind_tuner.py \
+  --world src/sjtu_drone-ros2/sjtu_drone_description/worlds/playground.world \
   --area 0.1 0.2 0.5 \
   --coeff 0.5 1.0 2.0 \
   --speed 2.0 5.0 \
   --dir 0 90 180 \
   --duration 15 \
+  --publish_rate_hz 10.0 \
   --out /tmp/wind_tuning
 ```
+
+Notes:
+
+- The script injects a `<plugin name="wind_plugin" ...>` block into a copied world file.
+- Prefer a world template without an existing `wind_plugin` block to avoid duplicate plugin entries.
 
 ## What it records
 

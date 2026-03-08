@@ -7,13 +7,21 @@ This repository contains a ROS2 + Gazebo Classic drone simulation based on `sjtu
 - MATLAB-driven startup (`takeoff`) + XY PID tag-centering hold
 - AprilTag-based landing-zone observability and stability logic
 - AprilTag bridge topic (`/landing_tag_state`) for MATLAB environments without custom message support
-- short tag-dropout continuity using last valid tag state hold (prevents control/decision discontinuity)
+- short tag-dropout continuity using last valid tag state hold
 
 ## Requirements
 
 - Ubuntu 22.04
 - ROS2 Humble
 - Gazebo 11 (Classic)
+
+## Repository Packages
+
+- `sjtu_drone_bringup`: main launch files, RViz config, bridge executable
+- `sjtu_drone_description`: URDF/xacro, world files, Gazebo plugins
+- `sjtu_drone_control`: keyboard/joystick teleop and control helpers
+- `sjtu_drone_interfaces`: custom service definitions (`SetWind`)
+- `matlab/`: MATLAB landing and wind scripts
 
 ## Workspace Build
 
@@ -24,17 +32,9 @@ source /opt/ros/humble/setup.bash
 source /home/j/INCSL/IICC26_ws/install/setup.bash
 ```
 
-If `--symlink-install` fails with a stale build folder (e.g. symlink conflict under `build/sjtu_drone_interfaces` or `build/sjtu_drone_description`), remove only the failing package build folder and rebuild:
+If you edit files under `src/`, rebuild affected packages before relaunch so install-space launch resources are updated.
 
-```bash
-rm -rf /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces
-rm -rf /home/j/INCSL/IICC26_ws/build/sjtu_drone_description
-colcon build --symlink-install
-```
-
-## Run (Recommended Headless)
-
-This mode avoids common GUI issues (`rviz2`/`xterm` in restricted environments):
+## Launch (Recommended Headless)
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -54,22 +54,21 @@ ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
   apriltag_bridge_topic:=/landing_tag_state
 ```
 
-Takeoff tuning launch arguments:
+Important launch defaults from code:
 
-- `takeoff_hover_height` (m): altitude increase target after takeoff
-- `takeoff_vertical_speed` (controller command): climb aggressiveness during takeoff phase
+- `controller:=keyboard`
+- `use_apriltag:=true`
+- `use_rviz:=true`
+- `takeoff_hover_height:=1.0`
+- `takeoff_vertical_speed:=1.0`
 
-If you edit launch/xacro/plugin files under `src/`, rebuild affected packages before relaunch so install-space files are updated.
-
-## Wind Model Integration
-
-### Topics and service
+## Wind Interfaces
 
 - `/wind_command` (`std_msgs/msg/Float32MultiArray`): `[speed_mps, direction_deg]`
-- `/wind_condition` (`std_msgs/msg/Float32MultiArray`): plugin wind state output
-- `/set_wind` (`sjtu_drone_interfaces/srv/SetWind`): optional service control path
+- `/wind_condition` (`std_msgs/msg/Float32MultiArray`): plugin output `[speed_mps, direction_deg]`
+- `/set_wind` (`sjtu_drone_interfaces/srv/SetWind`): request `{speed, direction}`
 
-### Quick wind test
+Quick test:
 
 ```bash
 ros2 topic pub /wind_command std_msgs/msg/Float32MultiArray "data: [5.0, 90.0]" -1
@@ -78,43 +77,26 @@ ros2 topic echo /wind_condition --once
 
 ## AprilTag Pipeline
 
-### Detector output
+- detector output: `/drone/bottom/tags` (`apriltag_msgs/msg/AprilTagDetectionArray`)
+- bridge output: `/landing_tag_state` (`std_msgs/msg/Float32MultiArray`)
 
-- `/drone/bottom/tags` (`apriltag_msgs/msg/AprilTagDetectionArray`)
+Bridge vector format:
 
-### MATLAB-safe bridge output
-
-- `/landing_tag_state` (`std_msgs/msg/Float32MultiArray`)
-- data format:
-  - `data[0]` detected (0/1)
-  - `data[1]` tag id
-  - `data[2]` center x (px)
-  - `data[3]` center y (px)
-  - `data[4]` area (px^2)
-  - `data[5]` decision margin
-  - `data[6]` number of detections
-
-MATLAB landing node keeps the last valid tag state for a short timeout when detections are momentarily lost, so tag position does not break abruptly in control/decision loops.
+- `[detected, tag_id, center_x_px, center_y_px, area_px2, margin, num_tags]`
 
 ## MATLAB Integration
 
-See `matlab/README.md` for full algorithm details, topic contracts, and tuning parameters.
+See `matlab/README.md` for full decision logic and parameter tuning.
 
-Quick note: MATLAB node now publishes control during startup/hold:
+MATLAB landing node publishes:
 
 - `/drone/takeoff` (`std_msgs/Empty`)
 - `/drone/cmd_vel` (`geometry_msgs/Twist`)
-- `/landing_decision` (`std_msgs/String`)
-
-Recent control behavior updates:
-
-- fallback flight-state inference from altitude when `/drone/state` is stale
-- XY hold uses predicted center first, then current center as fallback
-- optional delayed wind start after hover settle (reduces startup transients)
+- `/landing_decision` (`std_msgs/String`: `land`/`caution`/`wait`)
 
 ## Known Environment Issues
 
 - `rviz2` may fail with `GLIBC_PRIVATE` symbol errors in mixed host/snap library environments.
-  - workaround: `use_rviz:=false`
+  Workaround: `use_rviz:=false`
 - `xterm` teleop may fail in non-GUI sessions.
-  - workaround: `controller:=joystick` or headless run profile above
+  Workaround: `controller:=joystick`

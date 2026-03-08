@@ -19,6 +19,13 @@ Included world files:
 
 `sjtu_drone_bringup` currently defaults to `landingPad.world`.
 
+To launch a different world:
+
+```bash
+ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
+	world:=/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/worlds/playground.world
+```
+
 If the source world file is changed, rebuild this package so the install-space launch path is updated:
 
 ```bash
@@ -36,6 +43,14 @@ Interfaces:
 - `/wind_command` (`std_msgs/msg/Float32MultiArray`): command input `[speed_mps, direction_deg]`
 - `/wind_condition` (`std_msgs/msg/Float32MultiArray`): plugin output state
 - `/set_wind` (`sjtu_drone_interfaces/srv/SetWind`): optional service control path
+
+Current default plugin parameters in `worlds/landingPad.world`:
+
+- `wind_speed: 0.0`
+- `wind_direction: 0`
+- `area: 0.1`
+- `force_coeff: 1.0`
+- `publish_rate_hz: 10.0`
 
 Quick check:
 
@@ -55,12 +70,17 @@ Default values are defined in:
 
 - `sjtu_drone_bringup/config/drone.yaml`
 
+Current defaults in code/yaml:
+
+- `takeoffHoverHeight: 1.0`
+- `takeoffVerticalSpeed: 1.0`
+
 Launch-time override:
 
 ```bash
 ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
-	takeoff_hover_height:=2.0 \
-	takeoff_vertical_speed:=0.8
+  takeoff_hover_height:=2.0 \
+  takeoff_vertical_speed:=0.8
 ```
 
 ## AprilTag + MATLAB Integration Context

@@ -78,7 +78,9 @@ params.xy_pid_ki = 0.05;
 params.xy_pid_kd = 0.12;
 params.xy_pid_integral_limit = 1.0;
 params.xy_cmd_limit = 0.7;
-params.xy_control_center_deadband = 0.01; % tighter than landing tolerance; used only to zero XY control near center
+params.xy_control_center_deadband = 0.005; % tighter than landing tolerance; used only to zero XY control near center
+params.xy_target_u_norm = 0.0;    % desired horizontal tag position in normalized image coordinates
+params.xy_target_v_norm = -0.08;  % desired vertical tag position; negative pulls target upward toward frame center
 params.flying_altitude_threshold = 0.20; % fallback flight inference when /state is stale
 params.state_stale_timeout_sec = 1.0;    % if no /state update within this window, trust pose fallback
 params.wind_start_require_tag_centered = true; % start wind only after hover center lock
@@ -437,7 +439,7 @@ while true
     cmd_y = 0.0;
     centered_ctrl_dbg = false;
     tag_center_for_takeoff = detected && isfinite(u_norm) && isfinite(v_norm) && ...
-        (sqrt(u_norm^2 + v_norm^2) <= params.pre_takeoff_tag_center_tolerance);
+        (sqrt((u_norm - params.xy_target_u_norm)^2 + (v_norm - params.xy_target_v_norm)^2) <= params.pre_takeoff_tag_center_tolerance);
     if params.xy_hold_enabled
         switch control_phase
             case 'wait_ready'
@@ -520,10 +522,10 @@ while true
                     end
 
                     if isfinite(u_ctrl) && isfinite(v_ctrl)
-                        centered_ctrl = sqrt(u_ctrl^2 + v_ctrl^2) <= params.xy_control_center_deadband;
+                        err_u = params.xy_target_u_norm - u_ctrl;
+                        err_v = params.xy_target_v_norm - v_ctrl;
+                        centered_ctrl = sqrt(err_u^2 + err_v^2) <= params.xy_control_center_deadband;
                         centered_ctrl_dbg = centered_ctrl;
-                        err_u = -u_ctrl;
-                        err_v = -v_ctrl;
 
                         [ux, pid_x] = pidStep(err_v, dt_ctrl, pid_x, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
                         [uy, pid_y] = pidStep(err_u, dt_ctrl, pid_y, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);

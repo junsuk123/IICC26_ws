@@ -1,2 +1,1 @@
-float32 speed
-float32 direction
+/home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/rosidl_cmake/srv/SetWind_Request.msg

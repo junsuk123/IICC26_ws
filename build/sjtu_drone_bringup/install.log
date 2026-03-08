@@ -1,5 +1,7 @@
+/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup/apriltag_state_bridge.py
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup/__init__.py
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup/spawn_drone.py
+/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup/__pycache__/apriltag_state_bridge.cpython-310.pyc
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup/__pycache__/__init__.cpython-310.pyc
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup/__pycache__/spawn_drone.cpython-310.pyc
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/share/ament_index/resource_index/packages/sjtu_drone_bringup
@@ -16,4 +18,5 @@
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup-0.0.0-py3.10.egg-info/zip-safe
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup-0.0.0-py3.10.egg-info/PKG-INFO
 /home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages/sjtu_drone_bringup-0.0.0-py3.10.egg-info/SOURCES.txt
-/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/sjtu_drone_bringup/spawn_drone
+/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/bin/apriltag_state_bridge
+/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/bin/spawn_drone

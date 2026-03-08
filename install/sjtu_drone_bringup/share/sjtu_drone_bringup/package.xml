@@ -15,6 +15,9 @@
   <depend>teleop_twist_keyboard</depend>
   <depend>robot_state_publisher</depend>
   <depend>joint_state_publisher</depend>
+  <depend>std_msgs</depend>
+  <depend>apriltag_msgs</depend>
+  <exec_depend>apriltag_detector</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

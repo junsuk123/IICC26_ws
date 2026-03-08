@@ -1,3 +1,1 @@
-
-bool success
-string message
+/home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/rosidl_cmake/srv/SetWind_Response.msg

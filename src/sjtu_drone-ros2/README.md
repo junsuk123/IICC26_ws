@@ -145,6 +145,48 @@ You should see the following:
 For more see the following image:
 ![rosgraph](./imgs/rosgraph.png)
 
+## IICC26 Workspace Updates
+
+This workspace includes additional integration beyond the upstream sjtu_drone baseline.
+
+- Real-time wind pipeline:
+    - Gazebo wind plugin publishes `/wind_condition`.
+    - Wind commands can be sent via `/wind_command` (`std_msgs/msg/Float32MultiArray`, `[speed, direction_deg]`).
+    - A `/set_wind` service path is also available in this workspace through `sjtu_drone_interfaces/srv/SetWind`.
+- MATLAB landing decision integration:
+    - `matlab/landing_decision_matlab.m` publishes `/landing_decision`.
+    - Optional MATLAB wind generator composes steady + Dryden-like turbulence + shear + gust and publishes continuously.
+- AprilTag-assisted landing-zone stability:
+    - Launch supports `apriltag_detector` via `use_apriltag:=true`.
+    - A bridge node publishes `/landing_tag_state` (`std_msgs/msg/Float32MultiArray`) so MATLAB can consume tag state without custom ROS2 message generation.
+
+### AprilTag launch example
+
+```bash
+ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
+    use_apriltag:=true \
+    apriltag_camera:=/drone/bottom \
+    apriltag_image:=image_raw \
+    apriltag_tags:=tags \
+    apriltag_type:=umich \
+    apriltag_bridge_topic:=/landing_tag_state
+```
+
+### Wind command example
+
+```bash
+ros2 topic pub /wind_command std_msgs/msg/Float32MultiArray "data: [5.0, 90.0]" -1
+```
+
+### Build note (symlink-install)
+
+If `cb` (`colcon build --symlink-install`) fails with a symlink/directory conflict under `build/sjtu_drone_interfaces`, remove the stale build directory and rebuild:
+
+```bash
+rm -rf /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces
+colcon build --symlink-install
+```
+
 
 
 # Known Issues

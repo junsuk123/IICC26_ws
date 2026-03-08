@@ -9,7 +9,7 @@
 /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/sjtu_drone_interfaces__rosidl_typesupport_fastrtps_cpp.dir
 /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/sjtu_drone_interfaces__rosidl_typesupport_introspection_cpp.dir
 /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/sjtu_drone_interfaces__rosidl_typesupport_cpp.dir
-/home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/ament_cmake_python_copy_sjtu_drone_interfaces.dir
+/home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/ament_cmake_python_symlink_sjtu_drone_interfaces.dir
 /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/ament_cmake_python_build_sjtu_drone_interfaces_egg.dir
 /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/sjtu_drone_interfaces__rosidl_generator_py.dir
 /home/j/INCSL/IICC26_ws/build/sjtu_drone_interfaces/CMakeFiles/sjtu_drone_interfaces__rosidl_typesupport_fastrtps_c__pyext.dir

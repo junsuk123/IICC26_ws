@@ -22,6 +22,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Opaq
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
 
 
 def get_teleop_controller(context, *_, **kwargs) -> Node:
@@ -67,6 +68,52 @@ def rviz_node_generator(context, rviz_path):
     ]
 
 
+def get_apriltag_nodes(context, *_, **__):
+    use_apriltag = LaunchConfiguration("use_apriltag").perform(context)
+    if use_apriltag != "true":
+        return []
+
+    try:
+        apriltag_share = get_package_share_directory("apriltag_detector")
+    except Exception:
+        print("[bringup] apriltag_detector package not found. Skipping AprilTag detector launch.")
+        return []
+
+    camera_ns = LaunchConfiguration("apriltag_camera").perform(context)
+    image_topic = LaunchConfiguration("apriltag_image").perform(context)
+    tags_topic = LaunchConfiguration("apriltag_tags").perform(context)
+    detector_type = LaunchConfiguration("apriltag_type").perform(context)
+    bridge_topic = LaunchConfiguration("apriltag_bridge_topic").perform(context)
+
+    return [
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(apriltag_share, "launch", "detect.launch.py")
+            ),
+            launch_arguments={
+                "camera": camera_ns,
+                "image": image_topic,
+                "tags": tags_topic,
+                "type": detector_type,
+            }.items(),
+            condition=IfCondition(LaunchConfiguration("use_apriltag")),
+        ),
+        Node(
+            package='sjtu_drone_bringup',
+            executable='apriltag_state_bridge',
+            name='apriltag_state_bridge',
+            output='screen',
+            parameters=[{
+                'input_topic': f"{camera_ns}/{tags_topic}",
+                'output_topic': bridge_topic,
+                'target_id': 0,
+                'use_target_id': True,
+            }],
+            condition=IfCondition(LaunchConfiguration("use_apriltag")),
+        ),
+    ]
+
+
 def generate_launch_description():
     sjtu_drone_bringup_path = get_package_share_directory('sjtu_drone_bringup')
 
@@ -90,6 +137,44 @@ def generate_launch_description():
             "controller",
             default_value="keyboard",
             description="Type of controller: keyboard (default) or joystick",
+        ),
+
+        DeclareLaunchArgument(
+            "use_apriltag",
+            default_value="true",
+            choices=["true", "false"],
+            description="Whether to start apriltag_detector for landing zone tag tracking",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_camera",
+            default_value="/drone/front",
+            description="Camera namespace for apriltag detector",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_image",
+            default_value="image_raw",
+            description="Image topic name under camera namespace",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_tags",
+            default_value="tags",
+            description="Output detections topic name under camera namespace",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_type",
+            default_value="umich",
+            choices=["umich", "mit"],
+            description="Apriltag detector backend type",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_bridge_topic",
+            default_value="/landing_tag_state",
+            description="Bridge topic to publish tag state as Float32MultiArray",
         ),
 
         DeclareLaunchArgument(
@@ -121,5 +206,9 @@ def generate_launch_description():
         OpaqueFunction(
             function=get_teleop_controller,
             kwargs={'model_ns': model_ns},
+        ),
+
+        OpaqueFunction(
+            function=get_apriltag_nodes,
         ),
     ])

@@ -1,4 +1,25 @@
 from setuptools import setup
+import sys
+
+# colcon may pass args that older distutils parsers don't recognize.
+# Strip unsupported args while preserving normal setup.py invocation.
+def _sanitize_argv(argv):
+    cleaned = [argv[0]]
+    skip_next = False
+    for arg in argv[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in ('--editable', '--uninstall'):
+            continue
+        if arg == '--build-directory':
+            skip_next = True
+            continue
+        cleaned.append(arg)
+    return cleaned
+
+
+sys.argv = _sanitize_argv(sys.argv)
 
 package_name = 'sjtu_drone_control'
 
@@ -17,7 +38,6 @@ setup(
     maintainer_email='georg.novtony@aon.at',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'teleop = sjtu_drone_control.teleop:main',

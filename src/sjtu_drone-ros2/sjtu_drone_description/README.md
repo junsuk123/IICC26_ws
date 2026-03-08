@@ -1,70 +1,90 @@
 # sjtu_drone_description
 
-This package contains the xacro/urdf/sdf model description of the sjtu drone and the corresponding plugin for Gazebo 11 and ROS 2 Humble.
-
+This package contains the drone model, world files, and Gazebo plugins used by the workspace.
 
 ## Structure
 
-* __models__: Gazebo sdf model and model meshes
-* __include__: Header files for the PID controller and drone plugin
-* __src__: Source code for the drone plugin and PID controller
-* __urdf__: Xacro and urdf model description files
-* __worlds__: Contains one playground world
-
+- `models/` Gazebo model resources
+- `urdf/` drone xacro and urdf
+- `src/` C++ plugin implementations
+- `include/` plugin headers
+- `worlds/` simulation world files
 
 ## Worlds
-To fully load the world you need to donwload the gazebo models first:
-```
 
-World files included in this workspace:
+Included world files:
+
 - `playground.world`
-- `landingPad.world` (used by bringup default world argument)
+- `landingPad.world`
 
-If `landingPad.world` changes in source, rebuild this package so install-space launch can find it:
+`sjtu_drone_bringup` currently defaults to `landingPad.world`.
+
+If the source world file is changed, rebuild this package so the install-space launch path is updated:
 
 ```bash
+cd /home/j/INCSL/IICC26_ws
 colcon build --packages-select sjtu_drone_description
 source /home/j/INCSL/IICC26_ws/install/setup.bash
 ```
 
-## Wind Plugin Integration
+## Wind Plugin
 
-This workspace includes a wind world plugin (`libwind_plugin.so`) that:
-- subscribes to `/wind_command` (`std_msgs/msg/Float32MultiArray`, `[speed, direction_deg]`)
-- publishes `/wind_condition` (`std_msgs/msg/Float32MultiArray`)
-- supports service-based control via `/set_wind` (`sjtu_drone_interfaces/srv/SetWind`)
+The world plugin `libwind_plugin.so` is used to apply wind forces to models.
 
-Quick test:
+Interfaces:
+
+- `/wind_command` (`std_msgs/msg/Float32MultiArray`): command input `[speed_mps, direction_deg]`
+- `/wind_condition` (`std_msgs/msg/Float32MultiArray`): plugin output state
+- `/set_wind` (`sjtu_drone_interfaces/srv/SetWind`): optional service control path
+
+Quick check:
 
 ```bash
 ros2 topic pub /wind_command std_msgs/msg/Float32MultiArray "data: [4.0, 45.0]" -1
 ros2 topic echo /wind_condition --once
 ```
 
-## AprilTag-Assisted Landing Pipeline
+## Takeoff Hover Configuration
 
-When bringup is launched with `use_apriltag:=true`, detector components run under camera namespace and a bridge node can publish:
-- `/landing_tag_state` (`std_msgs/msg/Float32MultiArray`)
+Drone plugin now supports configurable takeoff target behavior:
 
-This bridge enables MATLAB landing logic without requiring MATLAB custom ROS2 message generation for `apriltag_msgs`.
-curl -L https://github.com/osrf/gazebo_models/archive/refs/heads/master.zip -o /tmp/gazebo_models.zip \
-    && unzip /tmp/gazebo_models.zip -d /tmp && mkdir -p ~/.gazebo/models/ && mv /tmp/gazebo_models-master/* ~/.gazebo/models/ \
-    && rm -r /tmp/gazebo_models.zip
-```
+- `takeoffHoverHeight` (YAML/xacro/plugin): altitude increase target in meters
+- `takeoffVerticalSpeed` (YAML/xacro/plugin): climb command during takeoff phase
 
-## TF Tree
+Default values are defined in:
 
-![TF Tree](../imgs/tf_tree.png)
+- `sjtu_drone_bringup/config/drone.yaml`
 
-## Generate urdf and sdf files
-
-To generate the urdf file run the following command:
+Launch-time override:
 
 ```bash
-ros2 run xacro xacro -o ./urdf/sjtu_drone.urdf ./urdf/sjtu_drone.urdf.xacro params_path:="$(ros2 pkg prefix sjtu_drone_bringup)/share/sjtu_drone_bringup/config/drone.yaml"  # Generate urdf file, you need to change the mesh path to the gazebo model
+ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
+	takeoff_hover_height:=2.0 \
+	takeoff_vertical_speed:=0.8
 ```
 
-To generate the sdf file run the following command:
+## AprilTag + MATLAB Integration Context
+
+When bringup is launched with AprilTag enabled:
+
+- detector output topic: `/drone/bottom/tags`
+- bridge output topic: `/landing_tag_state`
+
+`/landing_tag_state` exists for MATLAB environments that cannot import `apriltag_msgs` custom message definitions.
+
+## Generate URDF/SDF
+
+Generate URDF:
+
 ```bash
-gz sdf -p ./urdf/sjtu_drone.urdf > ./models/sjtu_drone/model.sdf  # Generate sdf file, you need to change the mesh path to the gazebo model
+ros2 run xacro xacro -o ./urdf/sjtu_drone.urdf ./urdf/sjtu_drone.urdf.xacro \
+	params_path:="$(ros2 pkg prefix sjtu_drone_bringup)/share/sjtu_drone_bringup/config/drone.yaml" \
+	takeoff_hover_height:=2.0 \
+	takeoff_vertical_speed:=0.8
+```
+
+Generate SDF:
+
+```bash
+gz sdf -p ./urdf/sjtu_drone.urdf > ./models/sjtu_drone/model.sdf
 ```

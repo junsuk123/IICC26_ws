@@ -149,5 +149,14 @@
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
+
+    <!-- Wind plugin: applies wind forces and publishes /wind_condition -->
+    <plugin name="wind_plugin" filename="libwind_plugin.so">
+      <wind_speed>0.0</wind_speed>
+      <wind_direction>0</wind_direction>
+      <area>0.1</area>
+      <force_coeff>1.0</force_coeff>
+      <publish_rate_hz>10.0</publish_rate_hz>
+    </plugin>
   </world>
 </sdf>

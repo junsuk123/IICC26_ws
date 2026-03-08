@@ -50,6 +50,9 @@ def get_teleop_controller(context, *_, **kwargs) -> Node:
 
 def rviz_node_generator(context, rviz_path):
     """Return a Node action for RViz, omitting --fixed-frame if empty."""
+    if LaunchConfiguration('use_rviz').perform(context) != 'true':
+        return []
+
     fixed_frame_value = LaunchConfiguration('fixed_frame').perform(context)
 
     rviz_arguments = ['-d', rviz_path]
@@ -158,7 +161,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             "apriltag_camera",
-            default_value="/drone/front",
+            default_value="/drone/bottom",
             description="Camera namespace for apriltag detector",
         ),
 
@@ -188,9 +191,28 @@ def generate_launch_description():
         ),
 
         DeclareLaunchArgument(
+            "takeoff_hover_height",
+            default_value="1.0",
+            description="Target altitude increase (m) after takeoff",
+        ),
+
+        DeclareLaunchArgument(
+            "takeoff_vertical_speed",
+            default_value="1.0",
+            description="Vertical climb command used during takeoff",
+        ),
+
+        DeclareLaunchArgument(
             'fixed_frame',
             default_value='',
             description='If provided, sets the fixed frame in RViz.'
+        ),
+
+        DeclareLaunchArgument(
+            'use_rviz',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Whether to launch RViz2',
         ),
 
         OpaqueFunction(
@@ -202,7 +224,11 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(sjtu_drone_bringup_path, 'launch', 'sjtu_drone_gazebo.launch.py')
-            )
+            ),
+            launch_arguments={
+                'takeoff_hover_height': LaunchConfiguration('takeoff_hover_height'),
+                'takeoff_vertical_speed': LaunchConfiguration('takeoff_vertical_speed'),
+            }.items(),
         ),
 
         Node(

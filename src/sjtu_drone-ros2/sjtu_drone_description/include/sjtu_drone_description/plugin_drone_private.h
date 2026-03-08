@@ -83,6 +83,12 @@ public:
   double motion_small_noise_;
   double motion_drift_noise_;
   double motion_drift_noise_time_;
+  double takeoff_hover_height_;
+  double takeoff_vertical_speed_;
+  double takeoff_timeout_sec_;
+  double takeoff_start_z_;
+  double takeoff_target_z_;
+  bool takeoff_target_initialized_;
 
   // Inertia and mass of the drone
   ignition::math::v6::Vector3<double> inertia;

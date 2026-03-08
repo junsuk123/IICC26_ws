@@ -1,18 +1,17 @@
 # Wind Tuner
 
-This folder contains `wind_tuner.py`, a small experiment runner to sweep wind plugin
-parameters and record `/wind_condition` messages from the running Gazebo world.
+`wind_tuner.py` runs parameter sweeps for wind plugin settings and records `/wind_condition`.
 
-Prerequisites
-- Source your ROS2 workspace environment first (so `rclpy` and messages are available):
+## Prerequisites
 
 ```bash
+source /opt/ros/humble/setup.bash
 source /home/j/INCSL/IICC26_ws/install/setup.bash
 ```
 
-- Ensure `gzserver` is available on PATH and the plugin library (`libwind_plugin.so`) is built and installed in the package (run `colcon build --packages-select sjtu_drone_description`).
+Ensure `sjtu_drone_description` is built and `libwind_plugin.so` is installed.
 
-Quick run example
+## Example
 
 ```bash
 python3 scripts/wind_tuner.py \
@@ -25,20 +24,23 @@ python3 scripts/wind_tuner.py \
   --out /tmp/wind_tuning
 ```
 
-What it does
-- For each combination of area/coeff/speed/dir, it writes a temporary world (copy of the provided template) with a `wind_plugin` block inserted.
-- Launches `gzserver` with that world and records messages published on `/wind_condition` for the requested duration.
-- Saves a CSV of recorded wind messages and gzserver logs per experiment in `--out`.
+## What it records
 
-Integration notes for this workspace
-- MATLAB landing script consumes `/wind_condition` and publishes `/landing_decision`.
-- AprilTag detector pipeline can run in parallel from bringup and publishes `/drone/bottom/tags`.
-- A bridge node (`apriltag_state_bridge`) publishes `/landing_tag_state` so MATLAB can use tag stability without custom `apriltag_msgs` registration.
+- `/wind_condition` time series
+- one output folder per parameter combination
+- gzserver logs for each run
 
-Notes / next steps
-- This script records only the `/wind_condition` topic. For a full tuning loop that measures actual landing performance you can extend it to:
-  - subscribe to model pose topics (e.g. Gazebo model state topics) or use a ROS2 node that monitors landing success
-  - implement automated success/failure criteria (position drift, touchdown event, etc.)
-  - run in headless CI by using `gzserver` as done here and collect logs
+## Relation to landing pipeline
 
-If you want, I can extend this runner to also track drone pose and compute landing success metrics, and then produce a summary report (CSV/plots) ranking parameter sets by performance.
+- MATLAB landing node reads `/wind_condition`.
+- Startup takeoff target can be tuned via bringup launch args `takeoff_hover_height` and `takeoff_vertical_speed`.
+- AprilTag landing observability runs in parallel from bringup.
+- Bridge topic `/landing_tag_state` supports MATLAB fallback when custom tag messages are unavailable.
+
+## Extensions
+
+For full landing-performance tuning, extend the script to include:
+
+- pose drift metrics
+- touchdown success criteria
+- ranking/scoring across wind parameter sets

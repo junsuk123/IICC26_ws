@@ -31,6 +31,9 @@ cfg.launchCMD = '';
 ns = '/drone'; % model namespace used by the bringup launch
 topic_wind = '/wind_condition';                     % Float32MultiArray [speed, direction]
 topic_pose = [ns '/gt_pose'];                       % geometry_msgs/Pose
+topic_state = [ns '/state'];                        % std_msgs/Int8 (0:landed, 1:flying, 2:takingoff, 3:landing)
+topic_takeoff = [ns '/takeoff'];                    % std_msgs/Empty
+topic_cmd_vel = [ns '/cmd_vel'];                    % geometry_msgs/Twist
 topic_decision = '/landing_decision';               % std_msgs/String
 topic_tags = [ns '/bottom/tags'];                   % apriltag_msgs/AprilTagDetectionArray
 topic_tag_state = '/landing_tag_state';             % Float32MultiArray from apriltag_state_bridge
@@ -56,6 +59,23 @@ params.tag_stability_score_warn = 0.65;
 params.tag_stability_score_land = 0.85;
 params.tag_min_samples = 5;         % minimum samples before trusting jitter
 
+% Startup + control params (MATLAB node drives takeoff/hover/xy-hold)
+params.startup_ready_timeout_sec = 15.0;
+params.takeoff_retry_sec = 1.0;
+params.hover_settle_sec = 2.0;
+params.tag_predict_horizon_sec = 0.15;
+params.tag_predict_timeout_sec = 0.6;
+params.xy_hold_enabled = true;
+params.xy_pid_kp = 0.9;
+params.xy_pid_ki = 0.05;
+params.xy_pid_kd = 0.12;
+params.xy_pid_integral_limit = 1.0;
+params.xy_cmd_limit = 0.7;
+% Default signs set for this workspace so positive image error commands move toward the tag.
+% If one axis is still reversed on your setup, flip only that axis sign.
+params.xy_map_sign_x_from_v = 1.0;  % x command from image v error
+params.xy_map_sign_y_from_u = 1.0;  % y command from image u error
+
 % Camera image size for normalized tag center calculations
 tag_cfg.image_width = 640;
 tag_cfg.image_height = 480;
@@ -66,6 +86,10 @@ cfg.start_wind_publisher = true; % enable built-in wind generator
 cfg.wind_pub_params = struct();   % see wind_publisher_matlab.startWindPublisher options (rate, steady_speed, etc.)
 cfg.wind_pub_params.use_set_wind_service = false;   % publish /wind_command continuously
 cfg.wind_pub_params.topic_publish_mode = 'matlab';  % 'matlab' publisher per tick, or 'cli'
+cfg.enable_live_plot = true;          % show real-time trends in MATLAB figure
+cfg.plot_window_sec = 45;             % sliding window length for live plot
+cfg.log_decision_changes_only = true; % reduce console noise
+cfg.log_summary_interval_sec = 5.0;   % periodic compact status log
 % Optional topic fallback mode inside startWindPublisher:
 % cfg.wind_pub_params.topic_publish_mode = 'cli';
 % cfg.wind_pub_params.cli_setup_cmd = 'source /home/j/INCSL/IICC26_ws/install/setup.bash';
@@ -97,6 +121,10 @@ end
 
 sub_wind = ros2subscriber(node, topic_wind, 'std_msgs/Float32MultiArray');
 sub_pose = ros2subscriber(node, topic_pose, 'geometry_msgs/Pose');
+sub_state = ros2subscriber(node, topic_state, 'std_msgs/Int8');
+
+pub_takeoff = ros2publisher(node, topic_takeoff, 'std_msgs/Empty');
+pub_cmd = ros2publisher(node, topic_cmd_vel, 'geometry_msgs/Twist');
 pub_dec = ros2publisher(node, topic_decision, 'std_msgs/String');
 
 % Optional AprilTag detection subscriber for landing zone reasoning.
@@ -144,9 +172,12 @@ if cfg.start_wind_publisher
 end
 
 % Template message
+msg_takeoff = ros2message(pub_takeoff);
+msg_cmd = ros2message(pub_cmd);
 msg_dec = ros2message(pub_dec);
 
-fprintf('[MATLAB] Node ready. Subscribed to %s and %s. Publishing decisions to %s\n', topic_wind, topic_pose, topic_decision);
+fprintf('[MATLAB] Node ready. Subscribed to %s, %s, %s. Publishing to %s, %s, %s\n', ...
+    topic_wind, topic_pose, topic_state, topic_takeoff, topic_cmd_vel, topic_decision);
 
 %% Minimal ontology constructors
 makeWind = @(speed,dir) struct('wind_speed',double(speed),'wind_direction',double(dir));
@@ -259,6 +290,24 @@ end
 dec_method = 'decision_tree'; % or 'bayesian'
 rate = rateControl(params.decision_rate);
 
+loop_t0 = tic;
+last_decision = '';
+last_log_t = -inf;
+viz = [];
+control_phase = 'wait_ready';
+control_phase_enter_t = 0.0;
+last_takeoff_cmd_t = -inf;
+have_pose = false;
+have_state = false;
+drone_state = -1; % 0:landed, 1:flying, 2:takingoff, 3:landing
+last_tag_detect_t = -inf;
+last_ctrl_t = 0.0;
+pid_x = initPidState();
+pid_y = initPidState();
+if cfg.enable_live_plot
+    viz = initLivePlots(cfg.plot_window_sec, params);
+end
+
 fprintf('[MATLAB] Entering decision loop (method=%s). Ctrl-C to stop.\n', dec_method);
 while true
     % get latest wind
@@ -277,11 +326,18 @@ while true
     if isempty(pose_msg)
         drone = makeDrone(struct('x',0,'y',0,'z',0), struct('w',1,'x',0,'y',0,'z',0), [0;0;0], [0;0;0]);
     else
+        have_pose = true;
         pos = [pose_msg.position.x; pose_msg.position.y; pose_msg.position.z];
         q = pose_msg.orientation; quat = struct('w',q.w,'x',q.x,'y',q.y,'z',q.z);
         % velocity not available from Pose message; set zero or extend to subscribe to twist
         vel = [0;0;0]; ang = [0;0;0];
         drone = makeDrone(pos, quat, vel, ang);
+    end
+
+    state_msg = tryReceive(sub_state, 0.01);
+    if ~isempty(state_msg)
+        have_state = true;
+        drone_state = double(state_msg.data);
     end
 
     % get latest apriltag detections and derive frame-center + jitter features
@@ -301,9 +357,14 @@ while true
         [tag_history, tag_hist_count] = pushTagCenter(tag_history, tag_hist_count, cx_px, cy_px);
         [tag_area_history, ~] = pushTagScalar(tag_area_history, area_px2);
         [tag_margin_history, ~] = pushTagScalar(tag_margin_history, margin);
+        last_tag_detect_t = toc(loop_t0);
     end
 
+    [pred_ok, pred_cx, pred_cy] = predictTagCenterPx(tag_history, tag_hist_count, cx_px, cy_px, ...
+        toc(loop_t0), last_tag_detect_t, params.tag_predict_horizon_sec, params.tag_predict_timeout_sec, params.decision_rate);
+
     [u_norm, v_norm, centered] = computeFrameCenterMetrics(cx_px, cy_px, tag_cfg.image_width, tag_cfg.image_height, params.tag_center_tolerance);
+    [u_pred, v_pred, centered_pred] = computeFrameCenterMetrics(pred_cx, pred_cy, tag_cfg.image_width, tag_cfg.image_height, params.tag_center_tolerance);
     jitter_px = computeTagJitter(tag_history, tag_hist_count, params.tag_min_samples);
     area_jitter_ratio = computeScalarJitterRatio(tag_area_history, tag_hist_count, params.tag_min_samples);
     margin_mean = computeScalarMean(tag_margin_history, tag_hist_count, params.tag_min_samples);
@@ -327,10 +388,107 @@ while true
     msg_dec.data = char(decision);
     send(pub_dec, msg_dec);
 
-    % print small status
-    fprintf('[%s] wind=%.2fm/s dir=%.1fdeg tag_detect=%d id=%d n=%d center=(%.2f,%.2f) jitter=%.2fpx areaJ=%.4f margin=%.1f score=%.2f -> %s\n', ...
-        datestr(now,'HH:MM:SS'), wind.wind_speed, wind.wind_direction, tagObs.detected, tagObs.tag_id, tagObs.num_tags, ...
-        tagObs.u_norm, tagObs.v_norm, tagObs.jitter_px, tagObs.area_jitter_ratio, tagObs.margin, tagObs.stability_score, decision);
+    t_now = toc(loop_t0);
+    dt_ctrl = max(1e-3, t_now - last_ctrl_t);
+    last_ctrl_t = t_now;
+
+    % Startup sequence: wait for readiness -> send takeoff -> settle hover -> xy hold on predicted tag center.
+    cmd_x = 0.0;
+    cmd_y = 0.0;
+    if params.xy_hold_enabled
+        switch control_phase
+            case 'wait_ready'
+                if (have_pose && have_state) || (t_now >= params.startup_ready_timeout_sec && have_pose)
+                    control_phase = 'takeoff';
+                    control_phase_enter_t = t_now;
+                end
+
+            case 'takeoff'
+                if (t_now - last_takeoff_cmd_t) >= params.takeoff_retry_sec
+                    send(pub_takeoff, msg_takeoff);
+                    last_takeoff_cmd_t = t_now;
+                end
+                if drone_state == 1
+                    control_phase = 'hover_settle';
+                    control_phase_enter_t = t_now;
+                    pid_x = initPidState();
+                    pid_y = initPidState();
+                end
+
+            case 'hover_settle'
+                if (t_now - control_phase_enter_t) >= params.hover_settle_sec
+                    control_phase = 'xy_hold';
+                    control_phase_enter_t = t_now;
+                end
+
+            case 'xy_hold'
+                if drone_state ~= 1
+                    control_phase = 'takeoff';
+                    control_phase_enter_t = t_now;
+                    pid_x = initPidState();
+                    pid_y = initPidState();
+                elseif pred_ok
+                    err_u = -u_pred;
+                    err_v = -v_pred;
+
+                    [ux, pid_x] = pidStep(err_v, dt_ctrl, pid_x, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
+                    [uy, pid_y] = pidStep(err_u, dt_ctrl, pid_y, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
+
+                    cmd_x = params.xy_map_sign_x_from_v * ux;
+                    cmd_y = params.xy_map_sign_y_from_u * uy;
+
+                    if centered_pred
+                        cmd_x = 0.0;
+                        cmd_y = 0.0;
+                    end
+                else
+                    pid_x = initPidState();
+                    pid_y = initPidState();
+                end
+        end
+    end
+
+    if drone_state == 1
+        msg_cmd.linear.x = cmd_x;
+        msg_cmd.linear.y = cmd_y;
+        msg_cmd.linear.z = 0.0;
+        msg_cmd.angular.x = 0.0;
+        msg_cmd.angular.y = 0.0;
+        msg_cmd.angular.z = 0.0;
+        send(pub_cmd, msg_cmd);
+    end
+
+    if cfg.enable_live_plot
+        ctrlViz = struct();
+        ctrlViz.u_now = u_norm;
+        ctrlViz.v_now = v_norm;
+        ctrlViz.u_pred = u_pred;
+        ctrlViz.v_pred = v_pred;
+        ctrlViz.pred_ok = pred_ok;
+        ctrlViz.centered_pred = centered_pred;
+        ctrlViz.cmd_x = cmd_x;
+        ctrlViz.cmd_y = cmd_y;
+        ctrlViz.control_phase = control_phase;
+        ctrlViz.drone_state = drone_state;
+        ctrlViz.tag_detected = detected;
+        viz = updateLivePlots(viz, t_now, wind, tagObs, decision, ctrlViz, params);
+    end
+
+    if cfg.log_decision_changes_only
+        if ~strcmp(decision, last_decision)
+            fprintf('[%s] phase=%s state=%d decision=%s wind=%.2f tag_detect=%d pred_ok=%d u=%.3f v=%.3f cmd=(%.2f,%.2f) stability=%.2f\n', ...
+                datestr(now,'HH:MM:SS'), control_phase, drone_state, decision, wind.wind_speed, tagObs.detected, pred_ok, u_pred, v_pred, cmd_x, cmd_y, tagObs.stability_score);
+            last_decision = decision;
+            last_log_t = t_now;
+        elseif (t_now - last_log_t) >= cfg.log_summary_interval_sec
+            fprintf('[%s] phase=%s keep=%s state=%d pred_ok=%d cmd=(%.2f,%.2f) wind=%.2f stability=%.2f\n', ...
+                datestr(now,'HH:MM:SS'), control_phase, decision, drone_state, pred_ok, cmd_x, cmd_y, wind.wind_speed, tagObs.stability_score);
+            last_log_t = t_now;
+        end
+    else
+        fprintf('[%s] decision=%s wind=%.2f stability=%.2f\n', ...
+            datestr(now,'HH:MM:SS'), decision, wind.wind_speed, tagObs.stability_score);
+    end
 
     waitfor(rate);
 end
@@ -619,6 +777,193 @@ function [detected, n_tags, tag_id, cx, cy, area_px2, margin] = extractTagFeatur
     area_px2 = d(5);
     margin = d(6);
     n_tags = d(7);
+end
+
+function st = initPidState()
+    st = struct('integral', 0.0, 'prev_error', 0.0, 'initialized', false);
+end
+
+function [u, st] = pidStep(err, dt, st, kp, ki, kd, i_limit, out_limit)
+    if ~st.initialized
+        st.prev_error = err;
+        st.initialized = true;
+    end
+
+    st.integral = clampValue(st.integral + err * dt, -abs(i_limit), abs(i_limit));
+    derr = (err - st.prev_error) / max(dt, 1e-6);
+    st.prev_error = err;
+
+    u = kp * err + ki * st.integral + kd * derr;
+    u = clampValue(u, -abs(out_limit), abs(out_limit));
+end
+
+function [ok, pred_cx, pred_cy] = predictTagCenterPx(hist, count, cx, cy, tNow, lastDetectT, horizonSec, timeoutSec, nominalRate)
+    ok = false;
+    pred_cx = nan;
+    pred_cy = nan;
+
+    if isfinite(cx) && isfinite(cy)
+        pred_cx = cx;
+        pred_cy = cy;
+        ok = true;
+    end
+
+    if count < 2
+        return;
+    end
+
+    if (tNow - lastDetectT) > timeoutSec
+        return;
+    end
+
+    rows = hist(end-count+1:end, :);
+    rows = rows(all(isfinite(rows), 2), :);
+    if size(rows, 1) < 2
+        return;
+    end
+
+    p2 = rows(end, :);
+    p1 = rows(end-1, :);
+    dt = 1.0 / max(nominalRate, 1e-3);
+    v = (p2 - p1) ./ dt;
+    p_pred = p2 + v .* horizonSec;
+
+    pred_cx = p_pred(1);
+    pred_cy = p_pred(2);
+    ok = isfinite(pred_cx) && isfinite(pred_cy);
+end
+
+function y = clampValue(x, xmin, xmax)
+    y = min(max(x, xmin), xmax);
+end
+
+function viz = initLivePlots(windowSec, params)
+    viz = struct();
+    viz.window_sec = max(5.0, windowSec);
+    viz.fig = figure('Name','Landing Decision Live Monitor','NumberTitle','off');
+    tlo = tiledlayout(viz.fig, 4, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    ax1 = nexttile(tlo, 1);
+    viz.wind_line = animatedline(ax1, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.5);
+    yline(ax1, params.wind_speed_caution, '--', 'Caution', 'Color', [0.85 0.33 0.10]);
+    yline(ax1, params.wind_speed_unsafe, '--', 'Unsafe', 'Color', [0.64 0.08 0.18]);
+    title(ax1, 'Wind Speed (m/s)');
+    ylabel(ax1, 'm/s');
+    grid(ax1, 'on');
+
+    ax2 = nexttile(tlo, 2);
+    viz.jitter_line = animatedline(ax2, 'Color', [0.49 0.18 0.56], 'LineWidth', 1.2);
+    viz.score_line = animatedline(ax2, 'Color', [0.47 0.67 0.19], 'LineWidth', 1.2);
+    yline(ax2, params.tag_jitter_warn_px, '--', 'Jitter Warn', 'Color', [0.85 0.33 0.10]);
+    yline(ax2, params.tag_jitter_unsafe_px, '--', 'Jitter Unsafe', 'Color', [0.64 0.08 0.18]);
+    title(ax2, 'Tag Jitter (px) and Stability Score');
+    ylabel(ax2, 'value');
+    grid(ax2, 'on');
+    legend(ax2, {'jitter','stability score'}, 'Location', 'best');
+
+    ax3 = nexttile(tlo, 3);
+    viz.decision_line = animatedline(ax3, 'Color', [0.00 0.00 0.00], 'LineWidth', 1.6);
+    title(ax3, 'Decision State');
+    xlabel(ax3, 'time (s)');
+    ylabel(ax3, 'decision');
+    yticks(ax3, [0 1 2]);
+    yticklabels(ax3, {'wait','caution','land'});
+    ylim(ax3, [-0.2 2.2]);
+    grid(ax3, 'on');
+
+    ax4 = nexttile(tlo, 4);
+    hold(ax4, 'on');
+    axis(ax4, [-1.05 1.05 -1.05 1.05]);
+    axis(ax4, 'square');
+    grid(ax4, 'on');
+    xlabel(ax4, 'u (image horizontal, normalized)');
+    ylabel(ax4, 'v (image vertical, normalized)');
+    title(ax4, 'Tag-Drone Alignment and PID Intent');
+
+    th = linspace(0, 2*pi, 100);
+    plot(ax4, params.tag_center_tolerance*cos(th), params.tag_center_tolerance*sin(th), '--', 'Color', [0.5 0.5 0.5]);
+    viz.center_marker = plot(ax4, 0, 0, '+', 'Color', [0 0 0], 'MarkerSize', 9, 'LineWidth', 1.4);
+    viz.tag_now_marker = plot(ax4, nan, nan, 'o', 'Color', [0.85 0.33 0.10], 'MarkerSize', 6, 'LineWidth', 1.3);
+    viz.tag_pred_marker = plot(ax4, nan, nan, 's', 'Color', [0.00 0.45 0.74], 'MarkerSize', 6, 'LineWidth', 1.3);
+    viz.align_quiver = quiver(ax4, 0, 0, 0, 0, 0, 'Color', [0.10 0.10 0.10], 'LineWidth', 1.5, 'MaxHeadSize', 2.0);
+    viz.cmd_quiver = quiver(ax4, 0, 0, 0, 0, 0, 'Color', [0.47 0.67 0.19], 'LineWidth', 1.5, 'MaxHeadSize', 2.0);
+    viz.ctrl_text = text(ax4, -1.02, 1.00, '', 'VerticalAlignment', 'top', 'FontSize', 9, 'Color', [0.1 0.1 0.1]);
+
+    legend(ax4, {'center tolerance', 'image center', 'tag now', 'tag predicted', 'align vector', 'cmd vector'}, 'Location', 'eastoutside');
+
+    viz.ax = [ax1 ax2 ax3];
+    viz.ax_align = ax4;
+end
+
+function viz = updateLivePlots(viz, tNow, wind, tagObs, decision, ctrlViz, params)
+    if isempty(viz) || ~isfield(viz, 'fig') || ~isgraphics(viz.fig)
+        return;
+    end
+
+    addpoints(viz.wind_line, tNow, wind.wind_speed);
+    if isfinite(tagObs.jitter_px)
+        addpoints(viz.jitter_line, tNow, tagObs.jitter_px);
+    end
+    if isfinite(tagObs.stability_score)
+        addpoints(viz.score_line, tNow, tagObs.stability_score);
+    end
+    addpoints(viz.decision_line, tNow, decisionToNumeric(decision));
+
+    xmin = max(0, tNow - viz.window_sec);
+    xmax = max(viz.window_sec, tNow);
+    for k = 1:numel(viz.ax)
+        xlim(viz.ax(k), [xmin xmax]);
+    end
+
+    if isfield(viz, 'ax_align') && isgraphics(viz.ax_align)
+        if isfinite(ctrlViz.u_now) && isfinite(ctrlViz.v_now)
+            set(viz.tag_now_marker, 'XData', ctrlViz.u_now, 'YData', ctrlViz.v_now);
+        else
+            set(viz.tag_now_marker, 'XData', nan, 'YData', nan);
+        end
+
+        if ctrlViz.pred_ok && isfinite(ctrlViz.u_pred) && isfinite(ctrlViz.v_pred)
+            set(viz.tag_pred_marker, 'XData', ctrlViz.u_pred, 'YData', ctrlViz.v_pred);
+
+            align_u = -ctrlViz.u_pred;
+            align_v = -ctrlViz.v_pred;
+            set(viz.align_quiver, 'XData', ctrlViz.u_pred, 'YData', ctrlViz.v_pred, 'UData', align_u, 'VData', align_v);
+
+            cmd_norm = max(params.xy_cmd_limit, 1e-6);
+            cmd_u = clampValue(ctrlViz.cmd_y / cmd_norm, -1.0, 1.0);
+            cmd_v = clampValue(ctrlViz.cmd_x / cmd_norm, -1.0, 1.0);
+            set(viz.cmd_quiver, 'XData', ctrlViz.u_pred, 'YData', ctrlViz.v_pred, 'UData', cmd_u*0.6, 'VData', cmd_v*0.6);
+        else
+            set(viz.tag_pred_marker, 'XData', nan, 'YData', nan);
+            set(viz.align_quiver, 'XData', 0, 'YData', 0, 'UData', 0, 'VData', 0);
+            set(viz.cmd_quiver, 'XData', 0, 'YData', 0, 'UData', 0, 'VData', 0);
+        end
+
+        align_err = nan;
+        if isfinite(ctrlViz.u_pred) && isfinite(ctrlViz.v_pred)
+            align_err = sqrt(ctrlViz.u_pred^2 + ctrlViz.v_pred^2);
+        end
+
+        txt = sprintf(['phase=%s state=%d det=%d pred=%d centered=%d\n', ...
+                       'u_pred=%.3f v_pred=%.3f align_err=%.3f\n', ...
+                       'cmd_x=%.3f cmd_y=%.3f'], ...
+                       char(ctrlViz.control_phase), ctrlViz.drone_state, ctrlViz.tag_detected, ctrlViz.pred_ok, ctrlViz.centered_pred, ...
+                       ctrlViz.u_pred, ctrlViz.v_pred, align_err, ctrlViz.cmd_x, ctrlViz.cmd_y);
+        set(viz.ctrl_text, 'String', txt);
+    end
+
+    drawnow limitrate nocallbacks;
+end
+
+function y = decisionToNumeric(decision)
+    switch char(decision)
+        case 'land'
+            y = 2;
+        case 'caution'
+            y = 1;
+        otherwise
+            y = 0;
+    end
 end
 
 % EOF

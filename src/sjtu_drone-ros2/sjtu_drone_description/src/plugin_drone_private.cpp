@@ -21,7 +21,13 @@ namespace gazebo_plugins
 {
 
 DroneSimpleControllerPrivate::DroneSimpleControllerPrivate()
-: m_timeAfterCmd(0.0)
+: takeoff_hover_height_(1.0)
+  , takeoff_vertical_speed_(1.0)
+  , takeoff_timeout_sec_(10.0)
+  , takeoff_start_z_(0.0)
+  , takeoff_target_z_(1.0)
+  , takeoff_target_initialized_(false)
+  , m_timeAfterCmd(0.0)
   , navi_state(LANDED_MODEL)
   , m_posCtrl(false)
   , m_velMode(false)
@@ -290,6 +296,9 @@ void DroneSimpleControllerPrivate::TakeoffCallback(const std_msgs::msg::Empty::S
   if (navi_state == LANDED_MODEL) {
     navi_state = TAKINGOFF_MODEL;
     m_timeAfterCmd = 0;
+    takeoff_start_z_ = link->WorldPose().Pos().Z();
+    takeoff_target_z_ = takeoff_start_z_ + takeoff_hover_height_;
+    takeoff_target_initialized_ = true;
     RCLCPP_INFO(ros_node_->get_logger(), "Quadrotor takes off!!");
   }
 }
@@ -396,8 +405,11 @@ void DroneSimpleControllerPrivate::UpdateState(double dt)
 {
   if (navi_state == TAKINGOFF_MODEL) {
     m_timeAfterCmd += dt;
-    if (m_timeAfterCmd > 0.5) {
+    const bool reached_target = takeoff_target_initialized_ && (pose.Pos().Z() >= takeoff_target_z_);
+    const bool timeout = m_timeAfterCmd > takeoff_timeout_sec_;
+    if (reached_target || timeout) {
       navi_state = FLYING_MODEL;
+      takeoff_target_initialized_ = false;
       std::cout << "Entering flying model!" << std::endl;
     }
   } else if (navi_state == LANDING_MODEL) {
@@ -429,6 +441,10 @@ void DroneSimpleControllerPrivate::UpdateState(double dt)
 void DroneSimpleControllerPrivate::UpdateDynamics(double dt)
 {
   ignition::math::v6::Vector3<double> force, torque;
+  double z_cmd = cmd_vel.linear.z;
+  if (navi_state == TAKINGOFF_MODEL) {
+    z_cmd = takeoff_vertical_speed_;
+  }
 
   // Get Pose/Orientation from Gazebo
   pose = link->WorldPose();
@@ -517,6 +533,11 @@ void DroneSimpleControllerPrivate::UpdateDynamics(double dt)
         (controllers_.velocity_z.update(
           vz, velocity[2], acceleration[2],
           dt) + load_factor * gravity);
+    } else if (navi_state == TAKINGOFF_MODEL) {
+      force[2] = mass *
+        (controllers_.velocity_z.update(
+          z_cmd, velocity[2], acceleration[2],
+          dt) + load_factor * gravity);
     }
   } else {
     //normal control
@@ -563,7 +584,7 @@ void DroneSimpleControllerPrivate::UpdateDynamics(double dt)
     torque[2] = inertia[2] * controllers_.yaw.update(cmd_vel.angular.z, angular_velocity[2], 0, dt);
     force[2] = mass *
       (controllers_.velocity_z.update(
-        cmd_vel.linear.z, velocity[2], acceleration[2],
+        z_cmd, velocity[2], acceleration[2],
         dt) + load_factor * gravity);
   }
 

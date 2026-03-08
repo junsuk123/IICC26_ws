@@ -109,6 +109,29 @@ void DroneSimpleController::Load(gazebo::physics::ModelPtr _model, sdf::ElementP
     impl_->motion_drift_noise_time_ = _sdf->GetElement("motionDriftNoiseTime")->Get<double>();
   }
 
+  if (!_sdf->HasElement("takeoffHoverHeight")) {
+    impl_->takeoff_hover_height_ = 1.0;
+  } else {
+    impl_->takeoff_hover_height_ = _sdf->GetElement("takeoffHoverHeight")->Get<double>();
+  }
+
+  if (!_sdf->HasElement("takeoffVerticalSpeed")) {
+    impl_->takeoff_vertical_speed_ = 1.0;
+  } else {
+    impl_->takeoff_vertical_speed_ = _sdf->GetElement("takeoffVerticalSpeed")->Get<double>();
+  }
+
+  if (impl_->takeoff_hover_height_ < 0.0) {
+    impl_->takeoff_hover_height_ = 0.0;
+  }
+  if (impl_->takeoff_vertical_speed_ <= 1e-6) {
+    impl_->takeoff_vertical_speed_ = 1.0;
+  }
+  impl_->takeoff_timeout_sec_ = 10.0;
+  impl_->takeoff_start_z_ = 0.0;
+  impl_->takeoff_target_z_ = impl_->takeoff_hover_height_;
+  impl_->takeoff_target_initialized_ = false;
+
 
   RCLCPP_INFO_STREAM(
     impl_->ros_node_->get_logger(), "Using following parameters: \n" <<
@@ -116,7 +139,9 @@ void DroneSimpleController::Load(gazebo::physics::ModelPtr _model, sdf::ElementP
       "\t\tmax_force: " << impl_->max_force_ << ",\n" <<
       "\t\tmotion_small_noise: " << impl_->motion_small_noise_ << ",\n" <<
       "\t\tmotion_drift_noise: " << impl_->motion_drift_noise_ << ",\n" <<
-      "\t\tmotion_drift_noise_time: " << impl_->motion_drift_noise_time_
+        "\t\tmotion_drift_noise_time: " << impl_->motion_drift_noise_time_ << ",\n" <<
+        "\t\ttakeoff_hover_height: " << impl_->takeoff_hover_height_ << ",\n" <<
+        "\t\ttakeoff_vertical_speed: " << impl_->takeoff_vertical_speed_
   );
 
   // get inertia and mass of quadrotor body

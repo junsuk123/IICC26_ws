@@ -3,9 +3,13 @@
 <!-- https://answers.ros.org/question/379014/passing-outside-parameters-into-urdf-file-using-xacro/ -->
   <!-- Need argument to get from launch file -->
   <xacro:arg name="params_path" default="$(find sjtu_drone_bringup)/config/drone.yaml"/> 
+  <xacro:arg name="takeoff_hover_height" default="-1.0"/>
+  <xacro:arg name="takeoff_vertical_speed" default="-1.0"/>
 
   <!-- Need seperate property for xacro inorder processing -->
   <xacro:property name="params_path" value="$(arg params_path)"/> 
+  <xacro:property name="takeoff_hover_height_arg" value="$(arg takeoff_hover_height)"/>
+  <xacro:property name="takeoff_vertical_speed_arg" value="$(arg takeoff_vertical_speed)"/>
 
   <!-- Read in the yaml dict as mp (short for model parameters) -->
   <xacro:property name="mp" value="${xacro.load_yaml(params_path)}"/> 
@@ -106,6 +110,8 @@
       <motionSmallNoise>${mp['motionSmallNoise']}</motionSmallNoise>
       <motionDriftNoise>${mp['motionDriftNoise']}</motionDriftNoise>
       <motionDriftNoiseTime>${mp['motionDriftNoiseTime']}</motionDriftNoiseTime>
+      <takeoffHoverHeight>${float(takeoff_hover_height_arg) if float(takeoff_hover_height_arg) >= 0.0 else mp['takeoffHoverHeight']}</takeoffHoverHeight>
+      <takeoffVerticalSpeed>${float(takeoff_vertical_speed_arg) if float(takeoff_vertical_speed_arg) > 0.0 else mp['takeoffVerticalSpeed']}</takeoffVerticalSpeed>
     </plugin>
   </gazebo>
 

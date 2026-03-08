@@ -57,3 +57,8 @@ motionSmallNoise: 0.00
 motionDriftNoise: 0.00
 # Time interval for updating motion drift noise. Relevant only if `motionDriftNoise` is non-zero.
 motionDriftNoiseTime: 50
+
+# Target altitude increase (meters) after takeoff command, relative to current z.
+takeoffHoverHeight: 1.0
+# Vertical climb command (m/s equivalent controller target) used during takeoff phase.
+takeoffVerticalSpeed: 1.0

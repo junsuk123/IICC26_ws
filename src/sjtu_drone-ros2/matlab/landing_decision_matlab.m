@@ -181,7 +181,7 @@ msg_takeoff = ros2message(pub_takeoff);
 msg_cmd = ros2message(pub_cmd);
 msg_dec = ros2message(pub_dec);
 msg_wind_zero = ros2message(pub_wind_cmd);
-msg_wind_zero.data = [0.0, 0.0];
+msg_wind_zero.data = single([0.0, 0.0]);
 
 fprintf('[MATLAB] Node ready. Subscribed to %s, %s, %s. Publishing to %s, %s, %s\n', ...
     topic_wind, topic_pose, topic_state, topic_takeoff, topic_cmd_vel, topic_decision);

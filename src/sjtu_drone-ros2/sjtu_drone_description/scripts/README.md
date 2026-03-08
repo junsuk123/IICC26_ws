@@ -36,6 +36,7 @@ python3 scripts/wind_tuner.py \
 - Startup takeoff target can be tuned via bringup launch args `takeoff_hover_height` and `takeoff_vertical_speed`.
 - AprilTag landing observability runs in parallel from bringup.
 - Bridge topic `/landing_tag_state` supports MATLAB fallback when custom tag messages are unavailable.
+- MATLAB landing node may hold last valid tag state for a short timeout during tag dropouts, so evaluate both raw detector stability and hold-time behavior when tuning.
 
 ## Extensions
 

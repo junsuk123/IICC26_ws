@@ -121,9 +121,21 @@ Rule-based output:
 ### Stage D: startup + XY hold control
 
 - phase flow: `wait_ready -> takeoff -> hover_settle -> xy_hold`
-- startup uses `/drone/state` to verify flying transition
-- XY hold uses predicted tag center (`u_pred`, `v_pred`) and PID control
+- startup prefers `/drone/state` and falls back to altitude-based inference when state is stale
+- XY hold uses predicted tag center (`u_pred`, `v_pred`) and falls back to current center when needed
 - control output publishes to `/drone/cmd_vel` with zero z/yaw command
+
+Current startup gate for experiments:
+
+- phase flow is now `wait_ready -> pre_takeoff_stabilize -> takeoff -> hover_settle -> xy_hold`
+- in `pre_takeoff_stabilize`, node continuously publishes zero wind command (`/wind_command = [0, 0]`)
+- takeoff is allowed only after zero-wind settle time and continuous tag-center hold are satisfied
+
+### Stage E: tag loss continuity
+
+- on valid detection, the node caches the latest tag state (`id`, center, area, margin)
+- if detection is briefly lost, cached state is reused for `tag_hold_timeout_sec`
+- this prevents abrupt tag-position discontinuities during temporary detector dropouts
 
 ## Fallback for MATLAB custom message limitations
 
@@ -177,6 +189,24 @@ run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/landing_decision_matlab.
   - increase `tag_margin_warn`
   - increase `tag_min_area_px2`
   - decrease `tag_area_jitter_warn_ratio`
+
+## Key Runtime Parameters (Current Defaults)
+
+- `params.tag_predict_timeout_sec = 0.6`
+- `params.tag_hold_last_state = true`
+- `params.tag_hold_timeout_sec = 0.6`
+- `params.pre_takeoff_zero_wind_enabled = true`
+- `params.pre_takeoff_zero_wind_settle_sec = 2.0`
+- `params.pre_takeoff_require_tag_centered = true`
+- `params.pre_takeoff_tag_center_tolerance = 0.03`
+- `params.pre_takeoff_tag_center_hold_sec = 1.0`
+- `params.xy_pid_kp = 1.2`
+- `params.xy_control_center_deadband = 0.05`
+- `params.flying_altitude_threshold = 0.20`
+- `params.state_stale_timeout_sec = 1.0`
+- `cfg.wind_start_delay_after_hover_sec = 5.0`
+- `params.wind_start_require_tag_centered = true`
+- `params.wind_start_tag_center_hold_sec = 1.0`
 
 ## PID Direction and Visualization
 

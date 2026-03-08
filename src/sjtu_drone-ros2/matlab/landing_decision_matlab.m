@@ -65,12 +65,24 @@ params.takeoff_retry_sec = 1.0;
 params.hover_settle_sec = 2.0;
 params.tag_predict_horizon_sec = 0.15;
 params.tag_predict_timeout_sec = 0.6;
+params.tag_hold_last_state = true;      % keep last valid tag state during short detection gaps
+params.tag_hold_timeout_sec = 0.6;      % max hold duration (sec)
+params.pre_takeoff_zero_wind_enabled = true;      % force zero wind before first takeoff command
+params.pre_takeoff_zero_wind_settle_sec = 2.0;    % wait after commanding zero wind
+params.pre_takeoff_require_tag_centered = true;   % require tag centered before takeoff
+params.pre_takeoff_tag_center_tolerance = 0.03;   % normalized distance to image center
+params.pre_takeoff_tag_center_hold_sec = 1.0;     % continuous centered time before takeoff
 params.xy_hold_enabled = true;
-params.xy_pid_kp = 0.9;
+params.xy_pid_kp = 1.2;
 params.xy_pid_ki = 0.05;
 params.xy_pid_kd = 0.12;
 params.xy_pid_integral_limit = 1.0;
 params.xy_cmd_limit = 0.7;
+params.xy_control_center_deadband = 0.05; % tighter than landing tolerance; used only to zero XY control near center
+params.flying_altitude_threshold = 0.20; % fallback flight inference when /state is stale
+params.state_stale_timeout_sec = 1.0;    % if no /state update within this window, trust pose fallback
+params.wind_start_require_tag_centered = true; % start wind only after hover center lock
+params.wind_start_tag_center_hold_sec = 1.0;
 % Default signs set for this workspace so positive image error commands move toward the tag.
 % If one axis is still reversed on your setup, flip only that axis sign.
 params.xy_map_sign_x_from_v = 1.0;  % x command from image v error
@@ -83,6 +95,7 @@ tag_cfg.history_len = 20;
 
 % Wind publisher integration: if true, MATLAB will generate and publish wind to /wind_command
 cfg.start_wind_publisher = true; % enable built-in wind generator
+cfg.wind_start_delay_after_hover_sec = 5.0; % start wind N seconds after entering hover_settle
 cfg.wind_pub_params = struct();   % see wind_publisher_matlab.startWindPublisher options (rate, steady_speed, etc.)
 cfg.wind_pub_params.use_set_wind_service = false;   % publish /wind_command continuously
 cfg.wind_pub_params.topic_publish_mode = 'matlab';  % 'matlab' publisher per tick, or 'cli'
@@ -126,6 +139,7 @@ sub_state = ros2subscriber(node, topic_state, 'std_msgs/Int8');
 pub_takeoff = ros2publisher(node, topic_takeoff, 'std_msgs/Empty');
 pub_cmd = ros2publisher(node, topic_cmd_vel, 'geometry_msgs/Twist');
 pub_dec = ros2publisher(node, topic_decision, 'std_msgs/String');
+pub_wind_cmd = ros2publisher(node, '/wind_command', 'std_msgs/Float32MultiArray');
 
 % Optional AprilTag detection subscriber for landing zone reasoning.
 sub_tags = [];
@@ -158,23 +172,16 @@ tag_hist_count = 0;
 tag_area_history = nan(tag_cfg.history_len, 1);
 tag_margin_history = nan(tag_cfg.history_len, 1);
 
-% Optionally start the MATLAB wind publisher which will publish to /wind_command
+% Wind publisher is started later in the loop (delay after hover phase begins).
 windTimer = [];
-if cfg.start_wind_publisher
-    try
-        % ensure wind_publisher_matlab is on path
-        windTimer = startWindPublisher(cfg.wind_pub_params);
-        % ensure cleanup on exit
-        cleanupWind = onCleanup(@() safeStopWind(windTimer));
-    catch ME
-        warning('Failed to start MATLAB wind publisher: %s', ME.message);
-    end
-end
+cleanupWind = [];
 
 % Template message
 msg_takeoff = ros2message(pub_takeoff);
 msg_cmd = ros2message(pub_cmd);
 msg_dec = ros2message(pub_dec);
+msg_wind_zero = ros2message(pub_wind_cmd);
+msg_wind_zero.data = [0.0, 0.0];
 
 fprintf('[MATLAB] Node ready. Subscribed to %s, %s, %s. Publishing to %s, %s, %s\n', ...
     topic_wind, topic_pose, topic_state, topic_takeoff, topic_cmd_vel, topic_decision);
@@ -301,7 +308,14 @@ have_pose = false;
 have_state = false;
 drone_state = -1; % 0:landed, 1:flying, 2:takingoff, 3:landing
 last_tag_detect_t = -inf;
+last_valid_tag = struct('n_tags',0,'tag_id',-1,'cx_px',nan,'cy_px',nan,'area_px2',nan,'margin',nan);
+have_valid_tag = false;
+last_state_rx_t = -inf;
 last_ctrl_t = 0.0;
+hover_start_t = nan;
+wind_started = false;
+pre_takeoff_tag_center_hold_start_t = nan;
+hover_center_hold_start_t = nan;
 pid_x = initPidState();
 pid_y = initPidState();
 if cfg.enable_live_plot
@@ -338,26 +352,44 @@ while true
     if ~isempty(state_msg)
         have_state = true;
         drone_state = double(state_msg.data);
+        last_state_rx_t = toc(loop_t0);
     end
 
     % get latest apriltag detections and derive frame-center + jitter features
     detected = false; n_tags = 0; tag_id = -1; cx_px = nan; cy_px = nan; area_px2 = nan; margin = nan;
+    raw_detected = false;
     tag_msg = [];
     if ~isempty(sub_tags)
         tag_msg = tryReceive(sub_tags, 0.01);
     end
 
     if ~isempty(tag_msg)
-        [detected, n_tags, tag_id, cx_px, cy_px, area_px2, margin] = extractTagFeatures(tag_msg, params.tag_target_id_enabled, params.tag_target_id);
+        [raw_detected, n_tags, tag_id, cx_px, cy_px, area_px2, margin] = extractTagFeatures(tag_msg, params.tag_target_id_enabled, params.tag_target_id);
     elseif ~isempty(sub_tag_state)
         bridge_msg = tryReceive(sub_tag_state, 0.01);
-        [detected, n_tags, tag_id, cx_px, cy_px, area_px2, margin] = extractTagFeaturesFromBridge(bridge_msg);
+        [raw_detected, n_tags, tag_id, cx_px, cy_px, area_px2, margin] = extractTagFeaturesFromBridge(bridge_msg);
     end
-    if detected
+
+    if raw_detected
+        detected = true;
+        last_valid_tag = struct('n_tags', n_tags, 'tag_id', tag_id, 'cx_px', cx_px, 'cy_px', cy_px, 'area_px2', area_px2, 'margin', margin);
+        have_valid_tag = true;
+
         [tag_history, tag_hist_count] = pushTagCenter(tag_history, tag_hist_count, cx_px, cy_px);
         [tag_area_history, ~] = pushTagScalar(tag_area_history, area_px2);
         [tag_margin_history, ~] = pushTagScalar(tag_margin_history, margin);
         last_tag_detect_t = toc(loop_t0);
+    elseif params.tag_hold_last_state && have_valid_tag
+        hold_age = toc(loop_t0) - last_tag_detect_t;
+        if hold_age <= params.tag_hold_timeout_sec
+            detected = true;
+            n_tags = last_valid_tag.n_tags;
+            tag_id = last_valid_tag.tag_id;
+            cx_px = last_valid_tag.cx_px;
+            cy_px = last_valid_tag.cy_px;
+            area_px2 = last_valid_tag.area_px2;
+            margin = last_valid_tag.margin;
+        end
     end
 
     [pred_ok, pred_cx, pred_cy] = predictTagCenterPx(tag_history, tag_hist_count, cx_px, cy_px, ...
@@ -392,25 +424,68 @@ while true
     dt_ctrl = max(1e-3, t_now - last_ctrl_t);
     last_ctrl_t = t_now;
 
-    % Startup sequence: wait for readiness -> send takeoff -> settle hover -> xy hold on predicted tag center.
+    % Determine flight status for control: prefer fresh /state, fallback to altitude if state is stale.
+    state_is_fresh = have_state && ((t_now - last_state_rx_t) <= params.state_stale_timeout_sec);
+    if state_is_fresh
+        is_flying_for_control = (drone_state == 1);
+    else
+        is_flying_for_control = have_pose && (drone.position(3) >= params.flying_altitude_threshold);
+    end
+
+    % Startup sequence: wait for readiness -> pre-takeoff stabilize -> takeoff -> settle hover -> xy hold.
     cmd_x = 0.0;
     cmd_y = 0.0;
+    centered_ctrl_dbg = false;
+    tag_center_for_takeoff = detected && isfinite(u_norm) && isfinite(v_norm) && ...
+        (sqrt(u_norm^2 + v_norm^2) <= params.pre_takeoff_tag_center_tolerance);
     if params.xy_hold_enabled
         switch control_phase
             case 'wait_ready'
                 if (have_pose && have_state) || (t_now >= params.startup_ready_timeout_sec && have_pose)
+                    control_phase = 'pre_takeoff_stabilize';
+                    control_phase_enter_t = t_now;
+                    pre_takeoff_tag_center_hold_start_t = nan;
+                end
+
+            case 'pre_takeoff_stabilize'
+                if params.pre_takeoff_zero_wind_enabled
+                    send(pub_wind_cmd, msg_wind_zero);
+                end
+
+                if params.pre_takeoff_require_tag_centered
+                    if tag_center_for_takeoff
+                        if ~isfinite(pre_takeoff_tag_center_hold_start_t)
+                            pre_takeoff_tag_center_hold_start_t = t_now;
+                        end
+                    else
+                        pre_takeoff_tag_center_hold_start_t = nan;
+                    end
+                    tag_center_ready = isfinite(pre_takeoff_tag_center_hold_start_t) && ...
+                        ((t_now - pre_takeoff_tag_center_hold_start_t) >= params.pre_takeoff_tag_center_hold_sec);
+                else
+                    tag_center_ready = true;
+                end
+
+                wind_settled = ~params.pre_takeoff_zero_wind_enabled || ...
+                    ((t_now - control_phase_enter_t) >= params.pre_takeoff_zero_wind_settle_sec);
+
+                if wind_settled && tag_center_ready
                     control_phase = 'takeoff';
                     control_phase_enter_t = t_now;
                 end
 
             case 'takeoff'
+                if params.pre_takeoff_zero_wind_enabled
+                    send(pub_wind_cmd, msg_wind_zero);
+                end
                 if (t_now - last_takeoff_cmd_t) >= params.takeoff_retry_sec
                     send(pub_takeoff, msg_takeoff);
                     last_takeoff_cmd_t = t_now;
                 end
-                if drone_state == 1
+                if is_flying_for_control
                     control_phase = 'hover_settle';
                     control_phase_enter_t = t_now;
+                    hover_start_t = t_now;
                     pid_x = initPidState();
                     pid_y = initPidState();
                 end
@@ -422,33 +497,85 @@ while true
                 end
 
             case 'xy_hold'
-                if drone_state ~= 1
+                if ~is_flying_for_control
                     control_phase = 'takeoff';
                     control_phase_enter_t = t_now;
+                    hover_start_t = nan;
+                    hover_center_hold_start_t = nan;
                     pid_x = initPidState();
                     pid_y = initPidState();
-                elseif pred_ok
-                    err_u = -u_pred;
-                    err_v = -v_pred;
-
-                    [ux, pid_x] = pidStep(err_v, dt_ctrl, pid_x, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
-                    [uy, pid_y] = pidStep(err_u, dt_ctrl, pid_y, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
-
-                    cmd_x = params.xy_map_sign_x_from_v * ux;
-                    cmd_y = params.xy_map_sign_y_from_u * uy;
-
-                    if centered_pred
-                        cmd_x = 0.0;
-                        cmd_y = 0.0;
-                    end
                 else
-                    pid_x = initPidState();
-                    pid_y = initPidState();
+                    use_pred = pred_ok && isfinite(u_pred) && isfinite(v_pred);
+                    use_now = detected && isfinite(u_norm) && isfinite(v_norm);
+
+                    if use_pred
+                        u_ctrl = u_pred;
+                        v_ctrl = v_pred;
+                    elseif use_now
+                        u_ctrl = u_norm;
+                        v_ctrl = v_norm;
+                    else
+                        u_ctrl = nan;
+                        v_ctrl = nan;
+                    end
+
+                    if isfinite(u_ctrl) && isfinite(v_ctrl)
+                        centered_ctrl = sqrt(u_ctrl^2 + v_ctrl^2) <= params.xy_control_center_deadband;
+                        centered_ctrl_dbg = centered_ctrl;
+                        err_u = -u_ctrl;
+                        err_v = -v_ctrl;
+
+                        [ux, pid_x] = pidStep(err_v, dt_ctrl, pid_x, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
+                        [uy, pid_y] = pidStep(err_u, dt_ctrl, pid_y, params.xy_pid_kp, params.xy_pid_ki, params.xy_pid_kd, params.xy_pid_integral_limit, params.xy_cmd_limit);
+
+                        cmd_x = params.xy_map_sign_x_from_v * ux;
+                        cmd_y = params.xy_map_sign_y_from_u * uy;
+
+                        if centered_ctrl
+                            cmd_x = 0.0;
+                            cmd_y = 0.0;
+                        end
+                    else
+                        pid_x = initPidState();
+                        pid_y = initPidState();
+                    end
                 end
         end
     end
 
-    if drone_state == 1
+    % Start wind only after drone has entered hover phase and the configured delay has elapsed.
+    if cfg.start_wind_publisher && ~wind_started && isfinite(hover_start_t)
+        hover_delay_ok = (t_now - hover_start_t) >= cfg.wind_start_delay_after_hover_sec;
+
+        if params.wind_start_require_tag_centered
+            hover_center_now = strcmp(control_phase, 'xy_hold') && detected && centered_ctrl_dbg;
+            if hover_center_now
+                if ~isfinite(hover_center_hold_start_t)
+                    hover_center_hold_start_t = t_now;
+                end
+            else
+                hover_center_hold_start_t = nan;
+            end
+
+            hover_center_ready = isfinite(hover_center_hold_start_t) && ...
+                ((t_now - hover_center_hold_start_t) >= params.wind_start_tag_center_hold_sec);
+        else
+            hover_center_ready = true;
+        end
+
+        if hover_delay_ok && hover_center_ready
+            try
+                windTimer = startWindPublisher(cfg.wind_pub_params);
+                cleanupWind = onCleanup(@() safeStopWind(windTimer));
+                wind_started = true;
+                fprintf('[MATLAB] Wind start condition met (hover+%.1fs). Wind publisher started.\n', cfg.wind_start_delay_after_hover_sec);
+            catch ME
+                warning('Failed to start delayed MATLAB wind publisher: %s', ME.message);
+            end
+        end
+    end
+
+    if is_flying_for_control
         msg_cmd.linear.x = cmd_x;
         msg_cmd.linear.y = cmd_y;
         msg_cmd.linear.z = 0.0;
@@ -466,23 +593,26 @@ while true
         ctrlViz.v_pred = v_pred;
         ctrlViz.pred_ok = pred_ok;
         ctrlViz.centered_pred = centered_pred;
+        ctrlViz.centered_ctrl = centered_ctrl_dbg;
         ctrlViz.cmd_x = cmd_x;
         ctrlViz.cmd_y = cmd_y;
         ctrlViz.control_phase = control_phase;
         ctrlViz.drone_state = drone_state;
+        ctrlViz.is_flying_for_control = is_flying_for_control;
+        ctrlViz.state_is_fresh = state_is_fresh;
         ctrlViz.tag_detected = detected;
         viz = updateLivePlots(viz, t_now, wind, tagObs, decision, ctrlViz, params);
     end
 
     if cfg.log_decision_changes_only
         if ~strcmp(decision, last_decision)
-            fprintf('[%s] phase=%s state=%d decision=%s wind=%.2f tag_detect=%d pred_ok=%d u=%.3f v=%.3f cmd=(%.2f,%.2f) stability=%.2f\n', ...
-                datestr(now,'HH:MM:SS'), control_phase, drone_state, decision, wind.wind_speed, tagObs.detected, pred_ok, u_pred, v_pred, cmd_x, cmd_y, tagObs.stability_score);
+            fprintf('[%s] phase=%s state=%d fly=%d stateFresh=%d decision=%s wind=%.2f tag_detect=%d pred_ok=%d u=%.3f v=%.3f cmd=(%.2f,%.2f) stability=%.2f\n', ...
+                datestr(now,'HH:MM:SS'), control_phase, drone_state, is_flying_for_control, state_is_fresh, decision, wind.wind_speed, tagObs.detected, pred_ok, u_pred, v_pred, cmd_x, cmd_y, tagObs.stability_score);
             last_decision = decision;
             last_log_t = t_now;
         elseif (t_now - last_log_t) >= cfg.log_summary_interval_sec
-            fprintf('[%s] phase=%s keep=%s state=%d pred_ok=%d cmd=(%.2f,%.2f) wind=%.2f stability=%.2f\n', ...
-                datestr(now,'HH:MM:SS'), control_phase, decision, drone_state, pred_ok, cmd_x, cmd_y, wind.wind_speed, tagObs.stability_score);
+            fprintf('[%s] phase=%s keep=%s state=%d fly=%d stateFresh=%d pred_ok=%d cmd=(%.2f,%.2f) wind=%.2f stability=%.2f\n', ...
+                datestr(now,'HH:MM:SS'), control_phase, decision, drone_state, is_flying_for_control, state_is_fresh, pred_ok, cmd_x, cmd_y, wind.wind_speed, tagObs.stability_score);
             last_log_t = t_now;
         end
     else
@@ -944,10 +1074,16 @@ function viz = updateLivePlots(viz, tNow, wind, tagObs, decision, ctrlViz, param
             align_err = sqrt(ctrlViz.u_pred^2 + ctrlViz.v_pred^2);
         end
 
-        txt = sprintf(['phase=%s state=%d det=%d pred=%d centered=%d\n', ...
+        centered_ctrl = 0;
+        if isfield(ctrlViz, 'centered_ctrl')
+            centered_ctrl = ctrlViz.centered_ctrl;
+        end
+
+        txt = sprintf(['phase=%s state=%d fly=%d fresh=%d det=%d pred=%d centeredPred=%d centeredCtrl=%d\n', ...
                        'u_pred=%.3f v_pred=%.3f align_err=%.3f\n', ...
                        'cmd_x=%.3f cmd_y=%.3f'], ...
-                       char(ctrlViz.control_phase), ctrlViz.drone_state, ctrlViz.tag_detected, ctrlViz.pred_ok, ctrlViz.centered_pred, ...
+                       char(ctrlViz.control_phase), ctrlViz.drone_state, ctrlViz.is_flying_for_control, ctrlViz.state_is_fresh, ...
+                       ctrlViz.tag_detected, ctrlViz.pred_ok, ctrlViz.centered_pred, centered_ctrl, ...
                        ctrlViz.u_pred, ctrlViz.v_pred, align_err, ctrlViz.cmd_x, ctrlViz.cmd_y);
         set(viz.ctrl_text, 'String', txt);
     end

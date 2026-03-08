@@ -7,6 +7,7 @@ This repository contains a ROS2 + Gazebo Classic drone simulation based on `sjtu
 - MATLAB-driven startup (`takeoff`) + XY PID tag-centering hold
 - AprilTag-based landing-zone observability and stability logic
 - AprilTag bridge topic (`/landing_tag_state`) for MATLAB environments without custom message support
+- short tag-dropout continuity using last valid tag state hold (prevents control/decision discontinuity)
 
 ## Requirements
 
@@ -93,6 +94,8 @@ ros2 topic echo /wind_condition --once
   - `data[5]` decision margin
   - `data[6]` number of detections
 
+MATLAB landing node keeps the last valid tag state for a short timeout when detections are momentarily lost, so tag position does not break abruptly in control/decision loops.
+
 ## MATLAB Integration
 
 See `matlab/README.md` for full algorithm details, topic contracts, and tuning parameters.
@@ -102,6 +105,12 @@ Quick note: MATLAB node now publishes control during startup/hold:
 - `/drone/takeoff` (`std_msgs/Empty`)
 - `/drone/cmd_vel` (`geometry_msgs/Twist`)
 - `/landing_decision` (`std_msgs/String`)
+
+Recent control behavior updates:
+
+- fallback flight-state inference from altitude when `/drone/state` is stale
+- XY hold uses predicted center first, then current center as fallback
+- optional delayed wind start after hover settle (reduces startup transients)
 
 ## Known Environment Issues
 

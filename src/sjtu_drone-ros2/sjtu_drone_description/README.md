@@ -71,6 +71,7 @@ When bringup is launched with AprilTag enabled:
 - bridge output topic: `/landing_tag_state`
 
 `/landing_tag_state` exists for MATLAB environments that cannot import `apriltag_msgs` custom message definitions.
+MATLAB landing logic can optionally hold the last valid bridge/tag state for short dropouts to keep tag-center control continuous.
 
 ## Generate URDF/SDF
 

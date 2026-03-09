@@ -154,7 +154,7 @@ function cfg = autosimDefaultConfig()
         'ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py ' ...
         'takeoff_hover_height:=%0.2f ' ...
         'takeoff_vertical_speed:=0.2 ' ...
-        'use_gui:=false use_rviz:=true controller:=joystick ' ...
+        'use_gui:=true use_rviz:=true controller:=joystick ' ...
         'use_apriltag:=true apriltag_camera:=/drone/bottom ' ...
         'apriltag_image:=image_raw apriltag_tags:=tags apriltag_type:=umich ' ...
         'apriltag_bridge_topic:=/landing_tag_state ' ...
@@ -177,7 +177,7 @@ function cfg = autosimDefaultConfig()
     cfg.wind.enable = true;
     cfg.wind.update_period_sec = 0.5;
     cfg.wind.speed_min = 0.0;
-    cfg.wind.speed_max = 8.0;
+    cfg.wind.speed_max = 3.0;
     cfg.wind.direction_min = -180.0;
     cfg.wind.direction_max = 180.0;
     cfg.wind.start_delay_after_hover_sec = 2.0;
@@ -197,8 +197,8 @@ function cfg = autosimDefaultConfig()
     cfg.control.hover_settle_sec = 2.0;
     cfg.control.flying_altitude_threshold = 0.25;
     cfg.control.xy_kp = 1.15;
-    cfg.control.xy_ki = 0.001;
-    cfg.control.xy_kd = 0.08;
+    cfg.control.xy_ki = 0.0;
+    cfg.control.xy_kd = 1.05;
     cfg.control.xy_i_limit = 1.0;
     cfg.control.xy_cmd_limit = 0.7;
     cfg.control.target_u = 0.0;
@@ -238,7 +238,13 @@ function cfg = autosimDefaultConfig()
     cfg.agent.no_model_fallback_enable = true;
     cfg.agent.no_model_min_samples_before_land = 12;
     cfg.agent.no_model_max_tag_error = 0.45;
-    cfg.agent.no_model_max_abs_vz = 0.35;
+    cfg.agent.no_model_eval_window_sec = 2.5;
+    cfg.agent.no_model_max_abs_vz = 0.45;
+    cfg.agent.no_model_max_z_osc_std = 0.12;
+    cfg.agent.no_model_max_z_flip_rate_hz = 1.8;
+    cfg.agent.no_model_max_xy_std = 0.10;
+    cfg.agent.no_model_max_xy_speed_rms = 0.22;
+    cfg.agent.no_model_max_xy_radius = 0.22;
     cfg.agent.no_model_max_abs_roll_pitch_deg = 18.0;
     cfg.agent.no_model_max_wind_speed = 6.5;
     cfg.agent.no_model_require_semantic_safe = false;
@@ -917,11 +923,24 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
+        evalWinN = max(5, round(cfg.agent.no_model_eval_window_sec / cfg.scenario.sample_period_sec));
+        zWin = autosimTail(z(1:k), evalWinN);
+        xWin = autosimTail(xPos(1:k), evalWinN);
+        yWin = autosimTail(yPos(1:k), evalWinN);
+        [zOscStd, zFlipRateHz] = autosimCalcZOscillationMetrics(zWin, cfg.scenario.sample_period_sec);
+        [xyStd, xySpeedRms] = autosimCalcXYMotionMetrics(xWin, yWin, cfg.scenario.sample_period_sec);
+        xyRadiusNow = sqrt(xNow*xNow + yNow*yNow);
+
         canLandByNoModelThreshold = (~hasTrainedModel) && cfg.agent.no_model_fallback_enable && ...
             (k >= cfg.agent.no_model_min_samples_before_land) && ...
             isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
             isfinite(vzNow) && (abs(vzNow) <= cfg.agent.no_model_max_abs_vz) && ...
+            isfinite(zOscStd) && (zOscStd <= cfg.agent.no_model_max_z_osc_std) && ...
+            isfinite(zFlipRateHz) && (zFlipRateHz <= cfg.agent.no_model_max_z_flip_rate_hz) && ...
+            isfinite(xyStd) && (xyStd <= cfg.agent.no_model_max_xy_std) && ...
+            isfinite(xySpeedRms) && (xySpeedRms <= cfg.agent.no_model_max_xy_speed_rms) && ...
+            isfinite(xyRadiusNow) && (xyRadiusNow <= cfg.agent.no_model_max_xy_radius) && ...
             isfinite(autosimNanLast(rollDeg(1:k))) && (abs(autosimNanLast(rollDeg(1:k))) <= cfg.agent.no_model_max_abs_roll_pitch_deg) && ...
             isfinite(autosimNanLast(pitchDeg(1:k))) && (abs(autosimNanLast(pitchDeg(1:k))) <= cfg.agent.no_model_max_abs_roll_pitch_deg) && ...
             isfinite(windSpNow) && (windSpNow <= cfg.agent.no_model_max_wind_speed) && ...
@@ -2352,6 +2371,60 @@ function [trendLast, oscStd, accelRms] = autosimCalcVzMetrics(vzSeq, dt)
         acc = diff(tVec) ./ max(dt, 1e-3);
         accelRms = sqrt(mean(acc.^2));
     end
+end
+
+
+function [zOscStd, flipRateHz] = autosimCalcZOscillationMetrics(zSeq, dt)
+    zOscStd = nan;
+    flipRateHz = nan;
+
+    z = double(zSeq(:));
+    z = z(isfinite(z));
+    if numel(z) < 4
+        return;
+    end
+
+    win = max(3, round(0.8 / max(dt, 1e-3)));
+    zTrend = movmean(z, win, 'omitnan');
+    zResid = z - zTrend;
+    zOscStd = std(zResid);
+
+    dz = diff(z);
+    sgn = sign(dz);
+    sgn = sgn(sgn ~= 0);
+    if numel(sgn) < 2
+        flipRateHz = 0.0;
+        return;
+    end
+
+    flips = sum(sgn(2:end) ~= sgn(1:end-1));
+    dur = max((numel(z)-1) * dt, 1e-3);
+    flipRateHz = flips / dur;
+end
+
+
+function [xyStd, xySpeedRms] = autosimCalcXYMotionMetrics(xSeq, ySeq, dt)
+    xyStd = nan;
+    xySpeedRms = nan;
+
+    x = double(xSeq(:));
+    y = double(ySeq(:));
+    valid = isfinite(x) & isfinite(y);
+    x = x(valid);
+    y = y(valid);
+    if numel(x) < 3
+        return;
+    end
+
+    cx = mean(x);
+    cy = mean(y);
+    r = sqrt((x - cx).^2 + (y - cy).^2);
+    xyStd = std(r);
+
+    vx = diff(x) ./ max(dt, 1e-3);
+    vy = diff(y) ./ max(dt, 1e-3);
+    vxy = sqrt(vx.^2 + vy.^2);
+    xySpeedRms = sqrt(mean(vxy.^2));
 end
 
 

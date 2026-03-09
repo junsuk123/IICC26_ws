@@ -62,6 +62,7 @@ try
         end
 
         results(end+1,1) = scenarioResult; %#ok<SAGROW>
+        printRunningLabelStats(results, i, cfg.scenario.count);
         savePipelineCheckpoint(cfg, results, "scenario_end");
 
         if cfg.process.stop_after_each_scenario
@@ -145,7 +146,7 @@ function cfg = defaultConfig()
         'apriltag_image:=image_raw apriltag_tags:=tags apriltag_type:=umich ' ...
         'apriltag_bridge_topic:=/landing_tag_state ' ...
         'apriltag_use_standalone_detector:=true ' ...
-        'apriltag_bridge_use_target_id:=false ' ...
+        'apriltag_bridge_use_target_id:=true ' ...
         'apriltag_bridge_target_id:=0' ...
     ];
     cfg.launch.warmup_sec = 10.0;
@@ -155,6 +156,7 @@ function cfg = defaultConfig()
     cfg.scenario.count = 20;
     cfg.scenario.duration_sec = 35.0;
     cfg.scenario.post_land_observe_sec = 6.0;
+    cfg.scenario.early_stop_after_landing_sec = 1.5;
     cfg.scenario.sample_period_sec = 0.2;
     cfg.scenario.hover_height_min_m = 1.8;
     cfg.scenario.hover_height_max_m = 2.8;
@@ -192,6 +194,12 @@ function cfg = defaultConfig()
     cfg.topics.takeoff_cmd = '/drone/takeoff';
     cfg.topics.cmd_vel = '/drone/cmd_vel';
 
+    cfg.ros = struct();
+    % Safety guards for MATLAB ROS2 interprocess stability.
+    % ContactsState has been a frequent crash source in long loops, so keep it off by default.
+    cfg.ros.receive_timeout_sec = 0.01;
+    cfg.ros.enable_bumper_subscription = false;
+
     cfg.control = struct();
     cfg.control.enable = true;
     cfg.control.takeoff_retry_sec = 1.0;
@@ -202,7 +210,7 @@ function cfg = defaultConfig()
     cfg.control.target_u = 0.0;
     cfg.control.target_v = -0.08;
     cfg.control.xy_kp = 1.2;
-    cfg.control.xy_ki = 0.05;
+    cfg.control.xy_ki = 0.15;
     cfg.control.xy_kd = 0.12;
     cfg.control.xy_i_limit = 1.0;
     cfg.control.xy_cmd_limit = 0.7;
@@ -218,6 +226,11 @@ function cfg = defaultConfig()
     cfg.control.pre_takeoff_require_tag_centered = false;
     cfg.control.pre_takeoff_tag_center_tolerance = 0.03;
     cfg.control.pre_takeoff_tag_center_hold_sec = 1.0;
+    cfg.control.enable_landing_vz_damping = true;
+    cfg.control.landing_vz_target_mps = -0.12;
+    cfg.control.landing_vz_kp = 1.1;
+    cfg.control.landing_up_cmd_limit = 0.25;
+    cfg.control.landing_vz_eval_window_sec = 1.0;
 
     cfg.learning = struct();
     cfg.learning.enable = true;
@@ -236,8 +249,15 @@ function cfg = defaultConfig()
     cfg.search.spiral_start_radius = 0.04;
 
     cfg.visualization = struct();
-    cfg.visualization.enable = true;
+    % Low-memory default for long batch runs.
+    cfg.visualization.enable = false;
     cfg.visualization.window_sec = 45.0;
+    cfg.visualization.max_points = 500;
+
+    cfg.logging = struct();
+    % Disable per-scenario launch log files by default.
+    cfg.logging.enable_launch_log_file = false;
+    cfg.logging.heartbeat_sec = 2.0;
 
     cfg.shell = struct();
     cfg.shell.ros2env = ros2env;
@@ -268,8 +288,10 @@ function cfg = defaultConfig()
     cfg.thresholds.final_speed_max_mps = 0.25;
     cfg.thresholds.final_attitude_max_deg = 12.0;
     cfg.thresholds.final_tag_error_max = 0.22;
-    cfg.thresholds.final_stability_std_z_max = 0.06;
-    cfg.thresholds.final_stability_std_vz_max = 0.08;
+    cfg.thresholds.final_stability_std_z_max = 0.10;
+    cfg.thresholds.final_stability_std_vz_max = 0.14;
+    cfg.thresholds.final_stability_std_vz_osc_max = 0.10;
+    cfg.thresholds.final_touchdown_accel_rms_max = 0.70;
     cfg.thresholds.bumpers_contact_max = 0;
 
     cfg.model = struct();
@@ -277,7 +299,8 @@ function cfg = defaultConfig()
         "mean_wind_speed", "max_wind_speed", "mean_abs_roll_deg", "mean_abs_pitch_deg", ...
         "mean_abs_vz", "max_abs_vz", "mean_tag_error", "max_tag_error", ...
         "final_altitude", "final_abs_speed", "final_abs_roll_deg", "final_abs_pitch_deg", ...
-        "final_tag_error", "stability_std_z", "stability_std_vz", "contact_count" ...
+        "final_tag_error", "stability_std_z", "stability_std_vz", "stability_std_vz_osc", ...
+        "touchdown_accel_rms", "contact_count" ...
     ];
 
     % Inference model selection:
@@ -296,7 +319,10 @@ end
 
 
 function ensureDirectories(cfg)
-    dirs = {cfg.paths.data_dir, cfg.paths.model_dir, cfg.paths.log_dir};
+    dirs = {cfg.paths.data_dir, cfg.paths.model_dir};
+    if isfield(cfg, 'logging') && isfield(cfg.logging, 'enable_launch_log_file') && cfg.logging.enable_launch_log_file
+        dirs{end+1} = cfg.paths.log_dir; %#ok<AGROW>
+    end
     for i = 1:numel(dirs)
         if ~exist(dirs{i}, 'dir')
             mkdir(dirs{i});
@@ -315,10 +341,20 @@ function info = startBringupLaunch(cfg, scenarioId, scenarioCfg)
     end
     launchCmd = sprintf(cfg.launch.command_template, hoverHeight);
     escapedCmd = shellEscapeDoubleQuotes(launchCmd);
-    escapedLog = shellEscapeDoubleQuotes(logFile);
+
+    enableLaunchLog = false;
+    if isfield(cfg, 'logging') && isfield(cfg.logging, 'enable_launch_log_file')
+        enableLaunchLog = logical(cfg.logging.enable_launch_log_file);
+    end
+
     % Keep launch invocation style consistent with landing_decision_matlab:
     % send a single background shell command via MATLAB system().
-    bashCmd = sprintf('bash -i -c "%s > \\\"%s\\\" 2>&1 &"', escapedCmd, escapedLog);
+    if enableLaunchLog
+        escapedLog = shellEscapeDoubleQuotes(logFile);
+        bashCmd = sprintf('bash -i -c "%s > \\\"%s\\\" 2>&1 &"', escapedCmd, escapedLog);
+    else
+        bashCmd = sprintf('bash -i -c "%s >/dev/null 2>&1 &"', escapedCmd);
+    end
     fprintf('[PIPELINE] Launch command: %s\n', launchCmd);
     [st, out] = system(bashCmd);
     if st ~= 0
@@ -332,8 +368,13 @@ function info = startBringupLaunch(cfg, scenarioId, scenarioCfg)
         pid = str2double(pTok{end}{1});
     end
 
-    info = struct('pid', pid, 'log_file', string(logFile));
-    fprintf('[PIPELINE] Launch started (pid=%d), log=%s\n', pid, logFile);
+    if enableLaunchLog
+        info = struct('pid', pid, 'log_file', string(logFile));
+        fprintf('[PIPELINE] Launch started (pid=%d), log=%s\n', pid, logFile);
+    else
+        info = struct('pid', pid, 'log_file', "");
+        fprintf('[PIPELINE] Launch started (pid=%d), file logging disabled\n', pid);
+    end
 end
 
 
@@ -390,13 +431,11 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
     subPose = ros2subscriber(node, cfg.topics.pose, 'geometry_msgs/Pose');
     subVel = ros2subscriber(node, cfg.topics.vel, 'geometry_msgs/Twist');
     subBumpers = [];
-    try
-        subBumpers = ros2subscriber(node, cfg.topics.bumpers, 'gazebo_msgs/msg/ContactsState');
-    catch
+    if isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_bumper_subscription') && cfg.ros.enable_bumper_subscription
         try
-            subBumpers = ros2subscriber(node, cfg.topics.bumpers, 'gazebo_msgs/ContactsState');
+            subBumpers = ros2subscriber(node, cfg.topics.bumpers, 'gazebo_msgs/msg/ContactsState');
         catch ME
-            fprintf('[PIPELINE] Bumper subscriber unavailable (non-blocking): %s\n', ME.message);
+            fprintf('[PIPELINE] Bumper subscriber unavailable (disabled for this scenario): %s\n', ME.message);
             subBumpers = [];
         end
     end
@@ -414,6 +453,11 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
     msgCmdVel = ros2message(pubCmdVel);
 
     sampleN = max(1, floor(cfg.scenario.duration_sec / cfg.scenario.sample_period_sec));
+    heartbeatSec = 2.0;
+    if isfield(cfg, 'logging') && isfield(cfg.logging, 'heartbeat_sec') && isfinite(cfg.logging.heartbeat_sec)
+        heartbeatSec = max(0.2, cfg.logging.heartbeat_sec);
+    end
+    heartbeatEvery = max(1, round(heartbeatSec / cfg.scenario.sample_period_sec));
 
     t = zeros(sampleN, 1);
     z = nan(sampleN, 1);
@@ -454,7 +498,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
 
     viz = [];
     if cfg.visualization.enable
-        viz = initScenarioLivePlots(cfg.visualization.window_sec);
+        viz = initScenarioLivePlots(cfg.visualization.window_sec, cfg.visualization.max_points);
     end
 
     [readyOk, readyDiag] = waitForScenarioTopicsReady(cfg, cfg.launch.ready_timeout_sec);
@@ -482,6 +526,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
     randomBiasX = 0.0;
     randomBiasY = 0.0;
     tagLostSearchStartT = nan;
+    landedHoldStartT = nan;
 
     for k = 1:sampleN
         tk = toc(t0);
@@ -497,7 +542,12 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             lastWindCmdT = tk;
         end
 
-        poseMsg = tryReceive(subPose, 0.01);
+        recvTimeout = 0.01;
+        if isfield(cfg, 'ros') && isfield(cfg.ros, 'receive_timeout_sec') && isfinite(cfg.ros.receive_timeout_sec)
+            recvTimeout = max(0.0, cfg.ros.receive_timeout_sec);
+        end
+
+        poseMsg = tryReceive(subPose, recvTimeout);
         if ~isempty(poseMsg)
             z(k) = double(poseMsg.position.z);
             q = poseMsg.orientation;
@@ -506,7 +556,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             pitchDeg(k) = abs(rad2deg(p));
         end
 
-        velMsg = tryReceive(subVel, 0.01);
+        velMsg = tryReceive(subVel, recvTimeout);
         if ~isempty(velMsg)
             vx = double(velMsg.linear.x);
             vy = double(velMsg.linear.y);
@@ -514,14 +564,14 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             speedAbs(k) = sqrt(vx*vx + vy*vy + vz(k)*vz(k));
         end
 
-        stateMsg = tryReceive(subState, 0.01);
+        stateMsg = tryReceive(subState, recvTimeout);
         if ~isempty(stateMsg)
             stateVal(k) = double(stateMsg.data);
         end
 
         bumpMsg = [];
         if ~isempty(subBumpers)
-            bumpMsg = tryReceive(subBumpers, 0.01);
+            bumpMsg = tryReceive(subBumpers, recvTimeout);
         end
         if ~isempty(bumpMsg)
             try
@@ -531,7 +581,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             end
         end
 
-        tagMsg = tryReceive(subTag, 0.01);
+        tagMsg = tryReceive(subTag, recvTimeout);
         tagDetected = false;
         uTag = nan;
         vTag = nan;
@@ -559,7 +609,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
         [predOk, uPred, vPred] = predictTagCenterNorm(tagHist, tagHistCount, uTag, vTag, tk, lastTagDetectT, ...
             cfg.control.tag_predict_horizon_sec, cfg.control.tag_predict_timeout_sec, cfg.scenario.sample_period_sec, cfg.control.tag_min_predict_samples);
 
-        windMsg = tryReceive(subWind, 0.01);
+        windMsg = tryReceive(subWind, recvTimeout);
         if ~isempty(windMsg)
             ws = parseWindSpeed(windMsg);
             windSpeed(k) = ws;
@@ -577,6 +627,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
         lastCtrlT = tk;
         cmdX = 0.0;
         cmdY = 0.0;
+        cmdZ = 0.0;
         tagLockReadyNow = false;
 
         if predOk && isfinite(uPred) && isfinite(vPred)
@@ -588,128 +639,134 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
         end
 
         if cfg.control.enable
-            switch char(controlPhase)
-                case 'pre_takeoff_stabilize'
-                    if cfg.control.pre_takeoff_require_tag_centered
-                        centerReadyNow = predOk && isfinite(uPred) && isfinite(vPred) && ...
-                            (sqrt((uPred - cfg.control.target_u)^2 + (vPred - cfg.control.target_v)^2) <= cfg.control.pre_takeoff_tag_center_tolerance);
-                        if centerReadyNow
-                            if ~isfinite(preTakeoffCenterHoldStartT)
-                                preTakeoffCenterHoldStartT = tk;
+            if landingSent
+                controlPhase = "landing_observe";
+                cmdX = 0.0;
+                cmdY = 0.0;
+            else
+                switch char(controlPhase)
+                    case 'pre_takeoff_stabilize'
+                        if cfg.control.pre_takeoff_require_tag_centered
+                            centerReadyNow = predOk && isfinite(uPred) && isfinite(vPred) && ...
+                                (sqrt((uPred - cfg.control.target_u)^2 + (vPred - cfg.control.target_v)^2) <= cfg.control.pre_takeoff_tag_center_tolerance);
+                            if centerReadyNow
+                                if ~isfinite(preTakeoffCenterHoldStartT)
+                                    preTakeoffCenterHoldStartT = tk;
+                                end
+                            else
+                                preTakeoffCenterHoldStartT = nan;
                             end
+
+                            centerHoldReady = isfinite(preTakeoffCenterHoldStartT) && ...
+                                ((tk - preTakeoffCenterHoldStartT) >= cfg.control.pre_takeoff_tag_center_hold_sec);
                         else
-                            preTakeoffCenterHoldStartT = nan;
+                            centerHoldReady = true;
                         end
 
-                        centerHoldReady = isfinite(preTakeoffCenterHoldStartT) && ...
-                            ((tk - preTakeoffCenterHoldStartT) >= cfg.control.pre_takeoff_tag_center_hold_sec);
-                    else
-                        centerHoldReady = true;
-                    end
-
-                    if centerHoldReady
-                        controlPhase = "takeoff";
-                        phaseEnterT = tk;
-                    end
-
-                case 'takeoff'
-                    if (tk - lastTakeoffCmdT) >= cfg.control.takeoff_retry_sec
-                        send(pubTakeoff, msgTakeoff);
-                        lastTakeoffCmdT = tk;
-                        takeoffPublishCount = takeoffPublishCount + 1;
-                        fprintf('[PIPELINE] s%03d takeoff publish #%d at t=%.1fs\n', scenarioId, takeoffPublishCount, tk);
-                    end
-
-                    if ~isFlying && ((tk - phaseEnterT) >= cfg.control.takeoff_force_cli_timeout_sec) && ...
-                            ((tk - lastTakeoffCliCmdT) >= cfg.control.takeoff_force_cli_retry_sec)
-                        cliCmd = sprintf('bash -i -c "%s"', shellEscapeDoubleQuotes(cfg.shell.takeoff_cli_cmd));
-                        [cliSt, cliOut] = system(cliCmd);
-                        lastTakeoffCliCmdT = tk;
-                        if cliSt == 0 || cliSt == 124
-                            fprintf('[PIPELINE] s%03d takeoff CLI fallback sent at t=%.1fs\n', scenarioId, tk);
-                        else
-                            fprintf('[PIPELINE] s%03d takeoff CLI fallback failed at t=%.1fs (code=%d): %s\n', scenarioId, tk, cliSt, strtrim(cliOut));
-                        end
-                    end
-
-                    if isFlying
-                        controlPhase = "hover_settle";
-                        phaseEnterT = tk;
-                        hoverStartT = tk;
-                        hoverCenterHoldStartT = nan;
-                        pidX = initPidState();
-                        pidY = initPidState();
-                    end
-
-                case 'hover_settle'
-                    if ~isFlying
-                        controlPhase = "takeoff";
-                        phaseEnterT = tk;
-                    elseif (tk - phaseEnterT) >= cfg.control.hover_settle_sec
-                        controlPhase = "xy_hold";
-                        phaseEnterT = tk;
-                    end
-
-                case 'xy_hold'
-                    if ~isFlying
-                        controlPhase = "takeoff";
-                        phaseEnterT = tk;
-                        hoverStartT = nan;
-                        hoverCenterHoldStartT = nan;
-                        pidX = initPidState();
-                        pidY = initPidState();
-                        tagLostSearchStartT = nan;
-                    else
-                        usePred = predOk && isfinite(uPred) && isfinite(vPred);
-                        useNow = tagDetected && isfinite(uTag) && isfinite(vTag);
-
-                        if usePred
-                            uCtrl = uPred;
-                            vCtrl = vPred;
-                        elseif useNow
-                            uCtrl = uTag;
-                            vCtrl = vTag;
-                        else
-                            uCtrl = nan;
-                            vCtrl = nan;
+                        if centerHoldReady
+                            controlPhase = "takeoff";
+                            phaseEnterT = tk;
                         end
 
-                        if isfinite(uCtrl) && isfinite(vCtrl)
-                            tagLostSearchStartT = nan;
-                            errU = cfg.control.target_u - uCtrl;
-                            errV = cfg.control.target_v - vCtrl;
+                    case 'takeoff'
+                        if (tk - lastTakeoffCmdT) >= cfg.control.takeoff_retry_sec
+                            send(pubTakeoff, msgTakeoff);
+                            lastTakeoffCmdT = tk;
+                            takeoffPublishCount = takeoffPublishCount + 1;
+                            fprintf('[PIPELINE] s%03d takeoff publish #%d at t=%.1fs\n', scenarioId, takeoffPublishCount, tk);
+                        end
 
-                            centeredCtrl = sqrt(errU^2 + errV^2) <= cfg.control.xy_control_center_deadband;
-
-                            [ux, pidX] = pidStep(errV, dtCtrl, pidX, cfg.control.xy_kp, cfg.control.xy_ki, cfg.control.xy_kd, cfg.control.xy_i_limit, cfg.control.xy_cmd_limit);
-                            [uy, pidY] = pidStep(errU, dtCtrl, pidY, cfg.control.xy_kp, cfg.control.xy_ki, cfg.control.xy_kd, cfg.control.xy_i_limit, cfg.control.xy_cmd_limit);
-
-                            cmdX = cfg.control.xy_map_sign_x_from_v * ux;
-                            cmdY = cfg.control.xy_map_sign_y_from_u * uy;
-
-                            if centeredCtrl
-                                cmdX = 0.0;
-                                cmdY = 0.0;
+                        if ~isFlying && ((tk - phaseEnterT) >= cfg.control.takeoff_force_cli_timeout_sec) && ...
+                                ((tk - lastTakeoffCliCmdT) >= cfg.control.takeoff_force_cli_retry_sec)
+                            cliCmd = sprintf('bash -i -c "%s"', shellEscapeDoubleQuotes(cfg.shell.takeoff_cli_cmd));
+                            [cliSt, cliOut] = system(cliCmd);
+                            lastTakeoffCliCmdT = tk;
+                            if cliSt == 0 || cliSt == 124
+                                fprintf('[PIPELINE] s%03d takeoff CLI fallback sent at t=%.1fs\n', scenarioId, tk);
+                            else
+                                fprintf('[PIPELINE] s%03d takeoff CLI fallback failed at t=%.1fs (code=%d): %s\n', scenarioId, tk, cliSt, strtrim(cliOut));
                             end
-                        else
+                        end
+
+                        if isFlying
+                            controlPhase = "hover_settle";
+                            phaseEnterT = tk;
+                            hoverStartT = tk;
+                            hoverCenterHoldStartT = nan;
                             pidX = initPidState();
                             pidY = initPidState();
+                        end
 
-                            if cfg.search.enable_spiral_when_tag_lost
-                                if ~isfinite(tagLostSearchStartT)
-                                    tagLostSearchStartT = tk;
+                    case 'hover_settle'
+                        if ~isFlying
+                            controlPhase = "takeoff";
+                            phaseEnterT = tk;
+                        elseif (tk - phaseEnterT) >= cfg.control.hover_settle_sec
+                            controlPhase = "xy_hold";
+                            phaseEnterT = tk;
+                        end
+
+                    case 'xy_hold'
+                        if ~isFlying
+                            controlPhase = "takeoff";
+                            phaseEnterT = tk;
+                            hoverStartT = nan;
+                            hoverCenterHoldStartT = nan;
+                            pidX = initPidState();
+                            pidY = initPidState();
+                            tagLostSearchStartT = nan;
+                        else
+                            usePred = predOk && isfinite(uPred) && isfinite(vPred);
+                            useNow = tagDetected && isfinite(uTag) && isfinite(vTag);
+
+                            if usePred
+                                uCtrl = uPred;
+                                vCtrl = vPred;
+                            elseif useNow
+                                uCtrl = uTag;
+                                vCtrl = vTag;
+                            else
+                                uCtrl = nan;
+                                vCtrl = nan;
+                            end
+
+                            if isfinite(uCtrl) && isfinite(vCtrl)
+                                tagLostSearchStartT = nan;
+                                errU = cfg.control.target_u - uCtrl;
+                                errV = cfg.control.target_v - vCtrl;
+
+                                centeredCtrl = sqrt(errU^2 + errV^2) <= cfg.control.xy_control_center_deadband;
+
+                                [ux, pidX] = pidStep(errV, dtCtrl, pidX, cfg.control.xy_kp, cfg.control.xy_ki, cfg.control.xy_kd, cfg.control.xy_i_limit, cfg.control.xy_cmd_limit);
+                                [uy, pidY] = pidStep(errU, dtCtrl, pidY, cfg.control.xy_kp, cfg.control.xy_ki, cfg.control.xy_kd, cfg.control.xy_i_limit, cfg.control.xy_cmd_limit);
+
+                                cmdX = cfg.control.xy_map_sign_x_from_v * ux;
+                                cmdY = cfg.control.xy_map_sign_y_from_u * uy;
+
+                                if centeredCtrl
+                                    cmdX = 0.0;
+                                    cmdY = 0.0;
                                 end
+                            else
+                                pidX = initPidState();
+                                pidY = initPidState();
 
-                                tSearch = max(0.0, tk - tagLostSearchStartT);
-                                rSearch = cfg.search.spiral_start_radius + cfg.search.spiral_growth_per_sec * tSearch;
-                                rSearch = min(rSearch, cfg.search.spiral_cmd_max);
-                                th = cfg.search.spiral_omega_rad_sec * tSearch;
+                                if cfg.search.enable_spiral_when_tag_lost
+                                    if ~isfinite(tagLostSearchStartT)
+                                        tagLostSearchStartT = tk;
+                                    end
 
-                                cmdX = clampValue(rSearch * cos(th), -abs(cfg.search.spiral_cmd_max), abs(cfg.search.spiral_cmd_max));
-                                cmdY = clampValue(rSearch * sin(th), -abs(cfg.search.spiral_cmd_max), abs(cfg.search.spiral_cmd_max));
+                                    tSearch = max(0.0, tk - tagLostSearchStartT);
+                                    rSearch = cfg.search.spiral_start_radius + cfg.search.spiral_growth_per_sec * tSearch;
+                                    rSearch = min(rSearch, cfg.search.spiral_cmd_max);
+                                    th = cfg.search.spiral_omega_rad_sec * tSearch;
+
+                                    cmdX = clampValue(rSearch * cos(th), -abs(cfg.search.spiral_cmd_max), abs(cfg.search.spiral_cmd_max));
+                                    cmdY = clampValue(rSearch * sin(th), -abs(cfg.search.spiral_cmd_max), abs(cfg.search.spiral_cmd_max));
+                                end
                             end
                         end
-                    end
+                end
             end
 
             if cfg.learning.enable && isFlying && (controlPhase == "xy_hold")
@@ -779,10 +836,16 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
                 if landingSent
                     cmdX = 0.0;
                     cmdY = 0.0;
+
+                    % During auto-landing, apply mild upward damping when descent is too fast.
+                    if cfg.control.enable_landing_vz_damping && isfinite(vz(k))
+                        vzErr = cfg.control.landing_vz_target_mps - vz(k);
+                        cmdZ = clampValue(cfg.control.landing_vz_kp * vzErr, 0.0, abs(cfg.control.landing_up_cmd_limit));
+                    end
                 end
                 msgCmdVel.linear.x = cmdX;
                 msgCmdVel.linear.y = cmdY;
-                msgCmdVel.linear.z = 0.0;
+                msgCmdVel.linear.z = cmdZ;
                 msgCmdVel.angular.x = 0.0;
                 msgCmdVel.angular.y = 0.0;
                 msgCmdVel.angular.z = 0.0;
@@ -794,9 +857,35 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             viz = updateScenarioLivePlots(viz, tk, z(k), tagErr(k), cmdX, cmdY, string(controlPhase), isFlying, tagDetected, predOk);
         end
 
-        if mod(k, max(1, round(1.0 / cfg.scenario.sample_period_sec))) == 0
+        if mod(k, heartbeatEvery) == 0
             fprintf('[PIPELINE] s%03d t=%.1fs phase=%s fly=%d tag=%d pred=%d tkofPub=%d cmd=(%.2f,%.2f) z=%.2f\n', ...
                 scenarioId, tk, char(controlPhase), isFlying, tagDetected, predOk, takeoffPublishCount, cmdX, cmdY, z(k));
+        end
+
+        if landingSent
+            landedByState = isfinite(stateNow) && (stateNow == cfg.thresholds.land_state_value);
+            evalWindowSamples = max(3, round(cfg.control.landing_vz_eval_window_sec / cfg.scenario.sample_period_sec));
+            recentVz = tailVec(vz(1:k), evalWindowSamples);
+            [vzTrendNow, vzOscStdNow, vzAccelRmsNow] = calcVzMotionMetrics(recentVz, cfg.scenario.sample_period_sec);
+            landedByPose = isfinite(z(k)) && ...
+                (z(k) <= (cfg.thresholds.landed_altitude_max_m + 0.05)) && ...
+                isfinite(vzTrendNow) && (abs(vzTrendNow) <= max(cfg.thresholds.final_speed_max_mps, 0.12)) && ...
+                isfinite(vzOscStdNow) && (vzOscStdNow <= cfg.thresholds.final_stability_std_vz_osc_max) && ...
+                isfinite(vzAccelRmsNow) && (vzAccelRmsNow <= cfg.thresholds.final_touchdown_accel_rms_max);
+
+            if landedByState || landedByPose
+                if ~isfinite(landedHoldStartT)
+                    landedHoldStartT = tk;
+                end
+            else
+                landedHoldStartT = nan;
+            end
+
+            if isfinite(landedHoldStartT) && ((tk - landedHoldStartT) >= cfg.scenario.early_stop_after_landing_sec)
+                fprintf('[PIPELINE] s%03d landing confirmed for %.1fs, ending scenario loop early at t=%.1fs\n', ...
+                    scenarioId, cfg.scenario.early_stop_after_landing_sec, tk);
+                break;
+            end
         end
 
         pause(cfg.scenario.sample_period_sec);
@@ -824,7 +913,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
     postN = max(1, floor(cfg.scenario.post_land_observe_sec / cfg.scenario.sample_period_sec));
     for m = 1:postN
         k = sampleN + m;
-        poseMsg = tryReceive(subPose, 0.01);
+        poseMsg = tryReceive(subPose, recvTimeout);
         if ~isempty(poseMsg)
             z(end+1,1) = double(poseMsg.position.z); %#ok<AGROW>
             q = poseMsg.orientation;
@@ -837,7 +926,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             pitchDeg(end+1,1) = nan; %#ok<AGROW>
         end
 
-        velMsg = tryReceive(subVel, 0.01);
+        velMsg = tryReceive(subVel, recvTimeout);
         if ~isempty(velMsg)
             vx = double(velMsg.linear.x);
             vy = double(velMsg.linear.y);
@@ -848,14 +937,14 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             speedAbs(end+1,1) = nan; %#ok<AGROW>
         end
 
-        stateMsg = tryReceive(subState, 0.01);
+        stateMsg = tryReceive(subState, recvTimeout);
         if ~isempty(stateMsg)
             stateVal(end+1,1) = double(stateMsg.data); %#ok<AGROW>
         else
             stateVal(end+1,1) = nan; %#ok<AGROW>
         end
 
-        tagMsg = tryReceive(subTag, 0.01);
+        tagMsg = tryReceive(subTag, recvTimeout);
         if ~isempty(tagMsg)
             tagErr(end+1,1) = parseTagErrorFromBridge(tagMsg); %#ok<AGROW>
         else
@@ -864,7 +953,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
 
         bumpMsg = [];
         if ~isempty(subBumpers)
-            bumpMsg = tryReceive(subBumpers, 0.01);
+            bumpMsg = tryReceive(subBumpers, recvTimeout);
         end
         if ~isempty(bumpMsg)
             try
@@ -876,7 +965,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
             bumperContact(end+1,1) = 0; %#ok<AGROW>
         end
 
-        windMsg = tryReceive(subWind, 0.01);
+        windMsg = tryReceive(subWind, recvTimeout);
         if ~isempty(windMsg)
             windSpeed(end+1,1) = parseWindSpeed(windMsg); %#ok<AGROW>
         else
@@ -918,8 +1007,27 @@ function out = summarizeAndLabelScenario(cfg, scenarioId, scenarioCfg, z, vz, sp
     out.final_tag_error = nanlast(tagErr);
 
     finalWindow = max(3, round(5.0 / cfg.scenario.sample_period_sec));
-    out.stability_std_z = nanstdSafe(tailVec(z, finalWindow));
-    out.stability_std_vz = nanstdSafe(tailVec(vz, finalWindow));
+    touchdownIdx = find(isfinite(z) & (z <= (cfg.thresholds.landed_altitude_max_m + 0.02)), 1, 'first');
+    if ~isempty(touchdownIdx)
+        settleSkip = round(1.0 / cfg.scenario.sample_period_sec);
+        segStart = min(numel(z), touchdownIdx + max(0, settleSkip));
+        zStableSrc = z(segStart:end);
+        vzStableSrc = vz(segStart:end);
+    else
+        zStableSrc = tailVec(z, finalWindow);
+        vzStableSrc = tailVec(vz, finalWindow);
+    end
+
+    if sum(isfinite(zStableSrc)) < 3
+        zStableSrc = tailVec(z, finalWindow);
+    end
+    if sum(isfinite(vzStableSrc)) < 3
+        vzStableSrc = tailVec(vz, finalWindow);
+    end
+
+    out.stability_std_z = nanstdSafe(zStableSrc);
+    out.stability_std_vz = nanstdSafe(vzStableSrc);
+    [~, out.stability_std_vz_osc, out.touchdown_accel_rms] = calcVzMotionMetrics(vzStableSrc, cfg.scenario.sample_period_sec);
 
     out.contact_count = sum(bumperContact > 0);
 
@@ -935,6 +1043,8 @@ function out = summarizeAndLabelScenario(cfg, scenarioId, scenarioCfg, z, vz, sp
     condTag = (~isfinite(out.final_tag_error)) || (out.final_tag_error <= c.final_tag_error_max);
     condStdZ = isfinite(out.stability_std_z) && out.stability_std_z <= c.final_stability_std_z_max;
     condStdVz = isfinite(out.stability_std_vz) && out.stability_std_vz <= c.final_stability_std_vz_max;
+    condVzOsc = isfinite(out.stability_std_vz_osc) && out.stability_std_vz_osc <= c.final_stability_std_vz_osc_max;
+    condAccel = isfinite(out.touchdown_accel_rms) && out.touchdown_accel_rms <= c.final_touchdown_accel_rms_max;
     % Ground contact is expected after successful landing.
     if condState && condAlt
         condContact = true;
@@ -942,7 +1052,7 @@ function out = summarizeAndLabelScenario(cfg, scenarioId, scenarioCfg, z, vz, sp
         condContact = out.contact_count <= c.bumpers_contact_max;
     end
 
-    passAll = condState && condAlt && condSpeed && condRoll && condPitch && condTag && condStdZ && condStdVz && condContact;
+    passAll = condState && condAlt && condSpeed && condRoll && condPitch && condTag && condStdZ && condStdVz && condVzOsc && condAccel && condContact;
 
     if passAll
         out.label = "stable";
@@ -951,7 +1061,7 @@ function out = summarizeAndLabelScenario(cfg, scenarioId, scenarioCfg, z, vz, sp
     else
         out.label = "unstable";
         out.success = false;
-        out.failure_reason = buildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condContact);
+        out.failure_reason = buildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condVzOsc, condAccel, condContact);
     end
 
     fprintf('[PIPELINE] Scenario %d label=%s reason=%s | final(z=%.3f, v=%.3f, roll=%.1f, pitch=%.1f, tag=%.3f)\n', ...
@@ -960,7 +1070,7 @@ function out = summarizeAndLabelScenario(cfg, scenarioId, scenarioCfg, z, vz, sp
 end
 
 
-function reason = buildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condContact)
+function reason = buildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condVzOsc, condAccel, condContact)
     parts = strings(0,1);
     if ~condState, parts(end+1,1) = "state_not_landed"; end %#ok<AGROW>
     if ~condAlt, parts(end+1,1) = "altitude_high"; end %#ok<AGROW>
@@ -970,6 +1080,8 @@ function reason = buildFailureReason(condState, condAlt, condSpeed, condRoll, co
     if ~condTag, parts(end+1,1) = "tag_error_high"; end %#ok<AGROW>
     if ~condStdZ, parts(end+1,1) = "z_unstable"; end %#ok<AGROW>
     if ~condStdVz, parts(end+1,1) = "vz_unstable"; end %#ok<AGROW>
+    if ~condVzOsc, parts(end+1,1) = "vz_oscillation_high"; end %#ok<AGROW>
+    if ~condAccel, parts(end+1,1) = "touchdown_accel_high"; end %#ok<AGROW>
     if ~condContact, parts(end+1,1) = "contact_detected"; end %#ok<AGROW>
 
     if isempty(parts)
@@ -998,7 +1110,7 @@ function tbl = toSummaryTable(results)
         'mean_abs_vz','max_abs_vz', ...
         'mean_tag_error','max_tag_error', ...
         'final_altitude','final_abs_speed','final_abs_roll_deg','final_abs_pitch_deg','final_tag_error', ...
-        'stability_std_z','stability_std_vz','contact_count','final_state', ...
+        'stability_std_z','stability_std_vz','stability_std_vz_osc','touchdown_accel_rms','contact_count','final_state', ...
         'launch_pid','launch_log','exception_message'
     };
 
@@ -1145,6 +1257,33 @@ function savePipelineCheckpoint(cfg, results, reasonTag)
         writetable(summaryTbl, cfg.persistence.checkpoint_csv);
     catch ME
         warning('[PIPELINE] Checkpoint save failed: %s', ME.message);
+    end
+end
+
+
+function printRunningLabelStats(results, idxNow, totalCount)
+    if isempty(results)
+        return;
+    end
+
+    labels = strings(numel(results), 1);
+    for i = 1:numel(results)
+        if isfield(results(i), 'label')
+            labels(i) = string(results(i).label);
+        end
+    end
+
+    nStable = sum(labels == "stable");
+    nUnstable = sum(labels == "unstable");
+    nValid = nStable + nUnstable;
+
+    if nValid > 0
+        stableRatio = nStable / nValid;
+        unstableRatio = nUnstable / nValid;
+        fprintf('[PIPELINE] Label stats after scenario %d/%d: stable=%d (%.1f%%), unstable=%d (%.1f%%)\n', ...
+            idxNow, totalCount, nStable, 100.0*stableRatio, nUnstable, 100.0*unstableRatio);
+    else
+        fprintf('[PIPELINE] Label stats after scenario %d/%d: no valid labels yet\n', idxNow, totalCount);
     end
 end
 
@@ -1494,27 +1633,31 @@ function x = randRange(a, b)
 end
 
 
-function viz = initScenarioLivePlots(windowSec)
+function viz = initScenarioLivePlots(windowSec, maxPoints)
     viz = struct();
     viz.window_sec = max(8.0, windowSec);
+    if nargin < 2 || ~isfinite(maxPoints)
+        maxPoints = 500;
+    end
+    maxPoints = max(100, round(maxPoints));
     viz.fig = figure('Name', 'Auto Landing Pipeline Monitor', 'NumberTitle', 'off');
     tl = tiledlayout(viz.fig, 3, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax1 = nexttile(tl, 1);
-    viz.altLine = animatedline(ax1, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.4);
+    viz.altLine = animatedline(ax1, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.4, 'MaximumNumPoints', maxPoints);
     title(ax1, 'Altitude z (m)');
     ylabel(ax1, 'm');
     grid(ax1, 'on');
 
     ax2 = nexttile(tl, 2);
-    viz.tagErrLine = animatedline(ax2, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.4);
+    viz.tagErrLine = animatedline(ax2, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.4, 'MaximumNumPoints', maxPoints);
     title(ax2, 'Tag Error (normalized)');
     ylabel(ax2, 'error');
     grid(ax2, 'on');
 
     ax3 = nexttile(tl, 3);
-    viz.cmdXLine = animatedline(ax3, 'Color', [0.47 0.67 0.19], 'LineWidth', 1.3);
-    viz.cmdYLine = animatedline(ax3, 'Color', [0.49 0.18 0.56], 'LineWidth', 1.3);
+    viz.cmdXLine = animatedline(ax3, 'Color', [0.47 0.67 0.19], 'LineWidth', 1.3, 'MaximumNumPoints', maxPoints);
+    viz.cmdYLine = animatedline(ax3, 'Color', [0.49 0.18 0.56], 'LineWidth', 1.3, 'MaximumNumPoints', maxPoints);
     title(ax3, 'PID Command (cmd\_vel x/y)');
     xlabel(ax3, 'time (s)');
     ylabel(ax3, 'cmd');
@@ -1630,6 +1773,41 @@ function v = nanlast(x)
 end
 
 
+function [trendLast, oscStd, accelRms] = calcVzMotionMetrics(vzSeq, dt)
+    trendLast = nan;
+    oscStd = nan;
+    accelRms = nan;
+
+    v = double(vzSeq(:));
+    valid = isfinite(v);
+    if sum(valid) < 3
+        return;
+    end
+
+    vFill = v;
+    vFill(~valid) = 0.0;
+
+    win = max(3, round(1.0 / max(dt, 1e-3)));
+    trend = movmean(vFill, win, 'omitnan');
+
+    validTrend = isfinite(trend) & valid;
+    if ~any(validTrend)
+        return;
+    end
+
+    trendLast = nanlast(trend(validTrend));
+
+    resid = v(validTrend) - trend(validTrend);
+    oscStd = nanstdSafe(resid);
+
+    trendValid = trend(validTrend);
+    if numel(trendValid) >= 2
+        accel = diff(trendValid) ./ max(dt, 1e-3);
+        accelRms = sqrt(mean(accel.^2));
+    end
+end
+
+
 function t = tailVec(x, n)
     x = x(:);
     n = min(numel(x), n);
@@ -1721,6 +1899,8 @@ function s = emptyScenarioResult()
 
     s.stability_std_z = nan;
     s.stability_std_vz = nan;
+    s.stability_std_vz_osc = nan;
+    s.touchdown_accel_rms = nan;
     s.contact_count = nan;
     s.final_state = nan;
 

@@ -21,6 +21,7 @@ end
 
 cfg = defaultConfig();
 ensureDirectories(cfg);
+lockCleanup = acquirePipelineLock(cfg); %#ok<NASGU>
 
 fprintf('\n[PIPELINE] Starting automation at %s\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
 fprintf('[PIPELINE] Scenario count: %d\n', cfg.scenario.count);
@@ -125,6 +126,7 @@ function cfg = defaultConfig()
     cfg.paths.data_dir = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data';
     cfg.paths.model_dir = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/models';
     cfg.paths.log_dir = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/logs';
+    cfg.paths.lock_file = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/auto_landing_pipeline.lock';
     cfg.paths.bringup_py_src = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_bringup';
     cfg.paths.bringup_py_install = '/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages';
 
@@ -176,6 +178,7 @@ function cfg = defaultConfig()
     cfg.process = struct();
     cfg.process.stop_after_each_scenario = true;
     cfg.process.kill_settle_sec = 2.0;
+    cfg.process.cleanup_verify_timeout_sec = 8.0;
 
     cfg.persistence = struct();
     cfg.persistence.enable_checkpoint = true;
@@ -209,7 +212,7 @@ function cfg = defaultConfig()
     cfg.control.flying_altitude_threshold = 0.25;
     cfg.control.target_u = 0.0;
     cfg.control.target_v = -0.08;
-    cfg.control.xy_kp = 1.2;
+    cfg.control.xy_kp = 1.05;
     cfg.control.xy_ki = 0.15;
     cfg.control.xy_kd = 0.12;
     cfg.control.xy_i_limit = 1.0;
@@ -331,13 +334,65 @@ function ensureDirectories(cfg)
 end
 
 
+function lockCleanup = acquirePipelineLock(cfg)
+    lockPath = cfg.paths.lock_file;
+
+    if isfile(lockPath)
+        try
+            txt = strtrim(fileread(lockPath));
+            oldPid = str2double(txt);
+        catch
+            oldPid = nan;
+        end
+
+        if isfinite(oldPid) && oldPid > 1
+            [st, ~] = system(sprintf('bash -i -c "kill -0 %d >/dev/null 2>&1"', round(oldPid)));
+            if st == 0
+                error('Another auto_landing_pipeline_matlab instance is running (pid=%d). Stop it before starting a new one.', round(oldPid));
+            end
+        end
+    end
+
+    thisPid = feature('getpid');
+    fid = fopen(lockPath, 'w');
+    if fid < 0
+        error('Failed to create pipeline lock file: %s', lockPath);
+    end
+    fprintf(fid, '%d\n', round(thisPid));
+    fclose(fid);
+
+    lockCleanup = onCleanup(@() releasePipelineLock(lockPath));
+end
+
+
+function releasePipelineLock(lockPath)
+    try
+        if isfile(lockPath)
+            delete(lockPath);
+        end
+    catch
+    end
+end
+
+
 function info = startBringupLaunch(cfg, scenarioId, scenarioCfg)
     [~, preOut] = system('bash -i -c "pgrep -f \"[r]os2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py\" | wc -l"');
     preCount = str2double(strtrim(preOut));
-    if isfinite(preCount) && preCount > 0
-        fprintf('[PIPELINE] Detected %d stale launch process(es) before start, forcing cleanup.\n', round(preCount));
+    preSnap = getActiveRosProcessSnapshot();
+    hasStaleGraph = strlength(strtrim(preSnap)) > 0;
+
+    if (isfinite(preCount) && preCount > 0) || hasStaleGraph
+        fprintf('[PIPELINE] Detected stale ROS/Gazebo process(es) before start, forcing cleanup.\n');
+        if hasStaleGraph
+            fprintf('[PIPELINE] Stale pre-launch snapshot:\n%s\n', preSnap);
+        end
         cleanupSimulationProcesses(cfg);
         pause(1.0);
+
+        postCleanupSnap = getActiveRosProcessSnapshot();
+        if strlength(strtrim(postCleanupSnap)) > 0
+            error('Cleanup did not converge before launch start. Refusing to start new launch.\nRemaining:\n%s', postCleanupSnap);
+        end
     end
 
     logFile = fullfile(cfg.paths.log_dir, sprintf('bringup_s%03d_%s.log', scenarioId, timestampForFile()));
@@ -392,27 +447,34 @@ function cleanupSimulationProcesses(cfg, launchPid)
     end
 
     if isfinite(launchPid) && launchPid > 1
-        system(sprintf('kill -9 %d >/dev/null 2>&1 || true', round(launchPid)));
+        killProcessTree(round(launchPid));
     end
 
     out = '';
+    preSnap = getActiveRosProcessSnapshot();
+    if strlength(strtrim(preSnap)) > 0
+        fprintf('[PIPELINE] Cleanup pre-snapshot:\n%s\n', preSnap);
+    end
+
     for pass = 1:3
         [~, outPass] = system(['bash -i -c "' ...
             'pgrep -f \"[r]os2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py\" | xargs -r kill -9 || true; ' ...
-            'pkill -9 -f \"sjtu_drone_bringup.launch.py\" || true; ' ...
-            'pkill -9 -f \"component_container\" || true; ' ...
-            'pkill -9 -f \"apriltag_detector\" || true; ' ...
-            'pkill -9 -f \"apriltag_state_bridge\" || true; ' ...
-            'pkill -9 -f \"static_transform_publisher\" || true; ' ...
-            'pkill -9 -f \"robot_state_publisher\" || true; ' ...
-            'pkill -9 -f \"joint_state_publisher\" || true; ' ...
-            'pkill -9 -f \"spawn_drone\" || true; ' ...
-            'pkill -9 -f \"teleop_joystick\" || true; ' ...
-            'pkill -9 -f \"joy_node\" || true; ' ...
-            'pkill -9 -f \"gazebo_wind_plugin_node\" || true; ' ...
+            'pkill -9 -f \"[r]os2 launch sjtu_drone_bringup\" || true; ' ...
+            'pkill -9 -f \"[s]jtu_drone_bringup.launch.py\" || true; ' ...
+            'pkill -9 -f \"[c]omponent_container\" || true; ' ...
+            'pkill -9 -f \"[a]priltag_detector\" || true; ' ...
+            'pkill -9 -f \"[a]priltag_state_bridge\" || true; ' ...
+            'pkill -9 -f \"[s]tatic_transform_publisher\" || true; ' ...
+            'pkill -9 -f \"[r]obot_state_publisher\" || true; ' ...
+            'pkill -9 -f \"[j]oint_state_publisher\" || true; ' ...
+            'pkill -9 -f \"[s]pawn_drone\" || true; ' ...
+            'pkill -9 -f \"[t]eleop_joystick\" || true; ' ...
+            'pkill -9 -f \"[j]oy_node\" || true; ' ...
+            'pkill -9 -f \"[g]azebo_wind_plugin_node\" || true; ' ...
             'pkill -9 gzserver || true; ' ...
             'pkill -9 gzclient || true; ' ...
-            'pkill -9 -x rviz2 || true"']);
+            'pkill -9 -x rviz2 || true; ' ...
+            'pkill -9 -f \"[r]viz2\" || true"']);
 
         if ~isempty(strtrim(outPass))
             out = sprintf('%s\n[pass %d]\n%s', out, pass, outPass); %#ok<AGROW>
@@ -421,10 +483,20 @@ function cleanupSimulationProcesses(cfg, launchPid)
         pause(0.3);
     end
 
-    if isfield(cfg, 'shell') && isfield(cfg.shell, 'setup_cmd')
-        daemonCmd = sprintf('bash -i -c "%s && ros2 daemon stop >/dev/null 2>&1 || true; ros2 daemon start >/dev/null 2>&1 || true"', ...
-            shellEscapeDoubleQuotes(cfg.shell.setup_cmd));
-        system(daemonCmd);
+    % If pattern-based kill missed detached children, kill by discovered PID set.
+    killActiveRosProcessTrees();
+
+    refreshRos2Daemon(cfg);
+
+    verifyTimeout = 8.0;
+    if isfield(cfg, 'process') && isfield(cfg.process, 'cleanup_verify_timeout_sec') && isfinite(cfg.process.cleanup_verify_timeout_sec)
+        verifyTimeout = max(1.0, cfg.process.cleanup_verify_timeout_sec);
+    end
+    waitForRosProcessCleanup(verifyTimeout);
+
+    postSnap = getActiveRosProcessSnapshot();
+    if strlength(strtrim(postSnap)) > 0
+        fprintf('[PIPELINE] Cleanup post-snapshot (still alive):\n%s\n', postSnap);
     end
 
     if ~isempty(strtrim(out))
@@ -432,6 +504,90 @@ function cleanupSimulationProcesses(cfg, launchPid)
     else
         fprintf('[PIPELINE] Cleanup complete (multi-pass kill + daemon refresh).\n');
     end
+end
+
+
+function waitForRosProcessCleanup(timeoutSec)
+    t0 = tic;
+    while toc(t0) <= timeoutSec
+        snap = getActiveRosProcessSnapshot();
+        if strlength(strtrim(snap)) == 0
+            return;
+        end
+
+        killActiveRosProcessTrees();
+        pause(0.25);
+    end
+end
+
+
+function killActiveRosProcessTrees()
+    pids = getActiveRosProcessPids();
+    if isempty(pids)
+        return;
+    end
+
+    for i = 1:numel(pids)
+        killProcessTree(pids(i));
+    end
+end
+
+
+function pids = getActiveRosProcessPids()
+    cmd = ['bash -i -c "' ...
+        'pgrep -f \"[r]os2 launch sjtu_drone_bringup|[c]omponent_container|[a]priltag|[j]oint_state_publisher|[r]obot_state_publisher|[s]tatic_transform_publisher|[r]viz2|[j]oy_node|[g]azebo|[g]zserver|[g]zclient|[s]pawn_drone|[g]azebo_wind_plugin_node\" || true"'];
+    [~, txt] = system(cmd);
+    toks = regexp(txt, '(\d+)', 'tokens');
+    if isempty(toks)
+        pids = [];
+        return;
+    end
+
+    pids = zeros(numel(toks), 1);
+    for i = 1:numel(toks)
+        pids(i) = str2double(toks{i}{1});
+    end
+    pids = unique(pids(isfinite(pids) & pids > 1));
+end
+
+
+function killProcessTree(pid)
+    if ~isfinite(pid) || pid <= 1
+        return;
+    end
+
+    cmd = sprintf(['bash -i -c "' ...
+        'pkill -9 -P %d >/dev/null 2>&1 || true; ' ...
+        'pkill -9 -P %d >/dev/null 2>&1 || true; ' ...
+        'pkill -9 -P %d >/dev/null 2>&1 || true; ' ...
+        'kill -9 %d >/dev/null 2>&1 || true"'], round(pid), round(pid), round(pid), round(pid));
+    system(cmd);
+end
+
+
+function refreshRos2Daemon(cfg)
+    daemonOk = false;
+
+    if isfield(cfg, 'shell') && isfield(cfg.shell, 'setup_cmd')
+        daemonCmd = sprintf('bash -i -c "%s && ros2 daemon stop >/dev/null 2>&1 || true; ros2 daemon start >/dev/null 2>&1 || true"', ...
+            shellEscapeDoubleQuotes(cfg.shell.setup_cmd));
+        st = system(daemonCmd);
+        daemonOk = (st == 0);
+    end
+
+    if ~daemonOk
+        % Fallback path for cases where workspace setup command fails.
+        system('bash -i -c "source /opt/ros/humble/setup.bash >/dev/null 2>&1 || true; ros2 daemon stop >/dev/null 2>&1 || true; ros2 daemon start >/dev/null 2>&1 || true"');
+    end
+end
+
+
+function out = getActiveRosProcessSnapshot()
+    cmd = ['bash -i -c "' ...
+        'pgrep -af \"[r]os2 launch sjtu_drone_bringup|[c]omponent_container|[a]priltag|[j]oint_state_publisher|[r]obot_state_publisher|[s]tatic_transform_publisher|[r]viz2|[j]oy_node|[g]azebo|[g]zserver|[g]zclient|[s]pawn_drone|[g]azebo_wind_plugin_node\" ' ...
+        '| sed -n \"1,120p\" || true"'];
+    [~, txt] = system(cmd);
+    out = string(txt);
 end
 
 

@@ -1,10 +1,11 @@
 % landing_decision_matlab.m
-% MATLAB script to run an ontology-based landing decision node for ROS2/Gazebo.
+% MATLAB script to run an AI + ontology-based landing decision node for ROS2/Gazebo.
 % Features:
 % - Optional: start ROS2/Gazebo bringup launch (uses system call set in cfg.launchCMD)
 % - Subscribes to /wind_condition (std_msgs/Float32MultiArray) and to drone gt_pose
-% - Builds a minimal ontology (WindCondition, DroneState, LandingZone) as structs
-% - Implements two simple decision methods: Decision Tree and Bayesian score
+% - Builds ontology state (class/entity/relation/property) from sensor streams
+% - Performs ontology reasoning and semantic abstraction
+% - Generates AI feature vector and runs AI landing decision
 % - Publishes decision on /landing_decision (std_msgs/String) with values: "land","wait","caution"
 %
 % Usage:
@@ -23,9 +24,17 @@ end
 
 %% Configuration
 cfg.use_launch = false; % if true the script will attempt to start the configured launch command
-cfg.launchCMD = '';
-% Example if you want MATLAB to start the ros2 launch (adjust paths):
-% cfg.launchCMD = 'bash -lc "source /opt/ros/humble/setup.bash; source /home/user/INCSL/IICC26_ws/install/setup.bash; ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py use_gui:=false &"';
+cfg.ros2env = [ ...
+    'cd /home/j/INCSL/IICC26_ws && ' ...
+    'source /opt/ros/humble/setup.bash && ' ...
+    'source /home/j/INCSL/IICC26_ws/install/setup.bash' ...
+];
+cfg.launchCMD = sprintf( ...
+    'bash -i -c "%s && source ~/.bashrc; ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py use_gui:=false &"', ...
+    cfg.ros2env);
+% Example for a custom workspace path:
+% cfg.ros2env = 'cd /home/user/INCSL/IICC26_ws && source /opt/ros/humble/setup.bash && source /home/user/INCSL/IICC26_ws/install/setup.bash';
+% cfg.launchCMD = sprintf('bash -i -c "%s && source ~/.bashrc; ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py use_gui:=false &"', cfg.ros2env);
 
 % Topics (tune if your namespace differs)
 ns = '/drone'; % model namespace used by the bringup launch
@@ -111,10 +120,26 @@ cfg.log_summary_interval_sec = 5.0;   % periodic compact status log
 % When enabled and /set_wind service fails, MATLAB runs:
 % ros2 topic pub /wind_command std_msgs/msg/Float32MultiArray "data: [speed, direction]" -1
 
-% Bayesian model params (simple Gaussian assumptions)
-bayes.mu_safe = [0.0, 0.0];        % mean [wind_speed, attitude_score]
-bayes.sigma_safe = [1.5, 0.5];     % std deviations
-bayes.threshold = 0.5;             % probability threshold to consider safe
+% Ontology + AI decision configuration
+cfg.enable_rule_fallback = true;   % fallback only when AI confidence is very low
+cfg.ai_confidence_min = 0.42;      % if max softmax prob below this, fallback can be used
+
+% Lightweight AI model placeholder (softmax classifier over features).
+% Replace weights/bias with trained values for real experiments.
+% Classes are fixed in this order: [land, caution, wait]
+aiModel.class_names = {'land','caution','wait'};
+aiModel.feature_names = { ...
+    'wind_speed','wind_dir_norm','roll_abs','pitch_abs', ...
+    'tag_u','tag_v','jitter','area_ratio','margin','stability_score', ...
+    'wind_risk_enc','alignment_enc','visual_enc'};
+
+% 3 x 13 weight matrix (rows: land/caution/wait, cols: feature_names order)
+aiModel.W = [ ...
+    -0.70, -0.05, -1.20, -1.20, -1.00, -0.90, -0.60, -0.30,  0.60,  1.20, -0.80,  0.90,  1.00;  ... % land
+     0.20,  0.05,  0.30,  0.30,  0.20,  0.20,  0.20,  0.20, -0.20, -0.20,  0.40, -0.30, -0.40;  ... % caution
+     0.90,  0.02,  1.10,  1.10,  1.20,  1.00,  0.80,  0.40, -0.70, -1.00,  1.10, -0.70, -0.90   ... % wait
+];
+aiModel.b = [0.10; 0.00; -0.10];
 
 %% Launch if requested
 if cfg.use_launch && ~isempty(cfg.launchCMD)
@@ -201,7 +226,8 @@ makeTagObs = @(det,n,tid,u,v,jit,arj,area,margin,qok,stb,score,ctr) struct( ...
 landingZone = makeLandingZone([3.0,3.0], false);
 
 %% Decision functions
-function out = decision_tree(wind, drone, lz, tagObs, params)
+function out = decision_tree_fallback(wind, drone, lz, tagObs, params)
+    % Fallback-only rule function. Primary decision path is AI-based.
     % returns 'land','wait' or 'caution'
     ws = wind.wind_speed;
     % small attitude proxy: estimate from orientation quaternion to roll/pitch
@@ -269,18 +295,6 @@ function out = decision_tree(wind, drone, lz, tagObs, params)
     out = 'land';
 end
 
-function p = bayesian_score(wind, drone, bayes)
-    % Compute a toy probability that it's safe using wind_speed and an attitude score
-    ws = wind.wind_speed;
-    q = drone.orientation; [roll,pitch,~] = quat2eul_local([q.w, q.x, q.y, q.z]);
-    att_score = max(abs(roll), abs(pitch));
-    % Gaussian likelihoods (independent approx)
-    lw = exp(-0.5*((ws - bayes.mu_safe(1))/bayes.sigma_safe(1))^2);
-    la = exp(-0.5*((att_score - bayes.mu_safe(2))/bayes.sigma_safe(2))^2);
-    % normalized-ish score
-    p = (lw * la) / (1 + lw * la);
-end
-
 %% Helper: quaternion->euler
 function [roll,pitch,yaw] = quat2eul_local(qwxyz)
     w = qwxyz(1); x = qwxyz(2); y = qwxyz(3); z = qwxyz(4);
@@ -296,7 +310,6 @@ function [roll,pitch,yaw] = quat2eul_local(qwxyz)
 end
 
 %% Main loop: poll topics and decide
-dec_method = 'decision_tree'; % or 'bayesian'
 rate = rateControl(params.decision_rate);
 
 loop_t0 = tic;
@@ -324,7 +337,9 @@ if cfg.enable_live_plot
     viz = initLivePlots(cfg.plot_window_sec, params);
 end
 
-fprintf('[MATLAB] Entering decision loop (method=%s). Ctrl-C to stop.\n', dec_method);
+fprintf('[MATLAB] Entering decision loop (pipeline=sensor->ontology->AI->publish). Ctrl-C to stop.\n');
+loopError = [];
+try
 while true
     % get latest wind
     wind_msg = tryReceive(sub_wind, 0.1);
@@ -410,13 +425,26 @@ while true
         (stability_score >= params.tag_stability_score_warn);
     tagObs = makeTagObs(detected, n_tags, tag_id, u_norm, v_norm, jitter_px, area_jitter_ratio, area_px2, margin_mean, quality_ok, stable, stability_score, centered);
 
-    % run decision method
-    if strcmp(dec_method,'decision_tree')
-        decision = decision_tree(wind, drone, landingZone, tagObs, params);
-    else
-        p_safe = bayesian_score(wind, drone, bayes);
-        if p_safe >= bayes.threshold, decision = 'land'; else decision = 'wait'; end
-    end
+    % ---------------------------------------------------------------------
+    % Ontology section: build class/entity/relation/property state
+    % ---------------------------------------------------------------------
+    ontoState = buildOntologyState(wind, drone, tagObs, landingZone, params);
+
+    % ---------------------------------------------------------------------
+    % Ontology reasoning section: semantic abstraction before AI input
+    % ---------------------------------------------------------------------
+    semantic = ontologyReasoning(ontoState, params);
+
+    % ---------------------------------------------------------------------
+    % AI input section: convert semantic + numeric state to feature vector
+    % ---------------------------------------------------------------------
+    [aiFeatures, ~] = buildAIFeatureVector(wind, drone, tagObs, semantic, params);
+
+    % ---------------------------------------------------------------------
+    % AI decision section: feature -> class scores -> decision
+    % ---------------------------------------------------------------------
+    fallbackDecision = decision_tree_fallback(wind, drone, landingZone, tagObs, params);
+    [decision, aiOut] = aiLandingDecision(aiFeatures, aiModel, semantic, cfg, fallbackDecision);
 
     % publish decision
     msg_dec.data = char(decision);
@@ -434,6 +462,7 @@ while true
         is_flying_for_control = have_pose && (drone.position(3) >= params.flying_altitude_threshold);
     end
 
+    % Experiment/control state machine runs independently from ontology+AI decision.
     % Startup sequence: wait for readiness -> pre-takeoff stabilize -> takeoff -> settle hover -> xy hold.
     cmd_x = 0.0;
     cmd_y = 0.0;
@@ -608,13 +637,14 @@ while true
 
     if cfg.log_decision_changes_only
         if ~strcmp(decision, last_decision)
-            fprintf('[%s] phase=%s state=%d fly=%d stateFresh=%d decision=%s wind=%.2f tag_detect=%d pred_ok=%d u=%.3f v=%.3f cmd=(%.2f,%.2f) stability=%.2f\n', ...
-                datestr(now,'HH:MM:SS'), control_phase, drone_state, is_flying_for_control, state_is_fresh, decision, wind.wind_speed, tagObs.detected, pred_ok, u_pred, v_pred, cmd_x, cmd_y, tagObs.stability_score);
+            fprintf('[%s] phase=%s dec=%s(ai=%.2f fb=%d) wind=%.2f risk=%s align=%s visual=%s tag_detect=%d pred_ok=%d cmd=(%.2f,%.2f)\n', ...
+                datestr(now,'HH:MM:SS'), control_phase, decision, aiOut.confidence, aiOut.used_fallback, wind.wind_speed, ...
+                semantic.wind_risk, semantic.alignment_state, semantic.visual_state, tagObs.detected, pred_ok, cmd_x, cmd_y);
             last_decision = decision;
             last_log_t = t_now;
         elseif (t_now - last_log_t) >= cfg.log_summary_interval_sec
-            fprintf('[%s] phase=%s keep=%s state=%d fly=%d stateFresh=%d pred_ok=%d cmd=(%.2f,%.2f) wind=%.2f stability=%.2f\n', ...
-                datestr(now,'HH:MM:SS'), control_phase, decision, drone_state, is_flying_for_control, state_is_fresh, pred_ok, cmd_x, cmd_y, wind.wind_speed, tagObs.stability_score);
+            fprintf('[%s] phase=%s keep=%s ai=%.2f risk=%s align=%s visual=%s pred_ok=%d cmd=(%.2f,%.2f)\n', ...
+                datestr(now,'HH:MM:SS'), control_phase, decision, aiOut.confidence, semantic.wind_risk, semantic.alignment_state, semantic.visual_state, pred_ok, cmd_x, cmd_y);
             last_log_t = t_now;
         end
     else
@@ -623,6 +653,37 @@ while true
     end
 
     waitfor(rate);
+end
+catch ME
+    if isUserInterruptException(ME)
+        fprintf('[MATLAB] User interrupt received. Stopping decision loop safely.\n');
+    else
+        loopError = ME;
+    end
+end
+
+safeStopWind(windTimer);
+
+% Send neutral commands on exit so the simulator is left in a safe state.
+try
+    msg_cmd.linear.x = 0.0;
+    msg_cmd.linear.y = 0.0;
+    msg_cmd.linear.z = 0.0;
+    msg_cmd.angular.x = 0.0;
+    msg_cmd.angular.y = 0.0;
+    msg_cmd.angular.z = 0.0;
+    send(pub_cmd, msg_cmd);
+catch
+end
+
+try
+    msg_wind_zero.data = single([0.0, 0.0]);
+    send(pub_wind_cmd, msg_wind_zero);
+catch
+end
+
+if ~isempty(loopError)
+    rethrow(loopError);
 end
 
 %% small helper functions
@@ -1101,6 +1162,260 @@ function y = decisionToNumeric(decision)
             y = 1;
         otherwise
             y = 0;
+    end
+end
+
+function onto = buildOntologyState(wind, drone, tagObs, landingZone, params)
+    % Ontology section: compose sensor state as classes/entities/relations/properties.
+    [roll,pitch,yaw] = quat2eul_local([drone.orientation.w, drone.orientation.x, drone.orientation.y, drone.orientation.z]);
+
+    onto = struct();
+    onto.classes = {'WindCondition','DroneState','TagObservation','LandingContext'};
+
+    onto.entities = struct();
+    onto.entities.WindCondition = struct( ...
+        'class','WindCondition', ...
+        'wind_speed', wind.wind_speed, ...
+        'wind_direction', wind.wind_direction);
+
+    onto.entities.DroneState = struct( ...
+        'class','DroneState', ...
+        'position', drone.position, ...
+        'roll', roll, ...
+        'pitch', pitch, ...
+        'yaw', yaw, ...
+        'abs_attitude', max(abs(roll), abs(pitch)), ...
+        'vz', drone.velocity(3));
+
+    onto.entities.TagObservation = struct( ...
+        'class','TagObservation', ...
+        'detected', tagObs.detected, ...
+        'u_norm', tagObs.u_norm, ...
+        'v_norm', tagObs.v_norm, ...
+        'jitter_px', tagObs.jitter_px, ...
+        'area_jitter_ratio', tagObs.area_jitter_ratio, ...
+        'area_px2', tagObs.area_px2, ...
+        'margin', tagObs.margin, ...
+        'stability_score', tagObs.stability_score, ...
+        'quality_ok', tagObs.quality_ok, ...
+        'centered', tagObs.centered);
+
+    onto.entities.LandingContext = struct( ...
+        'class','LandingContext', ...
+        'landing_area_size', landingZone.landing_area_size, ...
+        'obstacle_presence', landingZone.obstacle_presence, ...
+        'tag_center_tolerance', params.tag_center_tolerance, ...
+        'wind_speed_caution', params.wind_speed_caution, ...
+        'wind_speed_unsafe', params.wind_speed_unsafe);
+
+    % Ontology relation triples (subject, predicate, object)
+    onto.relations = { ...
+        struct('subject','DroneState','predicate','isAffectedByWind','object','WindCondition'), ...
+        struct('subject','DroneState','predicate','isAlignedWithLandingMarker','object','TagObservation'), ...
+        struct('subject','TagObservation','predicate','hasVisualUncertainty','object','LandingContext'), ...
+        struct('subject','LandingContext','predicate','isSafeForLanding','object','DroneState'), ...
+        struct('subject','LandingContext','predicate','requiresCaution','object','WindCondition') ...
+    };
+end
+
+function semantic = ontologyReasoning(onto, params)
+    % Ontology reasoning section: symbolic semantic abstraction from relations.
+    w = onto.entities.WindCondition;
+    d = onto.entities.DroneState;
+    t = onto.entities.TagObservation;
+    lz = onto.entities.LandingContext;
+
+    if w.wind_speed >= params.wind_speed_unsafe || d.abs_attitude > params.max_attitude * 1.5
+        wind_risk = 'high';
+    elseif w.wind_speed >= params.wind_speed_caution || d.abs_attitude > params.max_attitude
+        wind_risk = 'medium';
+    else
+        wind_risk = 'low';
+    end
+
+    if t.detected && isfinite(t.u_norm) && isfinite(t.v_norm)
+        align_err = sqrt(t.u_norm^2 + t.v_norm^2);
+        if align_err <= params.tag_center_tolerance
+            alignment_state = 'aligned';
+        else
+            alignment_state = 'misaligned';
+        end
+    else
+        alignment_state = 'misaligned';
+    end
+
+    if ~t.detected || ~isfinite(t.stability_score)
+        visual_state = 'unstable';
+    elseif t.stability_score >= params.tag_stability_score_warn && t.quality_ok
+        visual_state = 'stable';
+    else
+        visual_state = 'unstable';
+    end
+
+    if lz.obstacle_presence || strcmp(wind_risk,'high')
+        landing_context = 'unsafe';
+    elseif strcmp(wind_risk,'medium') || strcmp(alignment_state,'misaligned') || strcmp(visual_state,'unstable')
+        landing_context = 'caution';
+    else
+        landing_context = 'safe';
+    end
+
+    semantic = struct();
+    semantic.wind_risk = wind_risk;
+    semantic.alignment_state = alignment_state;
+    semantic.visual_state = visual_state;
+    semantic.landing_context = landing_context;
+    semantic.isSafeForLanding = strcmp(landing_context, 'safe');
+    semantic.requiresCaution = strcmp(landing_context, 'caution');
+end
+
+function [x, fmap] = buildAIFeatureVector(wind, drone, tagObs, semantic, params)
+    % AI input section: combine numeric and symbolic-encoded features.
+    [roll,pitch,~] = quat2eul_local([drone.orientation.w, drone.orientation.x, drone.orientation.y, drone.orientation.z]);
+
+    wind_dir_norm = wrapTo180_local(wind.wind_direction) / 180.0;
+    jitter_norm = normalize01(tagObs.jitter_px, 0.0, params.tag_jitter_unsafe_px);
+    area_ratio_norm = normalize01(tagObs.area_jitter_ratio, 0.0, params.tag_area_jitter_unsafe_ratio);
+    margin_norm = normalize01(tagObs.margin, 0.0, max(params.tag_margin_warn, 1e-6));
+
+    wind_risk_enc = encodeCategory(semantic.wind_risk, {'low','medium','high'}, [0.0, 0.5, 1.0], 1.0);
+    alignment_enc = encodeCategory(semantic.alignment_state, {'aligned','misaligned'}, [1.0, 0.0], 0.0);
+    visual_enc = encodeCategory(semantic.visual_state, {'stable','unstable'}, [1.0, 0.0], 0.0);
+
+    x = [ ...
+        normalize01(wind.wind_speed, 0.0, params.wind_speed_unsafe), ...
+        wind_dir_norm, ...
+        normalize01(abs(roll), 0.0, params.max_attitude * 1.5), ...
+        normalize01(abs(pitch), 0.0, params.max_attitude * 1.5), ...
+        clampNaN(tagObs.u_norm, 0.0), ...
+        clampNaN(tagObs.v_norm, 0.0), ...
+        jitter_norm, ...
+        area_ratio_norm, ...
+        margin_norm, ...
+        clampNaN(tagObs.stability_score, 0.0), ...
+        wind_risk_enc, ...
+        alignment_enc, ...
+        visual_enc ...
+    ];
+
+    fmap = struct();
+    fmap.wind_speed = x(1);
+    fmap.wind_dir_norm = x(2);
+    fmap.roll_abs = x(3);
+    fmap.pitch_abs = x(4);
+    fmap.tag_u = x(5);
+    fmap.tag_v = x(6);
+    fmap.jitter = x(7);
+    fmap.area_ratio = x(8);
+    fmap.margin = x(9);
+    fmap.stability_score = x(10);
+    fmap.wind_risk_enc = x(11);
+    fmap.alignment_enc = x(12);
+    fmap.visual_enc = x(13);
+end
+
+function [decision, out] = aiLandingDecision(x, aiModel, semantic, cfg, fallbackDecision)
+    % AI decision section: feature vector -> softmax probabilities -> land/caution/wait.
+    logits = aiModel.W * x(:) + aiModel.b(:);
+    probs = softmax_local(logits);
+
+    [confidence, idx] = max(probs);
+    decision = char(aiModel.class_names{idx});
+    usedFallback = false;
+
+    % Semantic safety override (hard constraints remain for research safety)
+    if strcmp(semantic.landing_context, 'unsafe')
+        decision = 'wait';
+    end
+
+    if cfg.enable_rule_fallback && confidence < cfg.ai_confidence_min
+        decision = fallbackDecision;
+        usedFallback = true;
+    end
+
+    out = struct();
+    out.logits = logits;
+    out.probs = probs;
+    out.confidence = confidence;
+    out.used_fallback = usedFallback;
+end
+
+function p = softmax_local(z)
+    z = z(:);
+    zmax = max(z);
+    e = exp(z - zmax);
+    s = sum(e);
+    if s <= 0
+        p = ones(size(z)) / numel(z);
+    else
+        p = e / s;
+    end
+end
+
+function v = normalize01(x, xmin, xmax)
+    if ~isfinite(x)
+        v = 0.0;
+        return;
+    end
+    den = max(xmax - xmin, 1e-6);
+    v = (x - xmin) / den;
+    v = min(max(v, 0.0), 1.0);
+end
+
+function y = clampNaN(x, fallback)
+    if ~isfinite(x)
+        y = fallback;
+    else
+        y = x;
+    end
+end
+
+function enc = encodeCategory(value, categories, encodings, defaultVal)
+    enc = defaultVal;
+    for i = 1:numel(categories)
+        if strcmp(value, categories{i})
+            enc = encodings(i);
+            return;
+        end
+    end
+end
+
+function d = wrapTo180_local(deg)
+    d = mod(deg + 180.0, 360.0) - 180.0;
+end
+
+function tf = isUserInterruptException(ME)
+    tf = false;
+    try
+        id = lower(string(ME.identifier));
+    catch
+        id = "";
+    end
+    try
+        msg = lower(string(ME.message));
+    catch
+        msg = "";
+    end
+
+    tf = contains(id, "operationterminatedbyuser") || ...
+         contains(id, "interrupted") || ...
+         contains(msg, "operation terminated by user") || ...
+         contains(msg, "interrupt") || ...
+         contains(msg, "ctrl+c");
+
+    if tf
+        return;
+    end
+
+    try
+        causes = ME.cause;
+        for i = 1:numel(causes)
+            if isUserInterruptException(causes{i})
+                tf = true;
+                return;
+            end
+        end
+    catch
     end
 end
 

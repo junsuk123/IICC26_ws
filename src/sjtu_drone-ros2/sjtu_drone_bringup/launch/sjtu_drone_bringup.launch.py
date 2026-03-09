@@ -18,7 +18,7 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, LogInfo
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
@@ -87,7 +87,17 @@ def get_apriltag_nodes(context, *_, **__):
     tags_topic = LaunchConfiguration("apriltag_tags").perform(context)
     detector_type = LaunchConfiguration("apriltag_type").perform(context)
     bridge_topic = LaunchConfiguration("apriltag_bridge_topic").perform(context)
+    bridge_use_target_id = LaunchConfiguration("apriltag_bridge_use_target_id").perform(context)
+    bridge_target_id = LaunchConfiguration("apriltag_bridge_target_id").perform(context)
+    use_standalone_detector = LaunchConfiguration("apriltag_use_standalone_detector").perform(context)
     bridge_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'apriltag_state_bridge')
+
+    tags_full_topic = f'{camera_ns}/{tags_topic}'
+    image_full_topic = f'{camera_ns}/{image_topic}'
+
+    actions = [
+        LogInfo(msg=f'[bringup] Apriltag config: camera={camera_ns}, image={image_full_topic}, tags={tags_full_topic}, bridge={bridge_topic}, standalone={use_standalone_detector}, use_target_id={bridge_use_target_id}, target_id={bridge_target_id}')
+    ]
 
     bridge_action = None
     if os.path.exists(bridge_exe):
@@ -95,10 +105,10 @@ def get_apriltag_nodes(context, *_, **__):
             cmd=[
                 bridge_exe,
                 '--ros-args',
-                '-p', f'input_topic:={camera_ns}/{tags_topic}',
+                '-p', f'input_topic:={tags_full_topic}',
                 '-p', f'output_topic:={bridge_topic}',
-                '-p', 'target_id:=0',
-                '-p', 'use_target_id:=true',
+                '-p', f'target_id:={bridge_target_id}',
+                '-p', f'use_target_id:={bridge_use_target_id}',
             ],
             output='screen',
             condition=IfCondition(LaunchConfiguration("use_apriltag")),
@@ -106,20 +116,40 @@ def get_apriltag_nodes(context, *_, **__):
     else:
         print(f"[bringup] apriltag_state_bridge executable not found at {bridge_exe}. Skipping bridge node.")
 
-    actions = [
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(apriltag_share, "launch", "detect.launch.py")
-            ),
-            launch_arguments={
-                "camera": camera_ns,
-                "image": image_topic,
-                "tags": tags_topic,
-                "type": detector_type,
-            }.items(),
-            condition=IfCondition(LaunchConfiguration("use_apriltag")),
-        ),
-    ]
+    if use_standalone_detector == 'true':
+        actions.append(
+            Node(
+                package='apriltag_detector',
+                executable='apriltag_detector_node',
+                name='apriltag_detector_node',
+                output='screen',
+                parameters=[
+                    {
+                        'type': detector_type,
+                    }
+                ],
+                remappings=[
+                    ('image', image_full_topic),
+                    ('tags', tags_full_topic),
+                ],
+                condition=IfCondition(LaunchConfiguration("use_apriltag")),
+            )
+        )
+    else:
+        actions.append(
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(apriltag_share, "launch", "detect.launch.py")
+                ),
+                launch_arguments={
+                    "camera": camera_ns,
+                    "image": image_topic,
+                    "tags": tags_topic,
+                    "type": detector_type,
+                }.items(),
+                condition=IfCondition(LaunchConfiguration("use_apriltag")),
+            )
+        )
 
     if bridge_action is not None:
         actions.append(bridge_action)
@@ -188,6 +218,26 @@ def generate_launch_description():
             "apriltag_bridge_topic",
             default_value="/landing_tag_state",
             description="Bridge topic to publish tag state as Float32MultiArray",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_bridge_use_target_id",
+            default_value="false",
+            choices=["true", "false"],
+            description="Whether apriltag_state_bridge filters by target_id",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_bridge_target_id",
+            default_value="0",
+            description="Target tag id used by apriltag_state_bridge when filtering is enabled",
+        ),
+
+        DeclareLaunchArgument(
+            "apriltag_use_standalone_detector",
+            default_value="true",
+            choices=["true", "false"],
+            description="Use apriltag_detector_node directly instead of detect.launch composable container",
         ),
 
         DeclareLaunchArgument(

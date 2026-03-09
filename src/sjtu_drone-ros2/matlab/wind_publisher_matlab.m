@@ -36,7 +36,7 @@ if ~isfield(cfg.gust,'amp'), cfg.gust.amp = 3.0; end
 if ~isfield(cfg,'pose_topic'), cfg.pose_topic = '/drone/gt_pose'; end
 if ~isfield(cfg,'use_set_wind_service'), cfg.use_set_wind_service = true; end
 if ~isfield(cfg,'topic_publish_mode'), cfg.topic_publish_mode = 'matlab'; end % 'matlab' | 'cli'
-if ~isfield(cfg,'cli_setup_cmd'), cfg.cli_setup_cmd = 'source /home/j/INCSL/IICC26_ws/install/setup.bash'; end
+if ~isfield(cfg,'cli_setup_cmd'), cfg.cli_setup_cmd = 'source ~/.bashrc && source /opt/ros/humble/setup.bash && source /home/j/INCSL/IICC26_ws/install/setup.bash'; end
 
 % service client connection params
 if ~isfield(cfg,'service_wait_timeout'), cfg.service_wait_timeout = 10.0; end % total seconds to wait for service
@@ -236,9 +236,9 @@ function publishWindByCli(w_speed, w_dir, setupCmd)
 % ros2 topic pub /wind_command std_msgs/msg/Float32MultiArray "data: [speed, direction]" -1
 topicCmd = sprintf('ros2 topic pub /wind_command std_msgs/msg/Float32MultiArray ''data: [%.6f, %.6f]'' -1', w_speed, w_dir);
 if isempty(setupCmd)
-	fullCmd = sprintf('bash -lc "%s"', topicCmd);
+	fullCmd = sprintf('bash -i -c "%s"', shellEscapeDoubleQuotes(topicCmd));
 else
-	fullCmd = sprintf('bash -lc "%s; %s"', setupCmd, topicCmd);
+	fullCmd = sprintf('bash -i -c "%s"', shellEscapeDoubleQuotes([setupCmd ' && ' topicCmd]));
 end
 
 % Suppress CLI chatter in MATLAB output while preserving command behavior.
@@ -246,4 +246,8 @@ end
 if status ~= 0
 	warning('CLI wind publish failed: %s', strtrim(out));
 end
+end
+
+function s = shellEscapeDoubleQuotes(x)
+s = strrep(x, '"', '\"');
 end

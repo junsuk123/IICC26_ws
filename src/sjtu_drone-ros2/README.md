@@ -3,7 +3,7 @@
 This repository contains a ROS2 + Gazebo Classic drone simulation based on `sjtu_drone`, extended for IICC26 with:
 
 - runtime wind control (`/wind_command`, `/set_wind`, `/wind_condition`)
-- MATLAB landing decision integration
+- MATLAB landing decision integration (AI + ontology pipeline)
 - MATLAB-driven startup (`takeoff`) + XY PID tag-centering hold
 - AprilTag-based landing-zone observability and stability logic
 - AprilTag bridge topic (`/landing_tag_state`) for MATLAB environments without custom message support
@@ -87,6 +87,16 @@ Bridge vector format:
 ## MATLAB Integration
 
 See `matlab/README.md` for full decision logic and parameter tuning.
+
+For one-command automation (MATLAB only workflow), see `matlab/README.md` section `Quick Start (MATLAB Only)`.
+
+Current landing-decision flow in MATLAB:
+
+- sensor collection (`/wind_condition`, `/drone/gt_pose`, `/drone/state`, AprilTag)
+- ontology state construction (`buildOntologyState`)
+- ontology reasoning (`ontologyReasoning`)
+- AI feature generation (`buildAIFeatureVector`)
+- AI decision inference (`aiLandingDecision`) -> `/landing_decision`
 
 MATLAB landing node publishes:
 

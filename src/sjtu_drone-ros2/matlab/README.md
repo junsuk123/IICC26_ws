@@ -15,6 +15,11 @@ This folder contains MATLAB nodes for:
   - public entrypoint to start dynamic wind publishing loop
 - `wind_publisher_matlab.m`
   - same publisher implementation is mirrored here (function name is also `startWindPublisher`)
+- `auto_landing_pipeline_matlab.m`
+  - full automation entrypoint: launch-repeat-stop-label-train-infer
+  - repeatedly runs Gazebo via `ros2 launch`, stops with `pkill`/`gz` kill between scenarios
+  - labels landing success/failure from threshold rules on ROS topics
+  - saves dataset and timestamped model, then runs inference
 
 ## ROS Interfaces
 
@@ -80,15 +85,18 @@ Recommended robust mode for this workspace:
 
 Implemented in `landing_decision_matlab.m`.
 
-### Stage A: drone/wind safety gates
+### Pipeline Overview (Current)
 
-- wind speed thresholds:
-  - `wind_speed_caution`
-  - `wind_speed_unsafe`
-- attitude limit from quaternion -> roll/pitch
-- vertical velocity guard (`max_vz_land`)
+Decision is now structured as:
 
-### Stage B: landing-zone observability (AprilTag)
+1. sensor collection
+2. ontology state construction
+3. ontology reasoning (symbolic abstraction)
+4. AI feature vector generation
+5. AI landing decision (`land`/`caution`/`wait`)
+6. decision publish to `/landing_decision`
+
+### Stage A: sensor and tag feature extraction
 
 Tag feature extraction:
 
@@ -110,15 +118,68 @@ Composite stability score in `[0,1]` combines:
 - area jitter term
 - margin quality term
 
-### Stage C: decision output
+### Stage B: ontology state construction
 
-Rule-based output:
+`buildOntologyState(...)` creates ontology-style state with classes/entities/relations.
 
-- `wait`: unsafe wind/attitude or missing/poor/unreliable tag state
-- `caution`: intermediate risk (off-center, jitter high, small tag area, low score)
-- `land`: all safety + stability checks satisfied
+Ontology classes/entities:
 
-### Stage D: startup + XY hold control
+- `WindCondition`
+- `DroneState`
+- `TagObservation`
+- `LandingContext`
+
+Ontology relations (triples):
+
+- `DroneState isAffectedByWind WindCondition`
+- `DroneState isAlignedWithLandingMarker TagObservation`
+- `TagObservation hasVisualUncertainty LandingContext`
+- `LandingContext isSafeForLanding DroneState`
+- `LandingContext requiresCaution WindCondition`
+
+### Stage C: ontology reasoning (semantic abstraction)
+
+`ontologyReasoning(...)` derives symbolic interpretation used before AI inference:
+
+- `wind_risk = low | medium | high`
+- `alignment_state = aligned | misaligned`
+- `visual_state = stable | unstable`
+- `landing_context = safe | caution | unsafe`
+
+### Stage D: AI feature generation
+
+`buildAIFeatureVector(...)` converts numeric + semantic states into a model input vector.
+
+Feature layout:
+
+`[wind_speed, wind_dir_norm, roll_abs, pitch_abs, tag_u, tag_v, jitter, area_ratio, margin, stability_score, wind_risk_enc, alignment_enc, visual_enc]`
+
+### Stage E: AI decision inference
+
+`aiLandingDecision(...)` performs softmax-based 3-class inference:
+
+- classes: `land`, `caution`, `wait`
+- current script includes a lightweight placeholder model (`aiModel.W`, `aiModel.b`)
+- replace these parameters with trained model weights for experiments
+
+Rule-based fallback is reduced to low-confidence backup only:
+
+- fallback function: `decision_tree_fallback(...)`
+- enabled by: `cfg.enable_rule_fallback`
+- trigger threshold: `cfg.ai_confidence_min`
+
+### Stage F: control/experiment separation
+
+Takeoff/hover/xy-hold state machine is still present for experiments, but runs separately from the ontology+AI decision path.
+
+### Stage G: tag loss continuity
+
+- on valid detection, node caches latest tag state (`id`, center, area, margin)
+- on short dropout, cached state is reused for `tag_hold_timeout_sec`
+
+This reduces abrupt semantic/AI input discontinuity during temporary detector loss.
+
+### Startup + XY hold control
 
 - phase flow: `wait_ready -> takeoff -> hover_settle -> xy_hold`
 - startup prefers `/drone/state` and falls back to altitude-based inference when state is stale
@@ -131,11 +192,6 @@ Current startup gate for experiments:
 - in `pre_takeoff_stabilize`, node continuously publishes zero wind command (`/wind_command = [0, 0]`)
 - takeoff is allowed only after zero-wind settle time and continuous tag-center hold are satisfied
 
-### Stage E: tag loss continuity
-
-- on valid detection, the node caches the latest tag state (`id`, center, area, margin)
-- if detection is briefly lost, cached state is reused for `tag_hold_timeout_sec`
-- this prevents abrupt tag-position discontinuities during temporary detector dropouts
 
 ## Fallback for MATLAB custom message limitations
 
@@ -146,6 +202,42 @@ Bridge vector format:
 - `[detected, tag_id, center_x_px, center_y_px, area_px2, margin, num_tags]`
 
 ## Run Procedure
+
+## Quick Start (MATLAB Only)
+
+If your goal is full automation (launch -> repeat scenarios -> auto labeling -> train -> infer), use this minimal flow.
+
+1. In terminal, source ROS2 + workspace:
+
+```bash
+cd /home/j/INCSL/IICC26_ws
+source /opt/ros/humble/setup.bash
+source /home/j/INCSL/IICC26_ws/install/setup.bash
+```
+
+2. Start MATLAB from the same shell (recommended), then run:
+
+```matlab
+run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/auto_landing_pipeline_matlab.m')
+```
+
+3. Output files are generated automatically:
+
+- dataset: `matlab/data/landing_dataset_*.mat`, `matlab/data/landing_dataset_*.csv`
+- inference result: `matlab/data/landing_inference_*.csv`
+- trained model: `matlab/models/landing_model_*.mat`
+
+4. To force a specific model for inference:
+
+```bash
+export LANDING_MODEL_FILE=/abs/path/to/landing_model_YYYYMMDD_HHMMSS.mat
+```
+
+5. Main tuning points in `auto_landing_pipeline_matlab.m`:
+
+- `cfg.scenario.*` (scenario count/duration)
+- `cfg.thresholds.*` (success/failure criteria)
+- `cfg.launch.command` (launch arguments)
 
 1. Build and source workspace:
 
@@ -187,6 +279,89 @@ ros2 topic echo /landing_tag_state --once
 ros2 topic echo /wind_condition --once
 ```
 
+## Full Automation (One MATLAB Run)
+
+If you want MATLAB to run everything automatically (launch, scenario loop, cleanup, labeling, training, inference):
+
+```matlab
+run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/auto_landing_pipeline_matlab.m')
+```
+
+What this script does:
+
+- starts `ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py` for each scenario
+- stops previous scenario processes (`pkill ...`, `gzserver/gzclient`) before next run
+- publishes `/drone/takeoff` in each scenario startup phase
+- runs XY PID control via `/drone/cmd_vel` during hover/hold phase
+- displays live visualization (altitude, tag error, PID command, control phase)
+- subscribes to:
+  - `/drone/state`
+  - `/drone/gt_pose`
+  - `/drone/gt_vel`
+  - `/drone/bumper_states`
+  - `/landing_tag_state`
+  - `/wind_condition`
+- publishes:
+  - `/wind_command` (scenario wind profile)
+  - `/drone/land` (landing trigger)
+- computes threshold-based landing labels (`success` / `failed`)
+- accumulates and saves dataset (`.mat` + `.csv`)
+- trains and saves model with datetime filename:
+  - `matlab/models/landing_model_YYYYMMDD_HHMMSS.mat`
+- runs inference with latest model by default
+- on user interrupt (`Ctrl+C`), still saves partial dataset/model artifacts
+- writes rolling checkpoints after each scenario to reduce data loss
+
+Interrupt-safe persistence outputs:
+
+- checkpoint dataset (latest overwrite):
+  - `matlab/data/landing_dataset_checkpoint_latest.mat`
+  - `matlab/data/landing_dataset_checkpoint_latest.csv`
+- finalized run dataset (status suffix):
+  - `matlab/data/landing_dataset_YYYYMMDD_HHMMSS_completed.csv`
+  - `matlab/data/landing_dataset_YYYYMMDD_HHMMSS_interrupted.csv`
+  - `matlab/data/landing_dataset_YYYYMMDD_HHMMSS_failed.csv`
+- model save behavior:
+  - if enough labeled rows exist, normal trained model is saved
+  - if rows are insufficient or training fails, a placeholder model is still saved:
+    - `matlab/models/landing_model_YYYYMMDD_HHMMSS_placeholder.mat`
+
+### Labeling Thresholds
+
+Thresholds are centralized in `defaultConfig()` of `auto_landing_pipeline_matlab.m` under `cfg.thresholds`.
+
+Key conditions include:
+
+- landed state check (`/drone/state == 0`)
+- final altitude limit
+- final speed limit
+- final roll/pitch limits
+- final tag-center error limit (`/landing_tag_state` based)
+- final window stability (`std(z)`, `std(vz)`)
+- bumper contact count limit
+
+Adjust these values to tune strictness for stable/unstable labels.
+
+### Model Selection for Inference
+
+- default: latest model file in `matlab/models`
+- specific model: set `cfg.inference.model_file` to a full `.mat` path
+- runtime override without editing file:
+  - `export LANDING_MODEL_FILE=/abs/path/to/landing_model_YYYYMMDD_HHMMSS.mat`
+
+Example:
+
+```matlab
+cfg.inference.model_file = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/models/landing_model_20260309_000000.mat';
+```
+
+Output artifacts:
+
+- `matlab/data/landing_dataset_*.mat`
+- `matlab/data/landing_dataset_*.csv`
+- `matlab/data/landing_inference_*.csv`
+- `matlab/models/landing_model_*.mat`
+
 ## Practical Tuning Tips
 
 - If decision is too conservative:
@@ -215,6 +390,8 @@ ros2 topic echo /wind_condition --once
 - `cfg.wind_start_delay_after_hover_sec = 5.0`
 - `params.wind_start_require_tag_centered = true`
 - `params.wind_start_tag_center_hold_sec = 1.0`
+- `cfg.enable_rule_fallback = true`
+- `cfg.ai_confidence_min = 0.42`
 
 ## PID Direction and Visualization
 

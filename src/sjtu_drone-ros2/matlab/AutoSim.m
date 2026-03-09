@@ -166,7 +166,7 @@ function cfg = autosimDefaultConfig()
 
     cfg.scenario = struct();
     cfg.scenario.count = 30;
-    cfg.scenario.duration_sec = 25.0;
+    cfg.scenario.duration_sec = inf;
     cfg.scenario.sample_period_sec = 0.2;
     cfg.scenario.post_land_observe_sec = 3.0;
     cfg.scenario.early_stop_after_landing_sec = 1.5;
@@ -224,7 +224,7 @@ function cfg = autosimDefaultConfig()
     cfg.control.pose_hold_kp = 0.45;
     cfg.control.pose_hold_cmd_limit = 0.35;
     cfg.control.land_cmd_alt_m = 0.22;
-    cfg.control.land_forced_timeout_sec = 18.0;
+    cfg.control.land_forced_timeout_sec = inf;
 
     cfg.agent = struct();
     cfg.agent.enable_model_decision = true;
@@ -235,8 +235,13 @@ function cfg = autosimDefaultConfig()
     cfg.agent.decision_cooldown_sec = 0.8;
     cfg.agent.block_landing_if_unstable = true;
     cfg.agent.freeze_xy_if_unstable = false;
-    cfg.agent.force_guard_landing_on_timeout = false;
-    cfg.agent.enforce_inference_only = true;
+    cfg.agent.no_model_fallback_enable = true;
+    cfg.agent.no_model_min_samples_before_land = 12;
+    cfg.agent.no_model_max_tag_error = 0.45;
+    cfg.agent.no_model_max_abs_vz = 0.35;
+    cfg.agent.no_model_max_abs_roll_pitch_deg = 18.0;
+    cfg.agent.no_model_max_wind_speed = 6.5;
+    cfg.agent.no_model_require_semantic_safe = false;
 
     cfg.learning = struct();
     cfg.learning.enable = true;
@@ -258,6 +263,7 @@ function cfg = autosimDefaultConfig()
     cfg.process = struct();
     cfg.process.stop_after_each_scenario = true;
     cfg.process.kill_settle_sec = 2.0;
+    cfg.process.cleanup_verify_timeout_sec = 8.0;
 
     cfg.thresholds = struct();
     cfg.thresholds.land_state_value = 0;
@@ -428,6 +434,17 @@ end
 function info = autosimStartLaunch(cfg, scenarioCfg, scenarioId)
     autosimCleanupProcesses(cfg);
 
+    % Never start a new launch if old graph processes are still alive.
+    preSnap = autosimGetActiveProcessSnapshot();
+    if strlength(strtrim(preSnap)) > 0
+        fprintf('[AUTOSIM] Stale process snapshot before launch:\n%s\n', preSnap);
+        autosimCleanupProcesses(cfg);
+        preSnap2 = autosimGetActiveProcessSnapshot();
+        if strlength(strtrim(preSnap2)) > 0
+            error('Cleanup did not converge before launch start. Remaining processes:\n%s', preSnap2);
+        end
+    end
+
     logFile = fullfile(cfg.paths.log_dir, sprintf('autosim_launch_s%03d_%s.log', scenarioId, autosimTimestamp()));
     launchCmd = sprintf(cfg.launch.command_template, scenarioCfg.hover_height_m);
     escCmd = autosimEscapeDq(launchCmd);
@@ -472,7 +489,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     msgLand = ros2message(pubLand);
     msgCmd = ros2message(pubCmd);
 
-    sampleN = max(1, floor(cfg.scenario.duration_sec / cfg.scenario.sample_period_sec));
+    sampleN = 200;
 
     t = zeros(sampleN,1);
     xPos = nan(sampleN,1);
@@ -536,9 +553,40 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     kLast = 0;
 
     liveViz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg);
+    hasTrainedModel = ~(isfield(model, 'placeholder') && logical(model.placeholder));
 
     t0 = tic;
-    for k = 1:sampleN
+    k = 0;
+    while true
+        k = k + 1;
+        if k > sampleN
+            growN = 200;
+            t = [t; zeros(growN,1)]; %#ok<AGROW>
+            xPos = [xPos; nan(growN,1)]; %#ok<AGROW>
+            yPos = [yPos; nan(growN,1)]; %#ok<AGROW>
+            z = [z; nan(growN,1)]; %#ok<AGROW>
+            vz = [vz; nan(growN,1)]; %#ok<AGROW>
+            speedAbs = [speedAbs; nan(growN,1)]; %#ok<AGROW>
+            rollDeg = [rollDeg; nan(growN,1)]; %#ok<AGROW>
+            pitchDeg = [pitchDeg; nan(growN,1)]; %#ok<AGROW>
+            tagErr = [tagErr; nan(growN,1)]; %#ok<AGROW>
+            windSpeed = [windSpeed; nan(growN,1)]; %#ok<AGROW>
+            windCmdSpeed = [windCmdSpeed; nan(growN,1)]; %#ok<AGROW>
+            windCmdDir = [windCmdDir; nan(growN,1)]; %#ok<AGROW>
+            stateVal = [stateVal; nan(growN,1)]; %#ok<AGROW>
+            contact = [contact; zeros(growN,1)]; %#ok<AGROW>
+            predStableProb = [predStableProb; nan(growN,1)]; %#ok<AGROW>
+            decisionTxt = [decisionTxt; strings(growN,1)]; %#ok<AGROW>
+            phaseTxt = [phaseTxt; strings(growN,1)]; %#ok<AGROW>
+            semanticWindRisk = [semanticWindRisk; strings(growN,1)]; %#ok<AGROW>
+            semanticAlign = [semanticAlign; strings(growN,1)]; %#ok<AGROW>
+            semanticVisual = [semanticVisual; strings(growN,1)]; %#ok<AGROW>
+            semanticContext = [semanticContext; strings(growN,1)]; %#ok<AGROW>
+            semanticSafe = [semanticSafe; false(growN,1)]; %#ok<AGROW>
+            semFeat = [semFeat; nan(growN, numel(cfg.ontology.semantic_feature_names))]; %#ok<AGROW>
+            sampleN = sampleN + growN;
+        end
+
         tk = toc(t0);
         kLast = k;
         t(k) = tk;
@@ -846,8 +894,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             predStableProb(k) = 1.0 - predScore;
         end
 
-        modelSaysStable = isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= cfg.agent.prob_land_threshold);
-        modelSaysUnstable = cfg.agent.enable_model_decision && (~modelSaysStable);
+        modelSaysStable = hasTrainedModel && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= cfg.agent.prob_land_threshold);
+        modelSaysUnstable = hasTrainedModel && cfg.agent.enable_model_decision && (~modelSaysStable);
 
         if ~landingSent && cfg.agent.block_landing_if_unstable && modelSaysUnstable
             % Only block landing decision; keep XY correction active unless explicitly frozen.
@@ -862,11 +910,22 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             end
         end
 
-        canLandByModel = cfg.agent.enable_model_decision && ...
+        canLandByModel = hasTrainedModel && cfg.agent.enable_model_decision && ...
             (k >= cfg.agent.min_samples_before_decision) && ...
             modelSaysStable && ...
             isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.max_tag_error_before_land) && ...
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
+            ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
+
+        canLandByNoModelThreshold = (~hasTrainedModel) && cfg.agent.no_model_fallback_enable && ...
+            (k >= cfg.agent.no_model_min_samples_before_land) && ...
+            isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
+            isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
+            isfinite(vzNow) && (abs(vzNow) <= cfg.agent.no_model_max_abs_vz) && ...
+            isfinite(autosimNanLast(rollDeg(1:k))) && (abs(autosimNanLast(rollDeg(1:k))) <= cfg.agent.no_model_max_abs_roll_pitch_deg) && ...
+            isfinite(autosimNanLast(pitchDeg(1:k))) && (abs(autosimNanLast(pitchDeg(1:k))) <= cfg.agent.no_model_max_abs_roll_pitch_deg) && ...
+            isfinite(windSpNow) && (windSpNow <= cfg.agent.no_model_max_wind_speed) && ...
+            (~cfg.agent.no_model_require_semantic_safe || semanticSafe(k)) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
         guardLandingAllowed = ~cfg.agent.block_landing_if_unstable || ~modelSaysUnstable;
@@ -878,34 +937,20 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             lastDecisionT = tk;
             decisionTxt(k) = "land_by_model";
             controlPhase = "landing_observe";
-        elseif ~landingSent && ~cfg.agent.enforce_inference_only && guardLandingAllowed && landingDescentActive && isfinite(z(k)) && z(k) <= cfg.control.land_cmd_alt_m
+        elseif ~landingSent && canLandByNoModelThreshold
             send(pubLand, msgLand);
             landingSent = true;
             landingSentT = tk;
-            decisionTxt(k) = "land_by_altitude_guard";
+            lastDecisionT = tk;
+            decisionTxt(k) = "land_by_threshold_no_model";
             controlPhase = "landing_observe";
-        elseif ~landingSent && ~cfg.agent.enforce_inference_only && tk >= cfg.control.land_forced_timeout_sec && (guardLandingAllowed || cfg.agent.force_guard_landing_on_timeout)
-            landCmd = sprintf('bash -i -c "%s"', autosimEscapeDq(cfg.shell.land_cli_cmd));
-            system(landCmd);
-            landingSent = true;
-            landingSentT = tk;
-            decisionTxt(k) = "land_by_timeout_guard";
-            controlPhase = "landing_observe";
-        elseif ~landingSent && cfg.agent.enforce_inference_only && tk >= cfg.control.land_forced_timeout_sec
-            decisionTxt(k) = "wait_inference_no_land";
-        elseif ~landingSent && tk >= cfg.control.land_forced_timeout_sec && cfg.agent.block_landing_if_unstable && modelSaysUnstable
-            if cfg.agent.freeze_xy_if_unstable
-                cmdX = 0.0;
-                cmdY = 0.0;
-            end
-            decisionTxt(k) = "wait_hover_unstable";
         elseif decisionTxt(k) == ""
             decisionTxt(k) = "track";
         end
 
         phaseTxt(k) = controlPhase;
 
-        if canLandByModel
+        if canLandByModel || canLandByNoModelThreshold
             inferTxt = "LAND";
         else
             inferTxt = "NO-LAND";
@@ -949,10 +994,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         pause(cfg.scenario.sample_period_sec);
     end
 
-    if kLast <= 0
-        kLast = sampleN;
-    end
-
     t = t(1:kLast);
     xPos = xPos(1:kLast);
     yPos = yPos(1:kLast);
@@ -985,9 +1026,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     msgCmd.angular.z = 0.0;
     send(pubCmd, msgCmd);
 
-    if ~landingSent && ~cfg.agent.enforce_inference_only
-        send(pubLand, msgLand);
-        landingSentT = toc(t0);
+    if ~landingSent
+        fprintf('[AUTOSIM] s%03d ended without LAND inference, so no landing command was sent.\n', scenarioId);
     end
 
     postN = max(1, floor(cfg.scenario.post_land_observe_sec / cfg.scenario.sample_period_sec));
@@ -1703,18 +1743,58 @@ function autosimCleanupProcesses(cfg, launchPid)
         autosimKillTree(launchPid);
     end
 
-    system(['bash -i -c "set +m; ' ...
-        'pkill -9 -f \"[r]os2 launch sjtu_drone_bringup\" || true; ' ...
-        'pkill -9 -f \"[s]jtu_drone_bringup.launch.py\" || true; ' ...
-        'pkill -9 -f \"[c]omponent_container\" || true; ' ...
-        'pkill -9 -f \"[a]priltag\" || true; ' ...
-        'pkill -9 -f \"[r]obot_state_publisher\" || true; ' ...
-        'pkill -9 -f \"[j]oint_state_publisher\" || true; ' ...
-        'pkill -9 gzserver || true; ' ...
-        'pkill -9 gzclient || true; ' ...
-        'pkill -9 -x rviz2 || true" 2>/dev/null']);
+    preSnap = autosimGetActiveProcessSnapshot();
+    if strlength(strtrim(preSnap)) > 0
+        fprintf('[AUTOSIM] Cleanup pre-snapshot:\n%s\n', preSnap);
+    end
 
-    system('bash -i -c "source /opt/ros/humble/setup.bash >/dev/null 2>&1 || true; ros2 daemon stop >/dev/null 2>&1 || true; ros2 daemon start >/dev/null 2>&1 || true"');
+    for pass = 1:3
+        system(['bash -i -c "set +m; ' ...
+            'pgrep -f \"[r]os2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py\" | xargs -r kill -9 || true; ' ...
+            'pkill -9 -f \"[r]os2 launch sjtu_drone_bringup\" || true; ' ...
+            'pkill -9 -f \"[s]jtu_drone_bringup.launch.py\" || true; ' ...
+            'pkill -9 -f \"[c]omponent_container\" || true; ' ...
+            'pkill -9 -f \"[a]priltag\" || true; ' ...
+            'pkill -9 -f \"[s]tatic_transform_publisher\" || true; ' ...
+            'pkill -9 -f \"[r]obot_state_publisher\" || true; ' ...
+            'pkill -9 -f \"[j]oint_state_publisher\" || true; ' ...
+            'pkill -9 -f \"[s]pawn_drone\" || true; ' ...
+            'pkill -9 -f \"[t]eleop_joystick\" || true; ' ...
+            'pkill -9 -f \"[j]oy_node\" || true; ' ...
+            'pkill -9 -f \"[g]azebo_wind_plugin_node\" || true; ' ...
+            'pkill -9 gzserver || true; ' ...
+            'pkill -9 gzclient || true; ' ...
+            'pkill -9 -x joy_node || true; ' ...
+            'pkill -9 -x static_transform_publisher || true; ' ...
+            'pkill -9 -x robot_state_publisher || true; ' ...
+            'pkill -9 -x joint_state_publisher || true; ' ...
+            'pkill -9 -x rviz2 || true; ' ...
+            'pkill -9 -f \"[r]viz2\" || true" 2>/dev/null']);
+        pause(0.25 * pass);
+    end
+
+    autosimKillActiveProcessTrees();
+    autosimRefreshRos2Daemon();
+
+    verifyTimeout = 8.0;
+    if isfield(cfg, 'process') && isfield(cfg.process, 'cleanup_verify_timeout_sec') && isfinite(cfg.process.cleanup_verify_timeout_sec)
+        verifyTimeout = max(1.0, cfg.process.cleanup_verify_timeout_sec);
+    end
+    autosimWaitForProcessCleanup(verifyTimeout);
+
+    % Final hard pass for frequent duplicate-node offenders.
+    system(['bash -i -c "set +m; ' ...
+        'pkill -9 -x joy_node || true; ' ...
+        'pkill -9 -x static_transform_publisher || true; ' ...
+        'pkill -9 -x robot_state_publisher || true; ' ...
+        'pkill -9 -x joint_state_publisher || true; ' ...
+        'pkill -9 -x rviz2 || true" 2>/dev/null']);
+    autosimWaitForProcessCleanup(2.0);
+
+    postSnap = autosimGetActiveProcessSnapshot();
+    if strlength(strtrim(postSnap)) > 0
+        fprintf('[AUTOSIM] Cleanup post-snapshot (still alive):\n%s\n', postSnap);
+    end
 
     pause(max(0.2, cfg.process.kill_settle_sec));
 end
@@ -1726,6 +1806,62 @@ function autosimKillTree(pid)
     end
     cmd = sprintf('bash -i -c "pkill -9 -P %d >/dev/null 2>&1 || true; kill -9 %d >/dev/null 2>&1 || true"', round(pid), round(pid));
     system(cmd);
+end
+
+
+function autosimWaitForProcessCleanup(timeoutSec)
+    t0 = tic;
+    while toc(t0) <= timeoutSec
+        snap = autosimGetActiveProcessSnapshot();
+        if strlength(strtrim(snap)) == 0
+            return;
+        end
+        autosimKillActiveProcessTrees();
+        pause(0.25);
+    end
+end
+
+
+function autosimKillActiveProcessTrees()
+    pids = autosimGetActiveProcessPids();
+    if isempty(pids)
+        return;
+    end
+    for i = 1:numel(pids)
+        autosimKillTree(pids(i));
+    end
+end
+
+
+function pids = autosimGetActiveProcessPids()
+    cmd = ['bash -i -c "' ...
+        'pgrep -f \"[r]os2 launch sjtu_drone_bringup|[c]omponent_container|[a]priltag|[j]oint_state_publisher|[r]obot_state_publisher|[s]tatic_transform_publisher|[r]viz2|[j]oy_node|[g]azebo|[g]zserver|[g]zclient|[s]pawn_drone|[g]azebo_wind_plugin_node\" || true"'];
+    [~, txt] = system(cmd);
+    toks = regexp(txt, '(\d+)', 'tokens');
+    if isempty(toks)
+        pids = [];
+        return;
+    end
+
+    pids = zeros(numel(toks), 1);
+    for i = 1:numel(toks)
+        pids(i) = str2double(toks{i}{1});
+    end
+    pids = unique(pids(isfinite(pids) & pids > 1));
+end
+
+
+function out = autosimGetActiveProcessSnapshot()
+    cmd = ['bash -i -c "' ...
+        'pgrep -af \"[r]os2 launch sjtu_drone_bringup|[c]omponent_container|[a]priltag|[j]oint_state_publisher|[r]obot_state_publisher|[s]tatic_transform_publisher|[r]viz2|[j]oy_node|[g]azebo|[g]zserver|[g]zclient|[s]pawn_drone|[g]azebo_wind_plugin_node\" ' ...
+        '| sed -n \"1,120p\" || true"'];
+    [~, txt] = system(cmd);
+    out = string(txt);
+end
+
+
+function autosimRefreshRos2Daemon()
+    system('bash -i -c "source /opt/ros/humble/setup.bash >/dev/null 2>&1 || true; ros2 daemon stop >/dev/null 2>&1 || true; ros2 daemon start >/dev/null 2>&1 || true"');
 end
 
 

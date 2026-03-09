@@ -155,7 +155,7 @@ function cfg = defaultConfig()
     cfg.launch.ready_timeout_sec = 15.0;
 
     cfg.scenario = struct();
-    cfg.scenario.count = 50;
+    cfg.scenario.count = 5;
     cfg.scenario.duration_sec = 20.0;
     cfg.scenario.post_land_observe_sec = 3.0;
     cfg.scenario.early_stop_after_landing_sec = 1.5;
@@ -196,8 +196,6 @@ function cfg = defaultConfig()
     cfg.topics.land_cmd = '/drone/land';
     cfg.topics.takeoff_cmd = '/drone/takeoff';
     cfg.topics.cmd_vel = '/drone/cmd_vel';
-    cfg.topics.posctrl_cmd = '/drone/posctrl';
-    cfg.topics.dronevel_mode_cmd = '/drone/dronevel_mode';
 
     cfg.ros = struct();
     % Safety guards for MATLAB ROS2 interprocess stability.
@@ -228,15 +226,6 @@ function cfg = defaultConfig()
     cfg.control.tag_min_predict_samples = 2;
     cfg.control.tag_hold_last_state = true;
     cfg.control.tag_hold_timeout_sec = 0.6;
-    cfg.control.use_position_control_mode = true;
-    cfg.control.posctrl_enable_only_when_flying = true;
-    cfg.control.dronevel_mode_on = false;
-    cfg.control.poscmd_xy_rate_scale = 1.0;
-    cfg.control.poscmd_xy_rate_scale_landing = 0.7;
-    cfg.control.search_min_altitude_margin_m = 0.20;
-    cfg.control.landing_descent_rate_mps = 0.07;
-    cfg.control.landing_cmd_alt_min_m = 0.10;
-    cfg.control.landing_land_trigger_alt_m = 0.22;
     cfg.control.pre_takeoff_require_tag_centered = false;
     cfg.control.pre_takeoff_tag_center_tolerance = 0.005;
     cfg.control.pre_takeoff_tag_center_hold_sec = 1.0;
@@ -298,14 +287,14 @@ function cfg = defaultConfig()
 
     cfg.thresholds = struct();
     cfg.thresholds.land_state_value = 0;
-    cfg.thresholds.landed_altitude_max_m = 0.30;
-    cfg.thresholds.final_speed_max_mps = 0.40;
-    cfg.thresholds.final_attitude_max_deg = 15.0;
-    cfg.thresholds.final_tag_error_max = 0.35;
-    cfg.thresholds.final_stability_std_z_max = 0.18;
-    cfg.thresholds.final_stability_std_vz_max = 0.22;
-    cfg.thresholds.final_stability_std_vz_osc_max = 0.18;
-    cfg.thresholds.final_touchdown_accel_rms_max = 1.20;
+    cfg.thresholds.landed_altitude_max_m = 0.20;
+    cfg.thresholds.final_speed_max_mps = 0.25;
+    cfg.thresholds.final_attitude_max_deg = 12.0;
+    cfg.thresholds.final_tag_error_max = 0.22;
+    cfg.thresholds.final_stability_std_z_max = 0.10;
+    cfg.thresholds.final_stability_std_vz_max = 0.14;
+    cfg.thresholds.final_stability_std_vz_osc_max = 0.10;
+    cfg.thresholds.final_touchdown_accel_rms_max = 0.70;
     cfg.thresholds.bumpers_contact_max = 0;
 
     cfg.model = struct();
@@ -641,15 +630,11 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
     pubLand = ros2publisher(node, cfg.topics.land_cmd, 'std_msgs/Empty');
     pubTakeoff = ros2publisher(node, cfg.topics.takeoff_cmd, 'std_msgs/Empty');
     pubCmdVel = ros2publisher(node, cfg.topics.cmd_vel, 'geometry_msgs/Twist');
-    pubPosCtrl = ros2publisher(node, cfg.topics.posctrl_cmd, 'std_msgs/Bool');
-    pubVelMode = ros2publisher(node, cfg.topics.dronevel_mode_cmd, 'std_msgs/Bool');
 
     msgWind = ros2message(pubWind);
     msgLand = ros2message(pubLand);
     msgTakeoff = ros2message(pubTakeoff);
     msgCmdVel = ros2message(pubCmdVel);
-    msgPosCtrl = ros2message(pubPosCtrl);
-    msgVelMode = ros2message(pubVelMode);
 
     sampleN = max(1, floor(cfg.scenario.duration_sec / cfg.scenario.sample_period_sec));
     heartbeatSec = 2.0;
@@ -724,11 +709,6 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
     randomLandingEndT = nan;
     randomBiasX = 0.0;
     randomBiasY = 0.0;
-    landingDescentActive = false;
-    targetPoseX = nan;
-    targetPoseY = nan;
-    targetPoseZ = nan;
-    posCtrlConfigured = false;
     tagLostSearchStartT = nan;
     landedHoldStartT = nan;
 
@@ -752,11 +732,7 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
         end
 
         poseMsg = tryReceive(subPose, recvTimeout);
-        poseXNow = nan;
-        poseYNow = nan;
         if ~isempty(poseMsg)
-            poseXNow = double(poseMsg.position.x);
-            poseYNow = double(poseMsg.position.y);
             z(k) = double(poseMsg.position.z);
             q = poseMsg.orientation;
             [r, p, ~] = quat2eul_local([q.w, q.x, q.y, q.z]);
@@ -833,7 +809,6 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
 
         dtCtrl = max(1e-3, tk - lastCtrlT);
         lastCtrlT = tk;
-        searchMinAlt = scenarioCfg.hover_height_m + cfg.control.search_min_altitude_margin_m;
         cmdX = 0.0;
         cmdY = 0.0;
         cmdZ = 0.0;
@@ -848,31 +823,6 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
         end
 
         if cfg.control.enable
-            posctrlEnableCond = true;
-            if cfg.control.posctrl_enable_only_when_flying
-                posctrlEnableCond = isFlying;
-            end
-
-            if cfg.control.use_position_control_mode && ~posCtrlConfigured && posctrlEnableCond
-                msgPosCtrl.data = true;
-                send(pubPosCtrl, msgPosCtrl);
-                msgVelMode.data = logical(cfg.control.dronevel_mode_on);
-                send(pubVelMode, msgVelMode);
-                posCtrlConfigured = true;
-
-                if isfinite(poseXNow)
-                    targetPoseX = poseXNow;
-                end
-                if isfinite(poseYNow)
-                    targetPoseY = poseYNow;
-                end
-                if isfinite(z(k))
-                    targetPoseZ = max(z(k), searchMinAlt);
-                else
-                    targetPoseZ = searchMinAlt;
-                end
-            end
-
             if landingSent
                 controlPhase = "landing_observe";
                 cmdX = 0.0;
@@ -1033,8 +983,14 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
                         cmdX = clampValue(cmdX + randomBiasX, -abs(cfg.control.xy_cmd_limit), abs(cfg.control.xy_cmd_limit));
                         cmdY = clampValue(cmdY + randomBiasY, -abs(cfg.control.xy_cmd_limit), abs(cfg.control.xy_cmd_limit));
                     elseif tk >= randomLandingEndT
-                        landingDescentActive = true;
-                        fprintf('[PIPELINE] s%03d smooth landing descent started at t=%.1fs\n', scenarioId, tk);
+                        landCmd = sprintf('bash -i -c "%s"', shellEscapeDoubleQuotes(cfg.shell.land_cli_cmd));
+                        [landSt, landOut] = system(landCmd);
+                        if landSt ~= 0
+                            fprintf('[PIPELINE] s%03d land CLI failed at t=%.1fs (code=%d): %s\n', scenarioId, tk, landSt, strtrim(landOut));
+                        end
+                        landingSent = true;
+                        landingSentT = tk;
+                        fprintf('[PIPELINE] s%03d random landing command sent at t=%.1fs\n', scenarioId, tk);
                     end
                 end
             end
@@ -1066,68 +1022,14 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
                     cmdY = 0.0;
 
                     % During auto-landing, apply mild upward damping when descent is too fast.
-                    if (~cfg.control.use_position_control_mode) && cfg.control.enable_landing_vz_damping && isfinite(vz(k))
+                    if cfg.control.enable_landing_vz_damping && isfinite(vz(k))
                         vzErr = cfg.control.landing_vz_target_mps - vz(k);
                         cmdZ = clampValue(cfg.control.landing_vz_kp * vzErr, 0.0, abs(cfg.control.landing_up_cmd_limit));
                     end
                 end
-
-                usePosCtrlNow = cfg.control.use_position_control_mode && posCtrlConfigured;
-
-                if usePosCtrlNow
-                    if ~isfinite(targetPoseX) && isfinite(poseXNow)
-                        targetPoseX = poseXNow;
-                    end
-                    if ~isfinite(targetPoseY) && isfinite(poseYNow)
-                        targetPoseY = poseYNow;
-                    end
-                    if ~isfinite(targetPoseZ) && isfinite(z(k))
-                        targetPoseZ = max(z(k), searchMinAlt);
-                    end
-
-                    xyScale = cfg.control.poscmd_xy_rate_scale;
-                    if landingDescentActive
-                        xyScale = cfg.control.poscmd_xy_rate_scale_landing;
-                    end
-                    if isfinite(targetPoseX)
-                        targetPoseX = targetPoseX + cmdX * dtCtrl * xyScale;
-                    end
-                    if isfinite(targetPoseY)
-                        targetPoseY = targetPoseY + cmdY * dtCtrl * xyScale;
-                    end
-
-                    if landingDescentActive && ~landingSent
-                        if isfinite(targetPoseZ)
-                            targetPoseZ = targetPoseZ - cfg.control.landing_descent_rate_mps * dtCtrl;
-                            targetPoseZ = max(cfg.control.landing_cmd_alt_min_m, targetPoseZ);
-                        end
-
-                        if isfinite(z(k)) && (z(k) <= cfg.control.landing_land_trigger_alt_m)
-                            landCmd = sprintf('bash -i -c "%s"', shellEscapeDoubleQuotes(cfg.shell.land_cli_cmd));
-                            [landSt, landOut] = system(landCmd);
-                            if landSt ~= 0
-                                fprintf('[PIPELINE] s%03d land CLI failed at t=%.1fs (code=%d): %s\n', scenarioId, tk, landSt, strtrim(landOut));
-                            end
-                            landingSent = true;
-                            landingSentT = tk;
-                            fprintf('[PIPELINE] s%03d final land command sent at t=%.1fs (z=%.2f)\n', scenarioId, tk, z(k));
-                        end
-                    elseif ~landingSent && isfinite(targetPoseZ)
-                        % Keep enough camera standoff while searching/aliging the landing tag.
-                        targetPoseZ = max(targetPoseZ, searchMinAlt);
-                    end
-
-                    if ~isfinite(targetPoseX), targetPoseX = 0.0; end
-                    if ~isfinite(targetPoseY), targetPoseY = 0.0; end
-                    if ~isfinite(targetPoseZ), targetPoseZ = searchMinAlt; end
-                    msgCmdVel.linear.x = targetPoseX;
-                    msgCmdVel.linear.y = targetPoseY;
-                    msgCmdVel.linear.z = targetPoseZ;
-                else
-                    msgCmdVel.linear.x = cmdX;
-                    msgCmdVel.linear.y = cmdY;
-                    msgCmdVel.linear.z = cmdZ;
-                end
+                msgCmdVel.linear.x = cmdX;
+                msgCmdVel.linear.y = cmdY;
+                msgCmdVel.linear.z = cmdZ;
                 msgCmdVel.angular.x = 0.0;
                 msgCmdVel.angular.y = 0.0;
                 msgCmdVel.angular.z = 0.0;
@@ -1255,11 +1157,6 @@ function result = runSingleScenario(cfg, scenarioCfg, scenarioId)
         end
 
         pause(cfg.scenario.sample_period_sec);
-    end
-
-    if cfg.control.use_position_control_mode
-        msgPosCtrl.data = false;
-        send(pubPosCtrl, msgPosCtrl);
     end
 
     result = summarizeAndLabelScenario(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, bumperContact);

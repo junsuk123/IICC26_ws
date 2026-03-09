@@ -1847,3 +1847,8 @@
 [gzserver-2] [INFO] [1773068107.985541763] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.96 wind_direction=16.8
 [gzserver-2] [INFO] [1773068108.696885619] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.84 wind_direction=17.8
 [gzserver-2] [INFO] [1773068109.407208654] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.84 wind_direction=17.8
+[gzserver-2] [INFO] [1773068110.124613450] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.96 wind_direction=17.7
+[gzserver-2] [INFO] [1773068110.829546684] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.82 wind_direction=22.0
+[gzserver-2] [INFO] [1773068111.549317350] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.82 wind_direction=22.0
+[gzserver-2] [INFO] [1773068112.262514310] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.89 wind_direction=20.9
+[gzserver-2] [INFO] [1773068112.971348976] [gazebo_wind_plugin_node]: WindPlugin: set wind_speed=0.61 wind_direction=21.1

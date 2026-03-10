@@ -239,6 +239,8 @@ function cfg = autosimDefaultConfig()
 
     cfg.agent = struct();
     cfg.agent.enable_model_decision = true;
+    cfg.agent.semantic_only_mode = true;
+    cfg.agent.semantic_land_threshold = 0.70;
     cfg.agent.prob_land_threshold = 0.50;
     cfg.agent.min_samples_before_decision = 8;
     cfg.agent.min_hover_eval_sec = 3.0;
@@ -326,8 +328,6 @@ function cfg = autosimDefaultConfig()
     cfg.ontology.tag_stability_score_warn = 0.65;
     cfg.ontology.tag_min_samples = 5;
     cfg.ontology.wind_condition_window_sec = 1.0;
-    cfg.ontology.wind_turbulence_window_sec = 2.0;
-    cfg.ontology.wind_shear_window_sec = 1.2;
     cfg.ontology.gust_base_window_sec = 6.0;
     cfg.ontology.gust_burst_window_sec = 0.8;
     cfg.ontology.wind_caution_speed = 0.55 * cfg.wind.speed_max;
@@ -341,6 +341,28 @@ function cfg = autosimDefaultConfig()
         "tag_u", "tag_v", "jitter", "stability_score", ...
         "wind_risk_enc", "alignment_enc", "visual_enc", "context_enc" ...
     ];
+
+    % Ontology-AI fusion: ontology concepts are preserved, but concept scores are
+    % co-estimated by a lightweight AI branch and fused with rule-based scores.
+    cfg.ontology_ai = struct();
+    cfg.ontology_ai.enable = true;
+    cfg.ontology_ai.rule_weight = 0.60; % fused = rule_weight*rule + (1-rule_weight)*ai
+
+    % wind_risk AI branch weights (features defined in autosimOntologyReasoning)
+    cfg.ontology_ai.wind_w = [1.20, 1.35, 0.45, 0.20, -0.15, 0.35, -0.30];
+    cfg.ontology_ai.wind_b = -1.05;
+
+    % alignment AI branch weights
+    cfg.ontology_ai.align_w = [-1.45, -0.95, 1.00, 0.35, -0.30, -0.20];
+    cfg.ontology_ai.align_b = 0.10;
+
+    % visual AI branch weights
+    cfg.ontology_ai.visual_w = [1.30, -1.10, 1.00, 0.90, -0.25];
+    cfg.ontology_ai.visual_b = -0.15;
+
+    % context AI branch weights
+    cfg.ontology_ai.context_w = [-1.30, 1.05, 0.95, 0.70, -1.10];
+    cfg.ontology_ai.context_b = 0.40;
 
     cfg.topics = struct();
     cfg.topics.state = '/drone/state';
@@ -603,8 +625,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     windSpeedHistCount = 0;
     windDirHist = nan(histN, 1);
     windDirHistCount = 0;
-    attCorrHist = nan(histN, 1);
-    attCorrHistCount = 0;
     tagDetHist = nan(histN, 1);
     tagDetHistCount = 0;
 
@@ -801,8 +821,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         [windSpeedHist, windSpeedHistCount] = autosimPushScalarHist(windSpeedHist, windSpeedHistCount, windSpNow);
         [windDirHist, windDirHistCount] = autosimPushScalarHist(windDirHist, windDirHistCount, windDirNow);
-        attNowDeg = max(abs(rad2deg(rollNowRad)), abs(rad2deg(pitchNowRad)));
-        [attCorrHist, attCorrHistCount] = autosimPushScalarHist(attCorrHist, attCorrHistCount, attNowDeg);
         [tagDetHist, tagDetHistCount] = autosimPushScalarHist(tagDetHist, tagDetHistCount, double(tagDetected));
 
         detWin = max(5, round(2.0 / cfg.scenario.sample_period_sec));
@@ -818,8 +836,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             'position', [xNow; yNow; zNow], ...
             'roll', rollNowRad, ...
             'pitch', pitchNowRad, ...
-            'velocity', [0.0; 0.0; vzNow], ...
-            'attitude_corr_hist', attCorrHist(1:attCorrHistCount));
+            'velocity', [0.0; 0.0; vzNow]);
         tagObs = struct( ...
             'detected', tagDetected, ...
             'u_norm', uTag, ...
@@ -1037,15 +1054,27 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         if isfield(model, 'feature_names') && ~isempty(model.feature_names)
             featureSchema = model.feature_names;
         end
-        [predLabel, predScore] = autosimPredictModel(model, feat, featureSchema);
-        if predLabel == "stable"
-            predStableProb(k) = predScore;
+        semanticOnlyMode = isfield(cfg.agent, 'semantic_only_mode') && cfg.agent.semantic_only_mode;
+        if semanticOnlyMode
+            predStableProb(k) = autosimClampNaN(semantic.context_enc, 0.0);
+            if predStableProb(k) >= autosimClampNaN(cfg.agent.semantic_land_threshold, 0.70)
+                predLabel = "stable";
+            else
+                predLabel = "unstable";
+            end
+            predScore = predStableProb(k);
         else
-            predStableProb(k) = 1.0 - predScore;
+            [predLabel, predScore] = autosimPredictModel(model, feat, featureSchema);
+            if predLabel == "stable"
+                predStableProb(k) = predScore;
+            else
+                predStableProb(k) = 1.0 - predScore;
+            end
         end
 
-        modelSaysStable = hasTrainedModel && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= cfg.agent.prob_land_threshold);
-        modelSaysUnstable = hasTrainedModel && cfg.agent.enable_model_decision && (~modelSaysStable);
+        modelGateEnabled = (~semanticOnlyMode) && cfg.agent.enable_model_decision;
+        modelSaysStable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= cfg.agent.prob_land_threshold);
+        modelSaysUnstable = hasTrainedModel && modelGateEnabled && (~modelSaysStable);
 
         if ~landingSent && cfg.agent.block_landing_if_unstable && modelSaysUnstable
             % Only block landing decision; keep XY correction active unless explicitly frozen.
@@ -1062,11 +1091,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         hoverEvalReady = isFlying && (controlPhase == "xy_hold") && isfinite(hoverStartT) && ...
             ((tk - hoverStartT) >= cfg.agent.min_hover_eval_sec);
 
-        canLandByModel = hoverEvalReady && hasTrainedModel && cfg.agent.enable_model_decision && ...
+        canLandByModel = hoverEvalReady && hasTrainedModel && modelGateEnabled && ...
             (k >= cfg.agent.min_samples_before_decision) && ...
             modelSaysStable && ...
             isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.max_tag_error_before_land) && ...
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
+            ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
+
+        canLandBySemantic = hoverEvalReady && semanticOnlyMode && ...
+            isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.max_tag_error_before_land) && ...
+            isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
+            isfinite(semantic.context_enc) && (semantic.context_enc >= cfg.agent.semantic_land_threshold) && ...
+            logical(semanticSafe(k)) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
         evalWinN = max(5, round(cfg.agent.no_model_eval_window_sec / cfg.scenario.sample_period_sec));
@@ -1077,7 +1113,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         [xyStd, xySpeedRms] = autosimCalcXYMotionMetrics(xWin, yWin, cfg.scenario.sample_period_sec);
         xyRadiusNow = sqrt(xNow*xNow + yNow*yNow);
 
-        canLandByNoModelThreshold = hoverEvalReady && (~hasTrainedModel) && cfg.agent.no_model_fallback_enable && ...
+        canLandByNoModelThreshold = hoverEvalReady && (~semanticOnlyMode) && (~hasTrainedModel) && cfg.agent.no_model_fallback_enable && ...
             (k >= cfg.agent.no_model_min_samples_before_land) && ...
             isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
@@ -1098,11 +1134,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             (cfg.control.land_forced_timeout_sec > 0) && ...
             ((tk - hoverStartT) >= cfg.control.land_forced_timeout_sec) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec) && ...
-            (~hasTrainedModel || ~cfg.agent.enable_model_decision || modelSaysStable);
+            (~modelGateEnabled || ~hasTrainedModel || modelSaysStable);
 
         guardLandingAllowed = ~cfg.agent.block_landing_if_unstable || ~modelSaysUnstable;
 
-        if ~landingSent && guardLandingAllowed && canLandByModel
+        if ~landingSent && guardLandingAllowed && canLandBySemantic
+            send(pubLand, msgLand);
+            landingSent = true;
+            landingSentT = tk;
+            lastDecisionT = tk;
+            decisionTxt(k) = "land_by_ontology_ai";
+            controlPhase = "landing_observe";
+        elseif ~landingSent && guardLandingAllowed && canLandByModel
             send(pubLand, msgLand);
             landingSent = true;
             landingSentT = tk;
@@ -1131,7 +1174,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         phaseTxt(k) = controlPhase;
 
-        if canLandByModel || canLandByNoModelThreshold || canLandByForcedTimeout
+        if landingSent || canLandBySemantic || canLandByModel || canLandByNoModelThreshold || canLandByForcedTimeout
             inferTxt = "LAND";
         else
             inferTxt = "NO-LAND";
@@ -1317,9 +1360,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         decisionTxt(end+1,1) = "post_observe"; %#ok<AGROW>
         t(end+1,1) = toc(t0); %#ok<AGROW>
 
+        inferPost = "NO-LAND";
+        if landingSent
+            inferPost = "LAND";
+        end
+        predPost = autosimNanLast(predStableProb);
+        if ~isfinite(predPost)
+            predPost = nan;
+        end
+
         autosimUpdateScenarioRealtimePlot(liveViz, autosimNanLast(xPos), autosimNanLast(yPos), ...
             autosimNanLast(windSpeed), autosimNanLast(windCmdDir), t(end), "post_observe", autosimNanLast(z), ...
-            "NO-LAND", nan, "post_observe");
+            inferPost, predPost, "post_observe");
 
         pause(cfg.scenario.sample_period_sec);
     end
@@ -1968,6 +2020,7 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     perfCsv = fullfile(cfg.paths.data_dir, sprintf('autosim_performance_%s_%s.csv', ts, tag));
     confHistCsv = fullfile(cfg.paths.data_dir, sprintf('autosim_confidence_hist_%s_%s.csv', ts, tag));
     perfPng = fullfile(cfg.paths.plot_dir, sprintf('autosim_performance_%s_%s.png', ts, tag));
+    gtPredPng = fullfile(cfg.paths.plot_dir, sprintf('autosim_gt_vs_pred_%s_%s.png', ts, tag));
 
     save(datasetMat, 'results', 'summaryTbl', 'traceStore', 'learningHistory', 'model', 'runStatus');
     writetable(summaryTbl, datasetCsv);
@@ -1993,6 +2046,12 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
         warning('[AUTOSIM] Performance report save failed: %s', ME.message);
     end
 
+    try
+        autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, gtPredPng);
+    catch ME
+        warning('[AUTOSIM] GT-vs-pred plot failed: %s', ME.message);
+    end
+
     valid = false(height(summaryTbl), 1);
     if ismember('label', summaryTbl.Properties.VariableNames)
         valid = (summaryTbl.label == "stable") | (summaryTbl.label == "unstable");
@@ -2011,6 +2070,7 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     fprintf('[AUTOSIM] Saved plot:    %s\n', plotPng);
     fprintf('[AUTOSIM] Saved perf:    %s\n', perfCsv);
     fprintf('[AUTOSIM] Saved perfpng: %s\n', perfPng);
+    fprintf('[AUTOSIM] Saved gtpred:  %s\n', gtPredPng);
 
     finalInfo = struct();
     finalInfo.hasValidLabel = (nValid > 0);
@@ -2435,20 +2495,6 @@ function m = autosimCircularMeanDeg(thetaDeg)
     c = mean(cosd(th));
     s = mean(sind(th));
     m = autosimWrapTo180(rad2deg(atan2(s, c)));
-end
-
-
-function v = autosimCircularVarianceDeg(thetaDeg)
-    th = thetaDeg(isfinite(thetaDeg));
-    if numel(th) < 2
-        v = 0.0;
-        return;
-    end
-
-    c = mean(cosd(th));
-    s = mean(sind(th));
-    R = sqrt(c*c + s*s);
-    v = autosimClamp(1.0 - R, 0.0, 1.0);
 end
 
 
@@ -2951,39 +2997,6 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
         windDirRep = autosimClampNaN(windObs.wind_direction, 0.0);
     end
 
-    turbN = max(4, round(cfg.ontology.wind_turbulence_window_sec / dt));
-    wsT = autosimTail(wsHist, turbN);
-    wdT = autosimTail(wdHist, turbN);
-    sigmaV = autosimNanStd(wsT);
-    dirVar = autosimCircularVarianceDeg(wdT);
-    dvdt = diff(wsT) / dt;
-    dvdtRms = sqrt(mean((dvdt(isfinite(dvdt))).^2, 'omitnan'));
-    turbScore = autosimClamp( ...
-        0.45 * autosimNormalize01(sigmaV, 0.0, 1.2) + ...
-        0.25 * autosimClampNaN(dirVar, 0.0) + ...
-        0.30 * autosimNormalize01(dvdtRms, 0.0, 2.0), 0.0, 1.0);
-    turbLevel = autosimRiskLevel3(turbScore);
-
-    shearN = max(4, round(cfg.ontology.wind_shear_window_sec / dt));
-    wsS = autosimTail(wsHist, shearN);
-    wdS = autosimTail(wdHist, shearN);
-    ux = wsS .* cosd(wdS);
-    uy = wsS .* sind(wdS);
-    dUx = diff(ux);
-    dUy = diff(uy);
-    vecGrad = sqrt(dUx.^2 + dUy.^2) / dt;
-    shearRate = autosimNanMean(vecGrad);
-
-    attHist = droneObs.attitude_corr_hist(:);
-    attS = autosimTail(attHist, shearN);
-    dAtt = diff(attS) / dt;
-    attCorrRate = sqrt(mean((dAtt(isfinite(dAtt))).^2, 'omitnan'));
-
-    shearScore = autosimClamp( ...
-        0.65 * autosimNormalize01(shearRate, 0.0, 2.0) + ...
-        0.35 * autosimNormalize01(attCorrRate, 0.0, 25.0), 0.0, 1.0);
-    shearLevel = autosimRiskLevel3(shearScore);
-
     baseN = max(8, round(cfg.ontology.gust_base_window_sec / dt));
     burstN = max(3, round(cfg.ontology.gust_burst_window_sec / dt));
     wsBase = autosimTail(wsHist, baseN);
@@ -3012,19 +3025,6 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
     onto.entities.WindCondition = struct( ...
         'wind_speed', windSpeedRep, ...
         'wind_direction', windDirRep);
-
-    onto.entities.WindTurbulence = struct( ...
-        'sigma_speed', sigmaV, ...
-        'dir_variance', dirVar, ...
-        'dvdt_rms', dvdtRms, ...
-        'score', turbScore, ...
-        'level', turbLevel);
-
-    onto.entities.WindShear = struct( ...
-        'vector_grad', shearRate, ...
-        'att_corr_rate', attCorrRate, ...
-        'score', shearScore, ...
-        'level', shearLevel);
 
     onto.entities.Gust = struct( ...
         'active', gustActive, ...
@@ -3061,17 +3061,14 @@ end
 
 function semantic = autosimOntologyReasoning(onto, cfg)
     w = onto.entities.WindCondition;
-    wt = onto.entities.WindTurbulence;
-    ws = onto.entities.WindShear;
     g = onto.entities.Gust;
     d = onto.entities.DroneState;
     t = onto.entities.TagObservation;
     c = onto.entities.LandingContext;
 
     condScore = autosimNormalize01(w.wind_speed, c.wind_speed_caution, c.wind_speed_unsafe);
-    windRiskEnc = autosimClamp( ...
-        0.35 * condScore + 0.25 * wt.score + 0.20 * ws.score + 0.20 * g.intensity, 0.0, 1.0);
-    windRisk = autosimRiskLevel3(windRiskEnc);
+    windRiskRuleEnc = autosimClamp( ...
+        0.65 * condScore + 0.35 * g.intensity, 0.0, 1.0);
 
     if t.detected && isfinite(t.u_norm) && isfinite(t.v_norm)
         errNow = sqrt((t.u_norm - cfg.control.target_u)^2 + (t.v_norm - cfg.control.target_v)^2);
@@ -3081,42 +3078,101 @@ function semantic = autosimOntologyReasoning(onto, cfg)
             errPred = errNow;
         end
         detCont = autosimClampNaN(t.detection_continuity, 0.0);
-        alignEnc = autosimClamp(1.0 - ( ...
+        alignRuleEnc = autosimClamp(1.0 - ( ...
             0.55 * autosimNormalize01(errNow, 0.0, cfg.agent.max_tag_error_before_land) + ...
             0.25 * autosimNormalize01(errPred, 0.0, cfg.agent.max_tag_error_before_land) + ...
             0.20 * (1.0 - detCont)), 0.0, 1.0);
     else
-        alignEnc = 0.0;
-    end
-    if alignEnc >= 0.70
-        alignState = 'aligned';
-    else
-        alignState = 'misaligned';
+        errNow = nan;
+        errPred = nan;
+        alignRuleEnc = 0.0;
     end
 
     jitterN = autosimNormalize01(t.jitter_px, 0.0, cfg.ontology.tag_jitter_unsafe_px);
     stabScore = autosimClampNaN(t.stability_score, 0.0);
     detCont = autosimClampNaN(t.detection_continuity, 0.0);
-    visualEnc = autosimClamp( ...
+    visualRuleEnc = autosimClamp( ...
         0.35 * double(t.detected) + 0.25 * (1.0 - jitterN) + 0.25 * stabScore + 0.15 * detCont, 0.0, 1.0);
     if ~t.detected
-        visualEnc = 0.6 * visualEnc;
+        visualRuleEnc = 0.6 * visualRuleEnc;
+    end
+
+    attStab = 1.0 - autosimNormalize01(d.abs_attitude, 0.0, deg2rad(cfg.thresholds.final_attitude_max_deg));
+    riskCtx = ...
+        0.40 * windRiskRuleEnc + ...
+        0.20 * (1.0 - alignRuleEnc) + ...
+        0.20 * (1.0 - visualRuleEnc) + ...
+        0.20 * (1.0 - attStab) + ...
+        0.40 * double(c.obstacle_presence);
+    contextRuleEnc = autosimClamp(1.0 - riskCtx, 0.0, 1.0);
+
+    windRiskEnc = windRiskRuleEnc;
+    alignEnc = alignRuleEnc;
+    visualEnc = visualRuleEnc;
+    contextEnc = contextRuleEnc;
+
+    if isfield(cfg, 'ontology_ai') && isfield(cfg.ontology_ai, 'enable') && cfg.ontology_ai.enable
+        aiFeatWind = [ ...
+            condScore, ...
+            autosimClampNaN(g.intensity, 0.0), ...
+            autosimNormalize01(d.abs_attitude, 0.0, deg2rad(cfg.thresholds.final_attitude_max_deg)), ...
+            double(t.detected), ...
+            detCont, ...
+            jitterN, ...
+            1.0 - stabScore ...
+        ];
+        windRiskAiEnc = autosimLinearSigmoid(aiFeatWind, cfg.ontology_ai.wind_w, cfg.ontology_ai.wind_b, 0.5);
+
+        aiFeatAlign = [ ...
+            autosimNormalize01(errNow, 0.0, cfg.agent.max_tag_error_before_land), ...
+            autosimNormalize01(errPred, 0.0, cfg.agent.max_tag_error_before_land), ...
+            detCont, ...
+            double(t.detected), ...
+            1.0 - jitterN, ...
+            stabScore ...
+        ];
+        alignAiEnc = autosimLinearSigmoid(aiFeatAlign, cfg.ontology_ai.align_w, cfg.ontology_ai.align_b, 0.0);
+
+        aiFeatVisual = [ ...
+            double(t.detected), ...
+            jitterN, ...
+            stabScore, ...
+            detCont, ...
+            autosimClampNaN(g.intensity, 0.0) ...
+        ];
+        visualAiEnc = autosimLinearSigmoid(aiFeatVisual, cfg.ontology_ai.visual_w, cfg.ontology_ai.visual_b, 0.0);
+
+        aiFeatContext = [ ...
+            windRiskAiEnc, ...
+            alignAiEnc, ...
+            visualAiEnc, ...
+            attStab, ...
+            1.0 - double(c.obstacle_presence) ...
+        ];
+        contextAiEnc = autosimLinearSigmoid(aiFeatContext, cfg.ontology_ai.context_w, cfg.ontology_ai.context_b, 0.5);
+
+        rw = autosimClampNaN(cfg.ontology_ai.rule_weight, 0.60);
+        rw = autosimClamp(rw, 0.0, 1.0);
+        aw = 1.0 - rw;
+
+        windRiskEnc = autosimClamp(rw * windRiskRuleEnc + aw * windRiskAiEnc, 0.0, 1.0);
+        alignEnc = autosimClamp(rw * alignRuleEnc + aw * alignAiEnc, 0.0, 1.0);
+        visualEnc = autosimClamp(rw * visualRuleEnc + aw * visualAiEnc, 0.0, 1.0);
+        contextEnc = autosimClamp(rw * contextRuleEnc + aw * contextAiEnc, 0.0, 1.0);
+    end
+
+    windRisk = autosimRiskLevel3(windRiskEnc);
+
+    if alignEnc >= 0.70
+        alignState = 'aligned';
+    else
+        alignState = 'misaligned';
     end
     if visualEnc >= cfg.ontology.tag_stability_score_warn
         visualState = 'stable';
     else
         visualState = 'unstable';
     end
-
-    attStab = 1.0 - autosimNormalize01(d.abs_attitude, 0.0, deg2rad(cfg.thresholds.final_attitude_max_deg));
-    riskCtx = ...
-        0.40 * windRiskEnc + ...
-        0.20 * (1.0 - alignEnc) + ...
-        0.20 * (1.0 - visualEnc) + ...
-        0.20 * (1.0 - attStab) + ...
-        0.40 * double(c.obstacle_presence);
-    contextEnc = autosimClamp(1.0 - riskCtx, 0.0, 1.0);
-
     if contextEnc >= 0.70
         contextState = 'safe';
     elseif contextEnc >= 0.40
@@ -3135,6 +3191,7 @@ function semantic = autosimOntologyReasoning(onto, cfg)
     semantic.alignment_enc = alignEnc;
     semantic.visual_enc = visualEnc;
     semantic.context_enc = contextEnc;
+
 end
 
 
@@ -3232,6 +3289,115 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
 end
 
 
+function autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, outPngPath)
+    if isempty(summaryTbl) || ~ismember('scenario_id', summaryTbl.Properties.VariableNames)
+        return;
+    end
+
+    n = height(summaryTbl);
+    sid = summaryTbl.scenario_id;
+
+    gtSuccess = false(n, 1);
+    if ismember('success', summaryTbl.Properties.VariableNames)
+        gtSuccess = logical(summaryTbl.success);
+    elseif ismember('label', summaryTbl.Properties.VariableNames)
+        gtSuccess = (summaryTbl.label == "stable");
+    end
+
+    predThr = autosimClampNaN(cfg.agent.prob_land_threshold, 0.50);
+    if isfield(cfg.agent, 'semantic_only_mode') && cfg.agent.semantic_only_mode
+        predThr = autosimClampNaN(cfg.agent.semantic_land_threshold, predThr);
+    end
+
+    predSuccess = false(n, 1);
+    predKnown = false(n, 1);
+    meanPredProb = nan(n, 1);
+
+    if ~isempty(traceStore) && ...
+            ismember('scenario_id', traceStore.Properties.VariableNames) && ...
+            ismember('pred_stable_prob', traceStore.Properties.VariableNames)
+        for i = 1:n
+            pv = traceStore.pred_stable_prob(traceStore.scenario_id == sid(i));
+            pv = pv(isfinite(pv));
+            if ~isempty(pv)
+                pLast = pv(end);
+                predSuccess(i) = (pLast >= predThr);
+                predKnown(i) = true;
+                meanPredProb(i) = mean(pv);
+            end
+        end
+    end
+
+    valid = predKnown;
+    TP = sum(predSuccess(valid) & gtSuccess(valid));
+    FP = sum(predSuccess(valid) & ~gtSuccess(valid));
+    FN = sum(~predSuccess(valid) & gtSuccess(valid));
+    TN = sum(~predSuccess(valid) & ~gtSuccess(valid));
+    nValid = TP + FP + FN + TN;
+
+    acc = nan;
+    precision = nan;
+    recall = nan;
+    f1 = nan;
+    if nValid > 0
+        acc = (TP + TN) / nValid;
+    end
+    if (TP + FP) > 0
+        precision = TP / (TP + FP);
+    end
+    if (TP + FN) > 0
+        recall = TP / (TP + FN);
+    end
+    if isfinite(precision) && isfinite(recall) && (precision + recall) > 0
+        f1 = 2 * precision * recall / (precision + recall);
+    end
+
+    fig = figure('Name', 'AutoSim GT vs Prediction', 'NumberTitle', 'off');
+    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    ax1 = nexttile(tl, 1);
+    stem(ax1, sid, double(gtSuccess), 'Color', [0.10 0.60 0.10], 'Marker', 'o', 'LineWidth', 1.0);
+    hold(ax1, 'on');
+    if any(predKnown)
+        stem(ax1, sid(predKnown), double(predSuccess(predKnown)), 'Color', [0.85 0.33 0.10], 'Marker', 'x', 'LineWidth', 1.0);
+    end
+    ylim(ax1, [-0.1 1.1]);
+    yticks(ax1, [0 1]);
+    yticklabels(ax1, {'fail/unstable', 'success/stable'});
+    xlabel(ax1, 'scenario');
+    ylabel(ax1, 'class');
+    title(ax1, 'GT Landing Outcome vs Predicted Outcome');
+    legend(ax1, {'GT', 'Prediction'}, 'Location', 'southoutside', 'Orientation', 'horizontal');
+    grid(ax1, 'on');
+
+    ax2 = nexttile(tl, 2);
+    cm = [TP FP; FN TN];
+    imagesc(ax2, cm);
+    axis(ax2, 'equal');
+    axis(ax2, 'tight');
+    colormap(ax2, parula(128));
+    colorbar(ax2);
+    xticks(ax2, [1 2]);
+    yticks(ax2, [1 2]);
+    xticklabels(ax2, {'GT=Success', 'GT=Fail'});
+    yticklabels(ax2, {'Pred=Success', 'Pred=Fail'});
+    title(ax2, sprintf('Confusion Matrix | Acc=%.3f Prec=%.3f Rec=%.3f F1=%.3f', acc, precision, recall, f1));
+    for rr = 1:2
+        for cc = 1:2
+            text(ax2, cc, rr, sprintf('%d', cm(rr, cc)), 'HorizontalAlignment', 'center', 'Color', 'w', 'FontWeight', 'bold');
+        end
+    end
+
+    if isfinite(mean(meanPredProb, 'omitnan'))
+        subtitle(tl, sprintf('valid scenarios=%d/%d | threshold=%.2f | mean pred prob=%.3f', nValid, n, predThr, mean(meanPredProb, 'omitnan')));
+    else
+        subtitle(tl, sprintf('valid scenarios=%d/%d | threshold=%.2f', nValid, n, predThr));
+    end
+
+    exportgraphics(fig, outPngPath, 'Resolution', 150);
+end
+
+
 function p = autosimPercentile(x, q)
     x = sort(double(x(:)));
     x = x(isfinite(x));
@@ -3309,6 +3475,29 @@ function v = autosimSemGet(semVec, semNames, key, fallback)
     else
         v = double(semVec(idx));
     end
+end
+
+
+function y = autosimLinearSigmoid(x, w, b, fallback)
+    xv = double(x(:));
+    wv = double(w(:));
+    if nargin < 4
+        fallback = 0.5;
+    end
+
+    if isempty(xv) || isempty(wv) || numel(xv) ~= numel(wv)
+        y = autosimClampNaN(fallback, 0.5);
+        return;
+    end
+
+    if any(~isfinite(xv)) || any(~isfinite(wv)) || ~isfinite(b)
+        y = autosimClampNaN(fallback, 0.5);
+        return;
+    end
+
+    z = sum(xv .* wv) + double(b);
+    y = 1.0 / (1.0 + exp(-z));
+    y = autosimClamp(y, 0.0, 1.0);
 end
 
 

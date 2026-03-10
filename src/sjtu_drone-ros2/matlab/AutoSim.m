@@ -166,7 +166,7 @@ function cfg = autosimDefaultConfig()
     cfg.launch.ready_timeout_sec = 15.0;
 
     cfg.scenario = struct();
-    cfg.scenario.count = 50;
+    cfg.scenario.count = 300;
     cfg.scenario.duration_sec = inf;
     cfg.scenario.sample_period_sec = 0.2;
     cfg.scenario.post_land_observe_sec = 3.0;
@@ -2047,7 +2047,7 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     end
 
     try
-        autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, gtPredPng);
+        autosimPlotGtVsPrediction(summaryTbl, model, cfg, gtPredPng);
     catch ME
         warning('[AUTOSIM] GT-vs-pred plot failed: %s', ME.message);
     end
@@ -3289,7 +3289,7 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
 end
 
 
-function autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, outPngPath)
+function autosimPlotGtVsPrediction(summaryTbl, model, cfg, outPngPath)
     if isempty(summaryTbl) || ~ismember('scenario_id', summaryTbl.Properties.VariableNames)
         return;
     end
@@ -3305,26 +3305,40 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, outPngPath)
     end
 
     predThr = autosimClampNaN(cfg.agent.prob_land_threshold, 0.50);
-    if isfield(cfg.agent, 'semantic_only_mode') && cfg.agent.semantic_only_mode
-        predThr = autosimClampNaN(cfg.agent.semantic_land_threshold, predThr);
-    end
 
     predSuccess = false(n, 1);
     predKnown = false(n, 1);
     meanPredProb = nan(n, 1);
 
-    if ~isempty(traceStore) && ...
-            ismember('scenario_id', traceStore.Properties.VariableNames) && ...
-            ismember('pred_stable_prob', traceStore.Properties.VariableNames)
+    hasUsableModel = autosimIsModelReliable(model, cfg);
+    featureSchema = cfg.model.feature_names;
+    if isfield(model, 'feature_names') && ~isempty(model.feature_names)
+        featureSchema = model.feature_names;
+    end
+
+    if hasUsableModel
+        featNames = cellstr(featureSchema);
         for i = 1:n
-            pv = traceStore.pred_stable_prob(traceStore.scenario_id == sid(i));
-            pv = pv(isfinite(pv));
-            if ~isempty(pv)
-                pLast = pv(end);
-                predSuccess(i) = (pLast >= predThr);
-                predKnown(i) = true;
-                meanPredProb(i) = mean(pv);
+            X = zeros(1, numel(featNames));
+            for j = 1:numel(featNames)
+                fn = featNames{j};
+                if ismember(fn, summaryTbl.Properties.VariableNames)
+                    X(j) = autosimToNumeric(summaryTbl{i, fn});
+                else
+                    X(j) = 0.0;
+                end
             end
+
+            [lbl, score] = autosimPredictGaussianNB(model, X);
+            pStable = score(1);
+            if lbl(1) ~= "stable"
+                pStable = 1.0 - score(1);
+            end
+
+            pStable = autosimClampNaN(pStable, 0.0);
+            predSuccess(i) = (pStable >= predThr);
+            predKnown(i) = true;
+            meanPredProb(i) = pStable;
         end
     end
 
@@ -3366,8 +3380,8 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, outPngPath)
     yticklabels(ax1, {'fail/unstable', 'success/stable'});
     xlabel(ax1, 'scenario');
     ylabel(ax1, 'class');
-    title(ax1, 'GT Landing Outcome vs Predicted Outcome');
-    legend(ax1, {'GT', 'Prediction'}, 'Location', 'southoutside', 'Orientation', 'horizontal');
+    title(ax1, 'GT Landing Outcome vs Model Predicted Outcome');
+    legend(ax1, {'GT', 'Model Prediction'}, 'Location', 'southoutside', 'Orientation', 'horizontal');
     grid(ax1, 'on');
 
     ax2 = nexttile(tl, 2);
@@ -3388,10 +3402,12 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, cfg, outPngPath)
         end
     end
 
-    if isfinite(mean(meanPredProb, 'omitnan'))
-        subtitle(tl, sprintf('valid scenarios=%d/%d | threshold=%.2f | mean pred prob=%.3f', nValid, n, predThr, mean(meanPredProb, 'omitnan')));
+    if ~hasUsableModel
+        subtitle(tl, 'model unavailable or unreliable for evaluation');
+    elseif isfinite(mean(meanPredProb, 'omitnan'))
+        subtitle(tl, sprintf('model-based eval | valid scenarios=%d/%d | threshold=%.2f | mean p(stable)=%.3f', nValid, n, predThr, mean(meanPredProb, 'omitnan')));
     else
-        subtitle(tl, sprintf('valid scenarios=%d/%d | threshold=%.2f', nValid, n, predThr));
+        subtitle(tl, sprintf('model-based eval | valid scenarios=%d/%d | threshold=%.2f', nValid, n, predThr));
     end
 
     exportgraphics(fig, outPngPath, 'Resolution', 150);

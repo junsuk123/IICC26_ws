@@ -2804,7 +2804,7 @@ function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
         clf(fig);
     end
     set(fig, 'CloseRequestFcn', @(src, evt) autosimHandleStopFigureClose(src, sprintf("scenario_plot_closed_s%03d", scenarioId)));
-    autosimPlaceFigureRight(fig, [0.28, 0.14], [0.67, 0.80]);
+    autosimMaximizeFigure(fig);
 
     tl = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -2860,13 +2860,13 @@ function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
     title(axFlow, sprintf('Scenario %03d Ontology Flow (hover=%.2fm, cmd wind=%.2f@%.1fdeg)', ...
         scenarioId, scenarioCfg.hover_height_m, scenarioCfg.wind_speed, scenarioCfg.wind_dir), 'FontSize', 10, 'Interpreter', 'none');
 
-    text(axFlow, 0.13, 0.93, 'Sensors', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.18 0.36 0.64], 'Interpreter', 'none');
-    text(axFlow, 0.47, 0.93, 'Meaning', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.20 0.55 0.30], 'Interpreter', 'none');
-    text(axFlow, 0.86, 0.93, 'Result', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.66 0.44 0.14], 'Interpreter', 'none');
+    text(axFlow, 0.13, 0.965, 'Sensors', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.18 0.36 0.64], 'Interpreter', 'none');
+    text(axFlow, 0.47, 0.965, 'Meaning', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.20 0.55 0.30], 'Interpreter', 'none');
+    text(axFlow, 0.86, 0.965, 'Result', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.66 0.44 0.14], 'Interpreter', 'none');
 
-    summaryBox = rectangle(axFlow, 'Position', [0.30 0.84 0.40 0.08], 'Curvature', 0.08, ...
+    summaryBox = rectangle(axFlow, 'Position', [0.30 0.855 0.40 0.06], 'Curvature', 0.08, ...
         'FaceColor', [0.93 0.94 0.96], 'EdgeColor', [0.45 0.48 0.55], 'LineWidth', 1.4);
-    summaryText = text(axFlow, 0.50, 0.88, 'Decision Pending', 'HorizontalAlignment', 'center', ...
+    summaryText = text(axFlow, 0.50, 0.885, 'Decision Pending', 'HorizontalAlignment', 'center', ...
         'VerticalAlignment', 'middle', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.15 0.15 0.18], ...
         'Interpreter', 'none');
 
@@ -4785,6 +4785,19 @@ function autosimPlaceFigureRight(fig, sizeFracWH, centerFracXY)
 
         set(fig, 'Units', 'pixels', 'Position', [x, y, w, h]);
     catch
+    end
+end
+
+
+function autosimMaximizeFigure(fig)
+    try
+        set(fig, 'WindowState', 'maximized');
+    catch
+        try
+            scr = get(0, 'ScreenSize');
+            set(fig, 'Units', 'pixels', 'Position', scr);
+        catch
+        end
     end
 end
 

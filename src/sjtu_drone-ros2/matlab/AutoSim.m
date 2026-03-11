@@ -861,7 +861,7 @@ end
 
 function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model)
     node = ros2node(sprintf('/matlab_autosim_s%03d', scenarioId));
-    nodeCleanup = onCleanup(@() autosimClearNode(node)); %#ok<NASGU>
+    rosCleanup = []; %#ok<NASGU>
 
     subState = ros2subscriber(node, cfg.topics.state, 'std_msgs/Int8');
     subPose = ros2subscriber(node, cfg.topics.pose, 'geometry_msgs/Pose');
@@ -894,6 +894,11 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     msgTakeoff = ros2message(pubTakeoff);
     msgLand = ros2message(pubLand);
     msgCmd = ros2message(pubCmd);
+
+    rosHandles = {msgCmd, msgLand, msgTakeoff, msgWind, ...
+        pubCmd, pubLand, pubTakeoff, pubWind, ...
+        subBumpers, subImu, subWind, subTag, subVel, subPose, subState, node};
+    rosCleanup = onCleanup(@() autosimCleanupRosHandles(rosHandles)); %#ok<NASGU>
 
     sampleN = 200;
 
@@ -959,6 +964,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     controlPhase = "pre_takeoff_stabilize";
     phaseEnterT = 0.0;
     hoverStartT = nan;
+    decisionEvalStartT = nan;
     hoverCenterHoldStartT = nan;
     preTakeoffCenterHoldStartT = nan;
     windArmed = false;
@@ -1258,6 +1264,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         controlPhase = "hover_settle";
                         phaseEnterT = tk;
                         hoverStartT = tk;
+                        decisionEvalStartT = nan;
                         hoverCenterHoldStartT = nan;
                         pidX = autosimPidInit();
                         pidY = autosimPidInit();
@@ -1267,9 +1274,11 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     if ~isFlying
                         controlPhase = "takeoff";
                         phaseEnterT = tk;
+                        decisionEvalStartT = nan;
                     elseif (tk - phaseEnterT) >= cfg.control.hover_settle_sec
                         controlPhase = "xy_hold";
                         phaseEnterT = tk;
+                        decisionEvalStartT = tk;
                     end
 
                 case 'xy_hold'
@@ -1277,6 +1286,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         controlPhase = "takeoff";
                         phaseEnterT = tk;
                         hoverStartT = nan;
+                        decisionEvalStartT = nan;
                         hoverCenterHoldStartT = nan;
                         pidX = autosimPidInit();
                         pidY = autosimPidInit();
@@ -1395,8 +1405,17 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         if isfield(model, 'feature_names') && ~isempty(model.feature_names)
             featureSchema = model.feature_names;
         end
-        semanticOnlyMode = isfield(cfg.agent, 'semantic_only_mode') && cfg.agent.semantic_only_mode;
-        if semanticOnlyMode
+        requestedSemanticOnlyMode = isfield(cfg.agent, 'semantic_only_mode') && cfg.agent.semantic_only_mode;
+        modelGateEnabled = cfg.agent.enable_model_decision && hasTrainedModel;
+        semanticOnlyMode = requestedSemanticOnlyMode && ~modelGateEnabled;
+        if modelGateEnabled
+            [predLabel, predScore] = autosimPredictModel(model, feat, featureSchema);
+            if predLabel == "stable"
+                predStableProb(k) = predScore;
+            else
+                predStableProb(k) = 1.0 - predScore;
+            end
+        else
             predStableProb(k) = autosimClampNaN(semantic.landing_feasibility, 0.0);
             if predStableProb(k) >= autosimClampNaN(cfg.agent.semantic_land_threshold, 0.70)
                 predLabel = "stable";
@@ -1404,13 +1423,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 predLabel = "unstable";
             end
             predScore = predStableProb(k);
-        else
-            [predLabel, predScore] = autosimPredictModel(model, feat, featureSchema);
-            if predLabel == "stable"
-                predStableProb(k) = predScore;
-            else
-                predStableProb(k) = 1.0 - predScore;
-            end
         end
 
         probeBoost = 0.0;
@@ -1420,7 +1432,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         adaptiveProbLandThreshold = autosimClamp(cfg.agent.prob_land_threshold - probeBoost, 0.05, 0.99);
         adaptiveSemanticLandThreshold = autosimClamp(cfg.agent.semantic_land_threshold - probeBoost, 0.05, 0.99);
 
-        modelGateEnabled = (~semanticOnlyMode) && cfg.agent.enable_model_decision;
         modelSaysStable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= adaptiveProbLandThreshold);
         modelSaysUnstable = hasTrainedModel && modelGateEnabled && (~modelSaysStable);
 
@@ -1436,8 +1447,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             end
         end
 
-        hoverEvalReady = isFlying && (controlPhase == "xy_hold") && isfinite(hoverStartT) && ...
-            ((tk - hoverStartT) >= cfg.agent.min_hover_eval_sec);
+        hoverEvalReady = isFlying && (controlPhase == "xy_hold") && isfinite(decisionEvalStartT) && ...
+            ((tk - decisionEvalStartT) >= cfg.agent.min_hover_eval_sec);
 
         canLandByModel = hoverEvalReady && hasTrainedModel && modelGateEnabled && ...
             (k >= cfg.agent.min_samples_before_decision) && ...
@@ -1461,7 +1472,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         [xyStd, xySpeedRms] = autosimCalcXYMotionMetrics(xWin, yWin, cfg.scenario.sample_period_sec);
         xyRadiusNow = sqrt(xNow*xNow + yNow*yNow);
 
-        canLandByNoModelThreshold = hoverEvalReady && (~semanticOnlyMode) && (~hasTrainedModel) && cfg.agent.no_model_fallback_enable && ...
+        canLandByNoModelThreshold = hoverEvalReady && (~modelGateEnabled) && (~semanticOnlyMode) && cfg.agent.no_model_fallback_enable && ...
             (k >= cfg.agent.no_model_min_samples_before_land) && ...
             isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
@@ -1477,12 +1488,11 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             (~cfg.agent.no_model_require_semantic_safe || semanticSafe(k)) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
-        canLandByForcedTimeout = hoverEvalReady && ~landingSent && isfinite(hoverStartT) && ...
+        canLandByForcedTimeout = isFlying && (controlPhase == "xy_hold") && ~landingSent && isfinite(decisionEvalStartT) && ...
             isfield(cfg.control, 'land_forced_timeout_sec') && isfinite(cfg.control.land_forced_timeout_sec) && ...
             (cfg.control.land_forced_timeout_sec > 0) && ...
-            ((tk - hoverStartT) >= cfg.control.land_forced_timeout_sec) && ...
-            ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec) && ...
-            (~modelGateEnabled || ~hasTrainedModel || modelSaysStable);
+            ((tk - decisionEvalStartT) >= cfg.control.land_forced_timeout_sec) && ...
+            ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
         guardLandingAllowed = ~cfg.agent.block_landing_if_unstable || ~modelSaysUnstable;
 
@@ -1513,7 +1523,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             lastDecisionT = tk;
             decisionTxt(k) = "land_by_threshold_no_model";
             controlPhase = "landing_observe";
-        elseif ~landingSent && guardLandingAllowed && canLandByForcedTimeout
+        elseif ~landingSent && canLandByForcedTimeout
             send(pubLand, msgLand);
             landingSent = true;
             landingSentT = tk;
@@ -1746,6 +1756,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         pause(cfg.scenario.sample_period_sec);
     end
+
+    autosimCleanupRosHandles(rosHandles);
+    clear rosCleanup;
 
     res = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
         imuAngVel, imuLinAcc, contactForce, armForceFL, armForceFR, armForceRL, armForceRR);
@@ -4464,9 +4477,37 @@ function x = autosimRandRange(a, b)
 end
 
 
+function autosimCleanupRosHandles(handles)
+    if nargin < 1 || isempty(handles)
+        return;
+    end
+
+    if ~iscell(handles)
+        handles = {handles};
+    end
+
+    for i = 1:numel(handles)
+        obj = handles{i};
+        if isempty(obj)
+            continue;
+        end
+
+        try
+            if isobject(obj)
+                delete(obj);
+            end
+        catch
+        end
+
+        handles{i} = [];
+        pause(0.01);
+    end
+end
+
+
 function autosimClearNode(node)
     try
-        clear node;
+        autosimCleanupRosHandles({node});
     catch
     end
 end

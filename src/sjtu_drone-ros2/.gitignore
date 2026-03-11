@@ -1,3 +1,5 @@
 plugins/
 bin/
 __pycache__/
+matlab/data/**
+matlab/logs/**

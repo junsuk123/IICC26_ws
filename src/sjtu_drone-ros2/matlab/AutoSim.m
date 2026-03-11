@@ -19,6 +19,8 @@ if ~isempty(thisDir)
     addpath(thisDir);
 end
 
+autosimClearStopRequest();
+
 cfg = autosimDefaultConfig();
 autosimEnsureDirectories(cfg);
 lockCleanup = autosimAcquireLock(cfg); %#ok<NASGU>
@@ -40,6 +42,12 @@ try
     fprintf('[AUTOSIM] Initial model source: %s\n', modelInfo.source);
 
     for scenarioId = 1:cfg.scenario.count
+        if autosimIsStopRequested()
+            runStatus = "interrupted";
+            fprintf('[AUTOSIM] Stop requested before scenario start: %s\n', autosimGetStopReason());
+            break;
+        end
+
         fprintf('\n[AUTOSIM] Scenario %d/%d\n', scenarioId, cfg.scenario.count);
 
         datasetState = autosimAnalyzeDatasetState(results, traceStore, learningHistory);
@@ -98,6 +106,11 @@ try
             pause(cfg.process.kill_settle_sec);
         end
 
+        if autosimIsStopRequested()
+            runStatus = "interrupted";
+            fprintf('[AUTOSIM] Stop requested after scenario %d: %s\n', scenarioId, autosimGetStopReason());
+        end
+
         if runStatus == "interrupted"
             fprintf('[AUTOSIM] User interrupt detected. Stop after %d scenario(s).\n', numel(results));
             break;
@@ -126,6 +139,8 @@ end
 
 fprintf('[AUTOSIM] Completed at %s (status=%s)\n\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'), runStatus);
 
+autosimClearStopRequest();
+
 if ~isempty(runError)
     rethrow(runError);
 end
@@ -146,11 +161,15 @@ function cfg = autosimDefaultConfig()
     cfg.paths = struct();
     cfg.paths.ws = '/home/j/INCSL/IICC26_ws';
     cfg.paths.root = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab';
-    cfg.paths.data_dir = fullfile(cfg.paths.root, 'data');
+    cfg.paths.run_id = datestr(now, 'yyyymmdd_HHMMSS');
+    cfg.paths.data_root = fullfile(cfg.paths.root, 'data');
+    cfg.paths.log_root = fullfile(cfg.paths.root, 'logs');
+    cfg.paths.plot_root = fullfile(cfg.paths.root, 'plots');
+    cfg.paths.data_dir = fullfile(cfg.paths.data_root, cfg.paths.run_id);
     cfg.paths.model_dir = fullfile(cfg.paths.root, 'models');
-    cfg.paths.plot_dir = fullfile(cfg.paths.root, 'plots');
-    cfg.paths.log_dir = fullfile(cfg.paths.root, 'logs');
-    cfg.paths.lock_file = fullfile(cfg.paths.data_dir, 'autosim.lock');
+    cfg.paths.plot_dir = fullfile(cfg.paths.plot_root, cfg.paths.run_id);
+    cfg.paths.log_dir = fullfile(cfg.paths.log_root, cfg.paths.run_id);
+    cfg.paths.lock_file = fullfile(cfg.paths.data_root, 'autosim.lock');
     cfg.paths.bringup_py_src = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_bringup';
     cfg.paths.bringup_py_install = '/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/python3.10/site-packages';
     cfg.paths.control_py_src = '/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_control';
@@ -209,7 +228,7 @@ function cfg = autosimDefaultConfig()
     cfg.wind.model_dir_osc_amp_deg = 10.0;
     cfg.wind.model_dir_osc_freq_hz = 0.09;
     cfg.wind.source = "kma_csv"; % "kma_csv" | "random"
-    cfg.wind.kma_csv = fullfile(cfg.paths.data_dir, 'OBS_ASOS_MI_20260309231031.csv');
+    cfg.wind.kma_csv = fullfile(cfg.paths.data_root, 'OBS_ASOS_MI_20260309231031.csv');
     cfg.wind.kma_time_column = 'time';
     cfg.wind.kma_speed_column = 'wind_speed';
     cfg.wind.kma_direction_column = 'wind_dir';
@@ -452,7 +471,7 @@ end
 
 
 function autosimEnsureDirectories(cfg)
-    dirs = {cfg.paths.data_dir, cfg.paths.model_dir, cfg.paths.plot_dir, cfg.paths.log_dir};
+    dirs = {cfg.paths.data_root, cfg.paths.log_root, cfg.paths.plot_root, cfg.paths.data_dir, cfg.paths.model_dir, cfg.paths.plot_dir, cfg.paths.log_dir};
     for i = 1:numel(dirs)
         if ~exist(dirs{i}, 'dir')
             mkdir(dirs{i});
@@ -962,10 +981,19 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
     liveViz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg);
     hasTrainedModel = autosimIsModelReliable(model, cfg);
+    stopRequested = false;
+    stopReason = "";
 
     t0 = tic;
     k = 0;
     while true
+        if autosimIsStopRequested()
+            stopRequested = true;
+            stopReason = autosimGetStopReason();
+            fprintf('[AUTOSIM] Scenario %03d stop requested: %s\n', scenarioId, stopReason);
+            break;
+        end
+
         k = k + 1;
         if k > sampleN
             growN = 200;
@@ -1595,7 +1623,17 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     end
 
     postN = max(1, floor(cfg.scenario.post_land_observe_sec / cfg.scenario.sample_period_sec));
+    if stopRequested
+        postN = 0;
+    end
     for m = 1:postN
+        if autosimIsStopRequested()
+            stopRequested = true;
+            stopReason = autosimGetStopReason();
+            fprintf('[AUTOSIM] Scenario %03d stop requested during post-observe: %s\n', scenarioId, stopReason);
+            break;
+        end
+
         poseMsg = autosimTryReceive(subPose, 0.01);
         if ~isempty(poseMsg)
             xPos(end+1,1) = double(poseMsg.position.x); %#ok<AGROW>
@@ -1728,6 +1766,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     res.landing_feasibility = autosimLastFinite(landingFeasibility, nan);
     if isfield(scenarioCfg, 'policy_mode')
         res.scenario_policy = string(scenarioCfg.policy_mode);
+    end
+    if stopRequested
+        res.exception_message = string(stopReason);
     end
 
     n = numel(t);
@@ -2530,6 +2571,7 @@ end
 function plotState = autosimInitPlots()
     plotState = struct();
     plotState.fig = figure('Name', 'AutoSim Decision Progress', 'NumberTitle', 'off');
+    set(plotState.fig, 'CloseRequestFcn', @(src, evt) autosimHandleStopFigureClose(src, "progress_plot_closed"));
     autosimPlaceFigureRight(plotState.fig, [0.36, 0.46], [0.52, 0.51]);
     tl = tiledlayout(plotState.fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
@@ -2596,6 +2638,7 @@ function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
         figure(fig);
         clf(fig);
     end
+    set(fig, 'CloseRequestFcn', @(src, evt) autosimHandleStopFigureClose(src, sprintf("scenario_plot_closed_s%03d", scenarioId)));
     autosimPlaceFigureRight(fig, [0.42, 0.56], [0.55, 0.44]);
 
     ax = axes(fig);
@@ -3804,7 +3847,6 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
     grid(ax2, 'on');
 
     exportgraphics(fig, perfPngPath, 'Resolution', 150);
-    close(fig);
 end
 
 
@@ -4425,6 +4467,61 @@ end
 function autosimClearNode(node)
     try
         clear node;
+    catch
+    end
+end
+
+
+function autosimClearStopRequest()
+    try
+        setappdata(0, 'AutoSimStopRequested', false);
+        setappdata(0, 'AutoSimStopReason', "");
+    catch
+    end
+end
+
+
+function autosimRequestStop(reason)
+    if nargin < 1 || strlength(string(reason)) == 0
+        reason = "user_stop_requested";
+    end
+
+    try
+        setappdata(0, 'AutoSimStopRequested', true);
+        setappdata(0, 'AutoSimStopReason', string(reason));
+    catch
+    end
+end
+
+
+function tf = autosimIsStopRequested()
+    tf = false;
+    try
+        if isappdata(0, 'AutoSimStopRequested')
+            tf = logical(getappdata(0, 'AutoSimStopRequested'));
+        end
+    catch
+        tf = false;
+    end
+end
+
+
+function reason = autosimGetStopReason()
+    reason = "";
+    try
+        if isappdata(0, 'AutoSimStopReason')
+            reason = string(getappdata(0, 'AutoSimStopReason'));
+        end
+    catch
+        reason = "";
+    end
+end
+
+
+function autosimHandleStopFigureClose(src, reason)
+    autosimRequestStop(reason);
+    try
+        delete(src);
     catch
     end
 end

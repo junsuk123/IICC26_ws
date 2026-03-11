@@ -990,7 +990,12 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     landedHoldStartT = nan;
     kLast = 0;
 
-    liveViz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg);
+    try
+        liveViz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg);
+    catch ME
+        liveViz = struct();
+        warning('[AUTOSIM] Realtime ontology plot disabled: %s', ME.message);
+    end
     hasTrainedModel = autosimIsModelReliable(model, cfg);
     stopRequested = false;
     stopReason = "";
@@ -1590,8 +1595,34 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             inferTxt = "NO-LAND";
         end
 
-        autosimUpdateScenarioRealtimePlot(liveViz, xNow, yNow, windSpNow, windDirNow, tk, controlPhase, zNow, ...
-            inferTxt, predStableProb(k), decisionTxt(k));
+        vizState = struct();
+        vizState.tSec = tk;
+        vizState.phase = string(controlPhase);
+        vizState.inferTxt = string(inferTxt);
+        vizState.predStableProb = predStableProb(k);
+        vizState.predLabel = string(predLabel);
+        vizState.decisionTxt = string(decisionTxt(k));
+        vizState.landingFeasibility = semantic.landing_feasibility;
+        vizState.modelSaysStable = logical(modelSaysStable);
+        vizState.modelSaysUnstable = logical(modelSaysUnstable);
+        vizState.modelIsUncertain = logical(modelIsUncertain);
+        vizState.semantic = semantic;
+        vizState.semVec = semVec;
+        vizState.sensors = struct( ...
+            'windSpeed', windSpNow, ...
+            'windDirDeg', windDirNow, ...
+            'rollDeg', autosimNanLast(rollDeg(1:k)), ...
+            'pitchDeg', autosimNanLast(pitchDeg(1:k)), ...
+            'altitude', zNow, ...
+            'vz', vzNow, ...
+            'tagErr', autosimNanLast(tagErr(1:k)), ...
+            'tagU', uTag, ...
+            'tagV', vTag, ...
+            'tagDetected', logical(tagDetected), ...
+            'tagJitterPx', tagJitterPx, ...
+            'tagStabilityScore', tagStabilityScore, ...
+            'detectionContinuity', detCont);
+        autosimUpdateScenarioRealtimePlot(liveViz, vizState);
 
         if landingSent
             cmdX = 0.0;
@@ -1794,9 +1825,44 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             predPost = nan;
         end
 
-        autosimUpdateScenarioRealtimePlot(liveViz, autosimNanLast(xPos), autosimNanLast(yPos), ...
-            autosimNanLast(windSpeed), autosimNanLast(windCmdDir), t(end), "post_observe", autosimNanLast(z), ...
-            inferPost, predPost, "post_observe");
+        vizState = struct();
+        vizState.tSec = t(end);
+        vizState.phase = "post_observe";
+        vizState.inferTxt = string(inferPost);
+        vizState.predStableProb = predPost;
+        vizState.predLabel = "unknown";
+        vizState.decisionTxt = "post_observe";
+        vizState.landingFeasibility = autosimLastFinite(landingFeasibility, nan);
+        vizState.modelSaysStable = false;
+        vizState.modelSaysUnstable = false;
+        vizState.modelIsUncertain = false;
+        vizState.semantic = struct( ...
+            'wind_risk', autosimLastNonEmptyString(semanticWindRisk, "unknown"), ...
+            'environment_state', autosimLastNonEmptyString(semanticEnvironment, "unknown"), ...
+            'drone_state', autosimLastNonEmptyString(semanticDroneState, "unknown"), ...
+            'alignment_state', autosimLastNonEmptyString(semanticAlign, "unknown"), ...
+            'visual_state', autosimLastNonEmptyString(semanticVisual, "unknown"), ...
+            'landing_context', autosimLastNonEmptyString(semanticContext, "unknown"), ...
+            'semantic_relation', autosimLastNonEmptyString(semanticRelation, "unknown"), ...
+            'semantic_integration', autosimLastNonEmptyString(semanticIntegration, "unknown"), ...
+            'landing_feasibility', autosimLastFinite(landingFeasibility, nan), ...
+            'isSafeForLanding', logical(autosimLastFinite(double(semanticSafe), 0) > 0.5));
+        vizState.semVec = nan(1, numel(cfg.ontology.semantic_feature_names));
+        vizState.sensors = struct( ...
+            'windSpeed', autosimNanLast(windSpeed), ...
+            'windDirDeg', autosimNanLast(windCmdDir), ...
+            'rollDeg', autosimNanLast(rollDeg), ...
+            'pitchDeg', autosimNanLast(pitchDeg), ...
+            'altitude', autosimNanLast(z), ...
+            'vz', autosimNanLast(vz), ...
+            'tagErr', autosimNanLast(tagErr), ...
+            'tagU', nan, ...
+            'tagV', nan, ...
+            'tagDetected', isfinite(autosimNanLast(tagErr)), ...
+            'tagJitterPx', nan, ...
+            'tagStabilityScore', nan, ...
+            'detectionContinuity', nan);
+        autosimUpdateScenarioRealtimePlot(liveViz, vizState);
 
         pause(cfg.scenario.sample_period_sec);
     end
@@ -2729,7 +2795,7 @@ end
 
 
 function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
-    figName = 'AutoSim Live XY + Wind';
+    figName = 'AutoSim Ontology Live View';
     fig = findobj('Type', 'figure', 'Name', figName);
     if isempty(fig) || ~isgraphics(fig)
         fig = figure('Name', figName, 'NumberTitle', 'off');
@@ -2738,96 +2804,434 @@ function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
         clf(fig);
     end
     set(fig, 'CloseRequestFcn', @(src, evt) autosimHandleStopFigureClose(src, sprintf("scenario_plot_closed_s%03d", scenarioId)));
-    autosimPlaceFigureRight(fig, [0.42, 0.56], [0.55, 0.44]);
+    autosimPlaceFigureRight(fig, [0.28, 0.14], [0.67, 0.80]);
 
-    ax = axes(fig);
-    set(ax, 'FontSize', 9);
-    hold(ax, 'on');
-    grid(ax, 'on');
-    axis(ax, 'equal');
+    tl = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-    halfW = max(0.5, cfg.ontology.landing_area_size(1) / 2.0);
-    halfH = max(0.5, cfg.ontology.landing_area_size(2) / 2.0);
-    margin = 2.0;
-    xlim(ax, [-halfW - margin, halfW + margin]);
-    ylim(ax, [-halfH - margin, halfH + margin]);
+    axSensor = nexttile(tl, 1);
+    sensorBar = bar(axSensor, zeros(8,1), 0.65, 'FaceColor', [0.16 0.46 0.74]);
+    ylim(axSensor, [0 1]);
+    xticks(axSensor, 1:8);
+    xticklabels(axSensor, {'wind','roll','pitch','altitude','vz','tag err','jitter','tag stable'});
+    ylabel(axSensor, 'normalized');
+    title(axSensor, 'Sensor Snapshot', 'Interpreter', 'none');
+    grid(axSensor, 'on');
+    sensorLabels = gobjects(8,1);
+    for i = 1:8
+        sensorLabels(i) = text(axSensor, i, 0.03, '', 'HorizontalAlignment', 'center', ...
+            'VerticalAlignment', 'bottom', 'Rotation', 90, 'FontSize', 7, 'Color', [0.15 0.15 0.15], ...
+            'Interpreter', 'none');
+    end
 
-    rectangle(ax, 'Position', [-halfW, -halfH, 2*halfW, 2*halfH], ...
-        'EdgeColor', [0.10 0.55 0.20], 'LineWidth', 1.6, 'LineStyle', '--');
-    plot(ax, 0.0, 0.0, 'p', 'Color', [0.10 0.55 0.20], 'MarkerSize', 10, 'LineWidth', 1.1);
+    axConcept = nexttile(tl, 2);
+    conceptBar = bar(axConcept, zeros(5,1), 0.65, 'FaceColor', [0.20 0.62 0.38]);
+    ylim(axConcept, [0 1]);
+    xticks(axConcept, 1:5);
+    xticklabels(axConcept, {'wind risk','alignment','visual','context','feasibility'});
+    ylabel(axConcept, 'score');
+    title(axConcept, 'Ontology Meaning', 'Interpreter', 'none');
+    grid(axConcept, 'on');
+    conceptLabels = gobjects(5,1);
+    for i = 1:5
+        conceptLabels(i) = text(axConcept, i, 0.03, '', 'HorizontalAlignment', 'center', ...
+            'VerticalAlignment', 'bottom', 'Rotation', 90, 'FontSize', 7, 'Color', [0.15 0.15 0.15], ...
+            'Interpreter', 'none');
+    end
 
-    vizTrail = animatedline(ax, 'Color', [0.10 0.35 0.90], 'LineWidth', 1.1);
-    vizDrone = plot(ax, nan, nan, 'o', 'MarkerSize', 7, 'MarkerFaceColor', [0.95 0.25 0.20], ...
-        'MarkerEdgeColor', [0.40 0.05 0.05]);
-    vizWind = quiver(ax, nan, nan, 0.0, 0.0, 0.0, 'Color', [0.95 0.60 0.10], ...
-        'LineWidth', 1.8, 'MaxHeadSize', 1.8);
+    axTrend = nexttile(tl, 3);
+    hold(axTrend, 'on');
+    trendProb = animatedline(axTrend, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.5);
+    trendFeas = animatedline(axTrend, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.5);
+    trendCtx = animatedline(axTrend, 'Color', [0.30 0.30 0.30], 'LineWidth', 1.2, 'LineStyle', '--');
+    yline(axTrend, cfg.agent.prob_land_threshold, ':', 'Color', [0.00 0.45 0.74]);
+    yline(axTrend, cfg.agent.semantic_land_threshold, ':', 'Color', [0.85 0.33 0.10]);
+    ylim(axTrend, [0 1]);
+    xlabel(axTrend, 't [s]');
+    ylabel(axTrend, 'score');
+    title(axTrend, 'Decision Trend', 'Interpreter', 'none');
+    legend(axTrend, {'p stable','feasibility','context'}, 'Location', 'best', 'FontSize', 8);
+    grid(axTrend, 'on');
 
-    title(ax, sprintf('Scenario %03d Live View (hover=%.2fm, cmd wind=%.2f@%.1fdeg)', ...
-        scenarioId, scenarioCfg.hover_height_m, scenarioCfg.wind_speed, scenarioCfg.wind_dir), 'FontSize', 10);
-    xlabel(ax, 'x [m]', 'FontSize', 9);
-    ylabel(ax, 'y [m]', 'FontSize', 9);
-    legend(ax, {'Landing pad center', 'Drone trail', 'Drone', 'Wind vector'}, ...
-        'Location', 'northoutside', 'Orientation', 'horizontal', 'FontSize', 8);
+    axFlow = nexttile(tl, 4);
+    hold(axFlow, 'on');
+    axis(axFlow, [0 1 0 1]);
+    axis(axFlow, 'off');
+    set(axFlow, 'XLim', [0 1], 'YLim', [0 1], 'XLimMode', 'manual', 'YLimMode', 'manual');
+    title(axFlow, sprintf('Scenario %03d Ontology Flow (hover=%.2fm, cmd wind=%.2f@%.1fdeg)', ...
+        scenarioId, scenarioCfg.hover_height_m, scenarioCfg.wind_speed, scenarioCfg.wind_dir), 'FontSize', 10, 'Interpreter', 'none');
 
-    vizInfo = text(ax, 0.02, 0.98, '', 'Units', 'normalized', 'VerticalAlignment', 'top', ...
-        'FontName', 'Courier New', 'FontSize', 8, 'Color', [0.15 0.15 0.15]);
+    text(axFlow, 0.13, 0.93, 'Sensors', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.18 0.36 0.64], 'Interpreter', 'none');
+    text(axFlow, 0.47, 0.93, 'Meaning', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.20 0.55 0.30], 'Interpreter', 'none');
+    text(axFlow, 0.86, 0.93, 'Result', 'HorizontalAlignment', 'center', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.66 0.44 0.14], 'Interpreter', 'none');
+
+    summaryBox = rectangle(axFlow, 'Position', [0.30 0.84 0.40 0.08], 'Curvature', 0.08, ...
+        'FaceColor', [0.93 0.94 0.96], 'EdgeColor', [0.45 0.48 0.55], 'LineWidth', 1.4);
+    summaryText = text(axFlow, 0.50, 0.88, 'Decision Pending', 'HorizontalAlignment', 'center', ...
+        'VerticalAlignment', 'middle', 'FontWeight', 'bold', 'FontSize', 9, 'Color', [0.15 0.15 0.18], ...
+        'Interpreter', 'none');
+
+    sensorPos = [0.13 0.76; 0.13 0.60; 0.13 0.44; 0.13 0.28];
+    conceptPos = [0.47 0.76; 0.47 0.60; 0.47 0.44; 0.47 0.28];
+    resultPos = [0.86 0.68; 0.86 0.50; 0.86 0.32];
+    sensorRectPos = [0.03 0.70 0.20 0.11; 0.03 0.54 0.20 0.11; 0.03 0.38 0.20 0.11; 0.03 0.22 0.20 0.11];
+    conceptRectPos = [0.37 0.70 0.20 0.11; 0.37 0.54 0.20 0.11; 0.37 0.38 0.20 0.11; 0.37 0.22 0.20 0.11];
+    resultRectPos = [0.74 0.61 0.24 0.12; 0.74 0.43 0.24 0.12; 0.74 0.25 0.24 0.12];
+
+    sensorNodes = gobjects(4,1);
+    conceptNodes = gobjects(4,1);
+    resultNodes = gobjects(3,1);
+    sensorRects = gobjects(4,1);
+    conceptRects = gobjects(4,1);
+    resultRects = gobjects(3,1);
+    for i = 1:4
+        sensorRects(i) = rectangle(axFlow, 'Position', sensorRectPos(i,:), 'Curvature', 0.05, ...
+            'FaceColor', [0.88 0.92 0.98], 'EdgeColor', [0.30 0.45 0.65], 'LineWidth', 1.2);
+        sensorNodes(i) = text(axFlow, sensorPos(i,1), sensorPos(i,2), '', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+            'FontSize', 8, 'FontWeight', 'bold', 'Color', [0.12 0.18 0.28], 'Interpreter', 'none');
+        conceptRects(i) = rectangle(axFlow, 'Position', conceptRectPos(i,:), 'Curvature', 0.05, ...
+            'FaceColor', [0.89 0.96 0.90], 'EdgeColor', [0.28 0.55 0.35], 'LineWidth', 1.2);
+        conceptNodes(i) = text(axFlow, conceptPos(i,1), conceptPos(i,2), '', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+            'FontSize', 8, 'FontWeight', 'bold', 'Color', [0.10 0.24 0.12], 'Interpreter', 'none');
+    end
+    for i = 1:3
+        resultRects(i) = rectangle(axFlow, 'Position', resultRectPos(i,:), 'Curvature', 0.05, ...
+            'FaceColor', [0.97 0.93 0.85], 'EdgeColor', [0.70 0.50 0.18], 'LineWidth', 1.2);
+        resultNodes(i) = text(axFlow, resultPos(i,1), resultPos(i,2), '', ...
+            'Units', 'normalized', 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+            'FontSize', 7.5, 'FontWeight', 'bold', 'Color', [0.28 0.20 0.08], 'Interpreter', 'none');
+    end
+
+    sensorToConcept = [1 1; 1 4; 2 2; 2 4; 3 2; 3 3; 3 4; 4 4];
+    conceptToResult = [1 1; 2 1; 3 1; 4 1; 2 2; 3 2; 4 2; 1 3; 4 3];
+    arrowSensor = gobjects(size(sensorToConcept,1), 1);
+    arrowConcept = gobjects(size(conceptToResult,1), 1);
+    for i = 1:size(sensorToConcept,1)
+        src = sensorPos(sensorToConcept(i,1), :);
+        dst = conceptPos(sensorToConcept(i,2), :);
+        arrowSensor(i) = quiver(axFlow, src(1)+0.08, src(2), dst(1)-src(1)-0.16, dst(2)-src(2), 0, ...
+            'Color', [0.72 0.72 0.72], 'LineWidth', 1.1, 'MaxHeadSize', 0.35);
+    end
+    for i = 1:size(conceptToResult,1)
+        src = conceptPos(conceptToResult(i,1), :);
+        dst = resultPos(conceptToResult(i,2), :);
+        arrowConcept(i) = quiver(axFlow, src(1)+0.09, src(2), dst(1)-src(1)-0.18, dst(2)-src(2), 0, ...
+            'Color', [0.75 0.75 0.75], 'LineWidth', 1.1, 'MaxHeadSize', 0.35);
+    end
+
+    flowText = text(axFlow, 0.03, 0.05, '', 'Units', 'normalized', 'VerticalAlignment', 'bottom', ...
+        'FontName', 'Courier New', 'FontSize', 8, 'FontWeight', 'bold', 'Color', [0.16 0.16 0.18], ...
+        'Interpreter', 'none');
 
     viz = struct();
     viz.fig = fig;
-    viz.ax = ax;
-    viz.trail = vizTrail;
-    viz.drone = vizDrone;
-    viz.wind = vizWind;
-    viz.info = vizInfo;
+    viz.cfg = cfg;
+    viz.axSensor = axSensor;
+    viz.sensorBar = sensorBar;
+    viz.sensorLabels = sensorLabels;
+    viz.axConcept = axConcept;
+    viz.conceptBar = conceptBar;
+    viz.conceptLabels = conceptLabels;
+    viz.axTrend = axTrend;
+    viz.trendProb = trendProb;
+    viz.trendFeas = trendFeas;
+    viz.trendCtx = trendCtx;
+    viz.axFlow = axFlow;
+    viz.summaryBox = summaryBox;
+    viz.summaryText = summaryText;
+    viz.sensorRects = sensorRects;
+    viz.sensorNodes = sensorNodes;
+    viz.conceptRects = conceptRects;
+    viz.conceptNodes = conceptNodes;
+    viz.resultRects = resultRects;
+    viz.resultNodes = resultNodes;
+    viz.arrowSensor = arrowSensor;
+    viz.arrowConcept = arrowConcept;
+    viz.sensorToConcept = sensorToConcept;
+    viz.conceptToResult = conceptToResult;
+    viz.flowText = flowText;
 end
 
 
-function autosimUpdateScenarioRealtimePlot(viz, x, y, windSpeed, windDirDeg, tSec, phase, z, inferTxt, predStableProb, decisionTxt)
+function autosimUpdateScenarioRealtimePlot(viz, state)
+    persistent warnedRealtimeVizFailure
+
     if isempty(viz) || ~isfield(viz, 'fig') || ~isgraphics(viz.fig)
         return;
     end
 
-    if ~isfinite(x) || ~isfinite(y)
+    if nargin < 2 || isempty(state)
         return;
     end
 
-    if nargin < 9 || strlength(string(inferTxt)) == 0
-        inferTxt = "NO-LAND";
-    end
-    if nargin < 10
-        predStableProb = nan;
-    end
-    if nargin < 11 || strlength(string(decisionTxt)) == 0
-        decisionTxt = "";
-    end
+    try
 
-    addpoints(viz.trail, x, y);
-    set(viz.drone, 'XData', x, 'YData', y);
+        sensors = struct();
+        semantic = struct();
+        semVec = nan(1, numel(viz.cfg.ontology.semantic_feature_names));
+        if isfield(state, 'sensors') && isstruct(state.sensors)
+            sensors = state.sensors;
+        end
+        if isfield(state, 'semantic') && isstruct(state.semantic)
+            semantic = state.semantic;
+        end
+        if isfield(state, 'semVec') && ~isempty(state.semVec)
+            semVec = double(state.semVec(:)).';
+        end
 
-    ws = windSpeed;
-    wd = windDirDeg;
-    if ~isfinite(ws)
-        ws = 0.0;
-    end
-    if ~isfinite(wd)
-        wd = 0.0;
-    end
+        sensorVals = [ ...
+            autosimNormalize01(autosimVizField(sensors, 'windSpeed', nan), 0.0, viz.cfg.wind.speed_max), ...
+            autosimNormalize01(abs(autosimVizField(sensors, 'rollDeg', nan)), 0.0, viz.cfg.thresholds.final_attitude_max_deg), ...
+            autosimNormalize01(abs(autosimVizField(sensors, 'pitchDeg', nan)), 0.0, viz.cfg.thresholds.final_attitude_max_deg), ...
+            autosimNormalize01(autosimVizField(sensors, 'altitude', nan), 0.0, max(viz.cfg.scenario.hover_height_max_m, 0.5)), ...
+            autosimNormalize01(abs(autosimVizField(sensors, 'vz', nan)), 0.0, viz.cfg.agent.no_model_max_abs_vz), ...
+            autosimNormalize01(autosimVizField(sensors, 'tagErr', nan), 0.0, viz.cfg.agent.no_model_max_tag_error), ...
+            autosimNormalize01(autosimVizField(sensors, 'tagJitterPx', nan), 0.0, viz.cfg.ontology.tag_jitter_unsafe_px), ...
+            autosimClampNaN(autosimVizField(sensors, 'tagStabilityScore', nan), 0.0) ...
+        ];
+        set(viz.sensorBar, 'YData', sensorVals);
+        sensorStateLabels = {
+            autosimVizLevelText(sensorVals(1), {'calm','breezy','windy'}), ...
+            autosimVizLevelText(sensorVals(2), {'flat','tilted','aggressive'}), ...
+            autosimVizLevelText(sensorVals(3), {'flat','tilted','aggressive'}), ...
+            autosimVizLevelText(sensorVals(4), {'low','hover','high'}), ...
+            autosimVizLevelText(sensorVals(5), {'steady','moving','fast'}), ...
+            autosimVizLevelText(sensorVals(6), {'locked','offset','far'}), ...
+            autosimVizLevelText(sensorVals(7), {'stable','noisy','chaotic'}), ...
+            autosimVizLevelText(sensorVals(8), {'poor','usable','good'}) ...
+        };
+        for i = 1:numel(viz.sensorLabels)
+            set(viz.sensorLabels(i), 'String', sensorStateLabels{i}, 'Position', [i, min(0.92, sensorVals(i) + 0.05), 0]);
+        end
 
-    arrowLen = max(0.15, min(2.0, 0.25 * abs(ws)));
-    u = arrowLen * cosd(wd);
-    v = arrowLen * sind(wd);
-    set(viz.wind, 'XData', x, 'YData', y, 'UData', u, 'VData', v);
+        windRiskScore = autosimVizSemScore(semVec, 9, semantic, 'wind_risk_enc', nan);
+        alignScore = autosimVizSemScore(semVec, 10, semantic, 'alignment_enc', nan);
+        visualScore = autosimVizSemScore(semVec, 11, semantic, 'visual_enc', nan);
+        contextScore = autosimVizSemScore(semVec, 12, semantic, 'context_enc', nan);
+        feasibilityScore = autosimVizField(state, 'landingFeasibility', autosimVizField(semantic, 'landing_feasibility', nan));
+        conceptVals = [ ...
+            autosimClampNaN(windRiskScore, 0.0), ...
+            autosimClampNaN(alignScore, 0.0), ...
+            autosimClampNaN(visualScore, 0.0), ...
+            autosimClampNaN(contextScore, 0.0), ...
+            autosimClampNaN(feasibilityScore, 0.0) ...
+        ];
+        set(viz.conceptBar, 'YData', conceptVals);
+        conceptStateLabels = {
+            string(autosimVizField(semantic, 'wind_risk', "unknown")), ...
+            string(autosimVizField(semantic, 'alignment_state', "unknown")), ...
+            string(autosimVizField(semantic, 'visual_state', "unknown")), ...
+            string(autosimVizField(semantic, 'landing_context', "unknown")), ...
+            autosimVizLevelText(conceptVals(5), {'low','medium','high'}) ...
+        };
+        for i = 1:numel(viz.conceptLabels)
+            set(viz.conceptLabels(i), 'String', conceptStateLabels{i}, 'Position', [i, min(0.92, conceptVals(i) + 0.05), 0]);
+        end
 
-    if isfinite(predStableProb)
-        predTxt = sprintf('%.2f', predStableProb);
-    else
+        tSec = autosimVizField(state, 'tSec', nan);
+        predStableProb = autosimVizField(state, 'predStableProb', nan);
+        addpoints(viz.trendProb, tSec, predStableProb);
+        addpoints(viz.trendFeas, tSec, feasibilityScore);
+        addpoints(viz.trendCtx, tSec, contextScore);
+
+        if isfinite(tSec)
+            xlim(viz.axTrend, [max(0, tSec - 25), max(25, tSec + 1)]);
+        end
+
         predTxt = 'nan';
+        if isfinite(predStableProb)
+            predTxt = sprintf('%.2f', predStableProb);
+        end
+
+        sensorNodeScores = [ ...
+            sensorVals(1), ...
+            max(sensorVals(2), sensorVals(3)), ...
+            autosimNanMean(sensorVals(6:8)), ...
+            autosimNanMean(sensorVals(4:5)) ...
+        ];
+        conceptNodeScores = [ ...
+            autosimClampNaN(windRiskScore, 0.0), ...
+            autosimClampNaN(alignScore, 0.0), ...
+            autosimClampNaN(visualScore, 0.0), ...
+            autosimClampNaN(contextScore, 0.0) ...
+        ];
+        resultNodeScores = [ ...
+            max(conceptNodeScores), ...
+            autosimClampNaN(feasibilityScore, 0.0), ...
+            autosimClampNaN(predStableProb, 0.0) ...
+        ];
+
+        sensorNodeText = {
+            sprintf('%.2f m/s', autosimVizField(sensors, 'windSpeed', nan)), ...
+            sprintf('R%.0f P%.0f', autosimVizField(sensors, 'rollDeg', nan), autosimVizField(sensors, 'pitchDeg', nan)), ...
+            sprintf('e %.2f', autosimVizField(sensors, 'tagErr', nan)), ...
+            sprintf('z %.2f\nv %.2f', autosimVizField(sensors, 'altitude', nan), autosimVizField(sensors, 'vz', nan)) ...
+        };
+        conceptNodeText = {
+            autosimVizCompactToken(string(autosimVizField(semantic, 'wind_risk', "unknown"))), ...
+            autosimVizCompactToken(string(autosimVizField(semantic, 'alignment_state', "unknown"))), ...
+            autosimVizCompactToken(string(autosimVizField(semantic, 'visual_state', "unknown"))), ...
+            autosimVizCompactToken(string(autosimVizField(semantic, 'landing_context', "unknown"))) ...
+        };
+        resultNodeText = {
+            autosimVizCompactToken(string(autosimVizField(semantic, 'semantic_relation', "unknown"))), ...
+            autosimVizCompactToken(string(autosimVizField(semantic, 'semantic_integration', "unknown"))), ...
+            sprintf('%s\np=%s', string(autosimVizField(state, 'inferTxt', "NO-LAND")), predTxt) ...
+        };
+
+        decisionMode = string(autosimVizField(semantic, 'semantic_integration', "monitor_and_reassess"));
+        [summaryColor, summaryTextStr] = autosimVizDecisionBadge(decisionMode, autosimVizField(state, 'inferTxt', "NO-LAND"), feasibilityScore, predTxt);
+        set(viz.summaryBox, 'FaceColor', summaryColor, 'EdgeColor', 0.75 * summaryColor);
+        set(viz.summaryText, 'String', summaryTextStr, 'Color', [0.08 0.08 0.10]);
+
+        for i = 1:numel(viz.sensorNodes)
+            cardColor = autosimVizNodeColor(sensorNodeScores(i), false);
+            set(viz.sensorRects(i), 'FaceColor', cardColor, 'EdgeColor', autosimVizEdgeColor(sensorNodeScores(i)));
+            set(viz.sensorNodes(i), 'String', sensorNodeText{i});
+        end
+        for i = 1:numel(viz.conceptNodes)
+            invertRisk = (i == 1);
+            cardColor = autosimVizNodeColor(conceptNodeScores(i), invertRisk);
+            set(viz.conceptRects(i), 'FaceColor', cardColor, 'EdgeColor', autosimVizEdgeColor(conceptNodeScores(i)));
+            set(viz.conceptNodes(i), 'String', conceptNodeText{i});
+        end
+        for i = 1:numel(viz.resultNodes)
+            cardColor = autosimVizNodeColor(resultNodeScores(i), false);
+            set(viz.resultRects(i), 'FaceColor', cardColor, 'EdgeColor', autosimVizEdgeColor(resultNodeScores(i)));
+            set(viz.resultNodes(i), 'String', resultNodeText{i});
+        end
+
+        for i = 1:size(viz.sensorToConcept, 1)
+            srcIdx = viz.sensorToConcept(i,1);
+            dstIdx = viz.sensorToConcept(i,2);
+            edgeScore = autosimClampNaN(0.5 * (sensorNodeScores(srcIdx) + conceptNodeScores(dstIdx)), 0.0);
+            set(viz.arrowSensor(i), 'Color', autosimVizEdgeColor(edgeScore), 'LineWidth', 0.8 + 2.0 * edgeScore);
+        end
+        for i = 1:size(viz.conceptToResult, 1)
+            srcIdx = viz.conceptToResult(i,1);
+            dstIdx = viz.conceptToResult(i,2);
+            edgeScore = autosimClampNaN(0.5 * (conceptNodeScores(srcIdx) + resultNodeScores(dstIdx)), 0.0);
+            set(viz.arrowConcept(i), 'Color', autosimVizEdgeColor(edgeScore), 'LineWidth', 0.8 + 2.0 * edgeScore);
+        end
+
+        flowLines = [ ...
+            string(sprintf('phase=%s | t=%.1fs', string(autosimVizField(state, 'phase', "unknown")), autosimVizField(state, 'tSec', nan))); ...
+            string(sprintf('env=%s | drone=%s | feas=%.2f', ...
+                string(autosimVizField(semantic, 'environment_state', "unknown")), ...
+                string(autosimVizField(semantic, 'drone_state', "unknown")), feasibilityScore)) ...
+        ];
+        set(viz.flowText, 'String', cellstr(flowLines));
+
+        drawnow limitrate nocallbacks;
+    catch ME
+        if isempty(warnedRealtimeVizFailure) || ~warnedRealtimeVizFailure
+            warnedRealtimeVizFailure = true;
+            warning('[AUTOSIM] Realtime ontology plot update skipped: %s', ME.message);
+        end
     end
+end
 
-    set(viz.info, 'String', sprintf('t=%.1fs | phase=%s | z=%.2fm | infer=%s | p_stable=%s | decision=%s | wind=%.2f m/s @ %.1fdeg', ...
-        tSec, string(phase), z, string(inferTxt), predTxt, string(decisionTxt), ws, wd));
 
-    drawnow limitrate nocallbacks;
+function v = autosimVizField(S, fieldName, fallback)
+    v = fallback;
+    if nargin < 3
+        fallback = nan;
+        v = fallback;
+    end
+    if isstruct(S) && isfield(S, fieldName)
+        v = S.(fieldName);
+    end
+end
+
+
+function v = autosimVizSemScore(semVec, idx, semantic, fieldName, fallback)
+    v = fallback;
+    if numel(semVec) >= idx
+        cand = semVec(idx);
+        if isfinite(cand)
+            v = cand;
+            return;
+        end
+    end
+    if isstruct(semantic) && isfield(semantic, fieldName)
+        cand = semantic.(fieldName);
+        if isnumeric(cand) && isfinite(cand)
+            v = cand;
+        end
+    end
+end
+
+
+function c = autosimVizNodeColor(score, invertScale)
+    s = autosimClampNaN(score, 0.0);
+    s = autosimClamp(s, 0.0, 1.0);
+    if invertScale
+        s = 1.0 - s;
+    end
+    c0 = [0.93 0.95 0.98];
+    c1 = [0.42 0.78 0.48];
+    c = (1.0 - s) * c0 + s * c1;
+end
+
+
+function c = autosimVizEdgeColor(score)
+    s = autosimClampNaN(score, 0.0);
+    s = autosimClamp(s, 0.0, 1.0);
+    c0 = [0.78 0.78 0.78];
+    c1 = [0.18 0.52 0.86];
+    c = (1.0 - s) * c0 + s * c1;
+end
+
+
+function label = autosimVizLevelText(score, levels)
+    s = autosimClampNaN(score, 0.0);
+    s = autosimClamp(s, 0.0, 1.0);
+    if s < 0.33
+        idx = 1;
+    elseif s < 0.66
+        idx = min(2, numel(levels));
+    else
+        idx = min(3, numel(levels));
+    end
+    label = string(levels{idx});
+end
+
+
+function out = autosimVizCompactToken(token)
+    token = string(token);
+    switch token
+        case "monitor_and_reassess"
+            out = "monitor/reassess";
+        case "abort_recommended"
+            out = "abort rec";
+        case "clear_to_land"
+            out = "clear to land";
+        case "conditional"
+            out = "conditional";
+        case "conflicting"
+            out = "conflicting";
+        otherwise
+            out = replace(token, "_", " ");
+    end
+end
+
+
+function [color, textOut] = autosimVizDecisionBadge(integration, inferTxt, feasibilityScore, predTxt)
+    integration = string(integration);
+    inferTxt = string(inferTxt);
+    switch integration
+        case "clear_to_land"
+            color = [0.72 0.89 0.74];
+            titleTxt = "LAND";
+        case "abort_recommended"
+            color = [0.94 0.76 0.76];
+            titleTxt = "ABORT";
+        otherwise
+            color = [0.95 0.90 0.70];
+            titleTxt = "REASSESS";
+    end
+    textOut = sprintf('%s | %s | %.2f', titleTxt, inferTxt, feasibilityScore);
 end
 
 

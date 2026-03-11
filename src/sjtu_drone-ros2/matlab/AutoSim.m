@@ -42,7 +42,14 @@ try
     for scenarioId = 1:cfg.scenario.count
         fprintf('\n[AUTOSIM] Scenario %d/%d\n', scenarioId, cfg.scenario.count);
 
-        scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId);
+        datasetState = autosimAnalyzeDatasetState(results, traceStore, learningHistory);
+        scenarioPolicy = autosimChooseScenarioPolicy(cfg, datasetState, scenarioId);
+        scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, scenarioPolicy, datasetState);
+
+        fprintf('[AUTOSIM] Adaptive policy=%s | stable=%.2f unstable=%.2f boundary=%.2f unsafeRate=%.2f\n', ...
+            scenarioPolicy.mode, datasetState.stableRatio, 1.0 - datasetState.stableRatio, ...
+            datasetState.boundarySampleRatio, datasetState.unsafeLandingRate);
+
         autosimCleanupProcesses(cfg);
         pause(cfg.process.kill_settle_sec);
 
@@ -56,6 +63,9 @@ try
         catch ME
             scenarioResult = autosimEmptyScenarioResult();
             scenarioResult.scenario_id = scenarioId;
+            if exist('scenarioCfg', 'var') && isfield(scenarioCfg, 'policy_mode')
+                scenarioResult.scenario_policy = string(scenarioCfg.policy_mode);
+            end
             scenarioResult.label = "unstable";
             scenarioResult.success = false;
             if autosimIsUserInterrupt(ME)
@@ -66,6 +76,9 @@ try
             end
             scenarioResult.exception_message = string(ME.message);
             scenarioTrace = autosimEmptyTraceTable(scenarioId);
+            if exist('scenarioCfg', 'var') && isfield(scenarioCfg, 'policy_mode')
+                scenarioTrace.scenario_policy = string(scenarioCfg.policy_mode);
+            end
             warning('[AUTOSIM] Scenario %d exception: %s', scenarioId, ME.message);
         end
 
@@ -100,7 +113,7 @@ catch ME
         warning('[AUTOSIM] Fatal exception: %s', ME.message);
     end
 end
-
+%%
 autosimCleanupProcesses(cfg);
 pause(cfg.process.kill_settle_sec);
 
@@ -166,7 +179,7 @@ function cfg = autosimDefaultConfig()
     cfg.launch.ready_timeout_sec = 15.0;
 
     cfg.scenario = struct();
-    cfg.scenario.count = 300;
+    cfg.scenario.count =1000;
     cfg.scenario.duration_sec = inf;
     cfg.scenario.sample_period_sec = 0.2;
     cfg.scenario.post_land_observe_sec = 3.0;
@@ -282,6 +295,41 @@ function cfg = autosimDefaultConfig()
     cfg.learning.random_cmd_duration_min_sec = 1.0;
     cfg.learning.random_cmd_duration_max_sec = 3.0;
     cfg.learning.random_xy_cmd_max = 0.35;
+
+    cfg.adaptive = struct();
+    cfg.adaptive.enable = true;
+    cfg.adaptive.warmup_scenarios = 6;
+    cfg.adaptive.target_unstable_ratio = 0.45;
+    cfg.adaptive.target_boundary_ratio = 0.25;
+    cfg.adaptive.boundary_margin_context = 0.10;
+    cfg.adaptive.boundary_margin_prob = 0.10;
+    cfg.adaptive.recent_window = 20;
+    cfg.adaptive.base_exploit_prob = 0.60;
+    cfg.adaptive.base_boundary_prob = 0.25;
+    cfg.adaptive.base_hard_negative_prob = 0.15;
+    cfg.adaptive.max_boundary_prob = 0.45;
+    cfg.adaptive.max_hard_negative_prob = 0.40;
+    cfg.adaptive.safe_probe_ratio_boost = 0.06;
+
+    cfg.adaptive.exploit = struct();
+    cfg.adaptive.exploit.wind_scale = 0.85;
+    cfg.adaptive.exploit.gust_amp_scale = 0.85;
+    cfg.adaptive.exploit.dir_osc_scale = 0.85;
+    cfg.adaptive.exploit.hover_bias_m = 0.0;
+
+    cfg.adaptive.boundary = struct();
+    cfg.adaptive.boundary.wind_center_scale = 0.72;
+    cfg.adaptive.boundary.wind_span_scale = 0.10;
+    cfg.adaptive.boundary.gust_amp_scale = 1.00;
+    cfg.adaptive.boundary.dir_osc_scale = 1.05;
+    cfg.adaptive.boundary.hover_bias_m = 0.0;
+
+    cfg.adaptive.hard_negative = struct();
+    cfg.adaptive.hard_negative.wind_scale = 1.18;
+    cfg.adaptive.hard_negative.wind_min_scale = 0.95;
+    cfg.adaptive.hard_negative.gust_amp_scale = 1.35;
+    cfg.adaptive.hard_negative.dir_osc_scale = 1.25;
+    cfg.adaptive.hard_negative.hover_bias_m = -0.10;
 
     cfg.persistence = struct();
     cfg.persistence.checkpoint_mat = fullfile(cfg.paths.data_dir, 'autosim_checkpoint_latest.mat');
@@ -494,6 +542,14 @@ end
 function scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId)
     scenarioCfg = struct();
     scenarioCfg.id = scenarioId;
+    scenarioCfg.policy_mode = "exploit";
+    scenarioCfg.policy_reason = "base";
+    scenarioCfg.policy_weight_exploit = nan;
+    scenarioCfg.policy_weight_boundary = nan;
+    scenarioCfg.policy_weight_hard_negative = nan;
+    scenarioCfg.boundary_hint = false;
+    scenarioCfg.hard_negative_hint = false;
+    scenarioCfg.safe_probe_ratio_boost = 0.0;
     scenarioCfg.hover_height_m = autosimRandRange(cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
     scenarioCfg.wind_profile_offset_sec = 0;
     if cfg.wind.enable
@@ -502,6 +558,241 @@ function scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId)
     else
         scenarioCfg.wind_speed = 0.0;
         scenarioCfg.wind_dir = 0.0;
+    end
+end
+
+
+function state = autosimAnalyzeDatasetState(results, traceStore, learningHistory)
+    if nargin < 1 || isempty(results)
+        summaryTbl = table();
+    else
+        summaryTbl = autosimSummaryTable(results);
+    end
+
+    dEval = autosimEvaluateDecisionMetrics(summaryTbl);
+
+    state = struct();
+    state.nStable = 0;
+    state.nUnstable = 0;
+    state.stableRatio = 0.5;
+    state.decisionAccuracy = autosimClampNaN(dEval.accuracy, 0.0);
+    state.unsafeLandingRate = autosimClampNaN(dEval.unsafe_landing_rate, 0.0);
+    state.falseNegativeRate = autosimSafeDivide(dEval.fn, dEval.fn + dEval.tp);
+    state.boundarySampleRatio = 0.0;
+    state.recentUnstableRatio = 0.5;
+    state.tp = dEval.tp;
+    state.fp = dEval.fp;
+    state.fn = dEval.fn;
+    state.tn = dEval.tn;
+    state.nValid = dEval.n_valid;
+
+    if isempty(summaryTbl)
+        return;
+    end
+
+    if ismember('label', summaryTbl.Properties.VariableNames)
+        lbl = string(summaryTbl.label);
+        state.nStable = sum(lbl == "stable");
+        state.nUnstable = sum(lbl == "unstable");
+        nAll = state.nStable + state.nUnstable;
+        if nAll > 0
+            state.stableRatio = state.nStable / nAll;
+        end
+
+        w = min(20, numel(lbl));
+        if w > 0
+            recent = lbl(max(1, end-w+1):end);
+            state.recentUnstableRatio = sum(recent == "unstable") / numel(recent);
+        end
+    end
+
+    boundaryByContext = false(height(summaryTbl), 1);
+    boundaryByProb = false(height(summaryTbl), 1);
+    if ~isempty(traceStore) && ismember('scenario_id', traceStore.Properties.VariableNames)
+        if ismember('sem_context_enc', traceStore.Properties.VariableNames)
+            ids = summaryTbl.scenario_id;
+            contextMeans = nan(height(summaryTbl), 1);
+            for i = 1:height(summaryTbl)
+                sid = ids(i);
+                v = traceStore.sem_context_enc(traceStore.scenario_id == sid);
+                v = v(isfinite(v));
+                if ~isempty(v)
+                    contextMeans(i) = mean(v);
+                end
+            end
+            boundaryByContext = isfinite(contextMeans) & (abs(contextMeans - 0.5) <= 0.10);
+        end
+
+        if ismember('pred_stable_prob', traceStore.Properties.VariableNames)
+            ids = summaryTbl.scenario_id;
+            probMeans = nan(height(summaryTbl), 1);
+            for i = 1:height(summaryTbl)
+                sid = ids(i);
+                v = traceStore.pred_stable_prob(traceStore.scenario_id == sid);
+                v = v(isfinite(v));
+                if ~isempty(v)
+                    probMeans(i) = mean(v);
+                end
+            end
+            boundaryByProb = isfinite(probMeans) & (abs(probMeans - 0.5) <= 0.10);
+        end
+    end
+
+    boundaryMask = boundaryByContext | boundaryByProb;
+    if any(boundaryMask)
+        state.boundarySampleRatio = sum(boundaryMask) / numel(boundaryMask);
+    elseif state.nValid > 0
+        % Fallback: no trace boundary signal, approximate by uncertain outcomes.
+        state.boundarySampleRatio = min(1.0, (state.fp + state.fn) / state.nValid);
+    end
+
+    if nargin >= 3 && ~isempty(learningHistory) && ismember('stable_ratio', learningHistory.Properties.VariableNames)
+        r = learningHistory.stable_ratio(end);
+        if isfinite(r)
+            state.stableRatio = r;
+        end
+    end
+end
+
+
+function policy = autosimChooseScenarioPolicy(cfg, datasetState, scenarioId)
+    policy = struct();
+    policy.mode = "exploit";
+    policy.reason = "default";
+    policy.p_exploit = autosimClampNaN(cfg.adaptive.base_exploit_prob, 0.60);
+    policy.p_boundary = autosimClampNaN(cfg.adaptive.base_boundary_prob, 0.25);
+    policy.p_hard_negative = autosimClampNaN(cfg.adaptive.base_hard_negative_prob, 0.15);
+
+    if ~isfield(cfg, 'adaptive') || ~cfg.adaptive.enable || scenarioId <= cfg.adaptive.warmup_scenarios
+        return;
+    end
+
+    targetUnstable = autosimClampNaN(cfg.adaptive.target_unstable_ratio, 0.45);
+    targetBoundary = autosimClampNaN(cfg.adaptive.target_boundary_ratio, 0.25);
+
+    unstableRatio = 1.0 - autosimClampNaN(datasetState.stableRatio, 0.5);
+    boundaryRatio = autosimClampNaN(datasetState.boundarySampleRatio, 0.0);
+    unsafeRate = autosimClampNaN(datasetState.unsafeLandingRate, 0.0);
+    fnRate = autosimClampNaN(datasetState.falseNegativeRate, 0.0);
+
+    if unstableRatio < targetUnstable
+        d = min(0.25, targetUnstable - unstableRatio);
+        policy.p_hard_negative = min(cfg.adaptive.max_hard_negative_prob, policy.p_hard_negative + d);
+        policy.p_exploit = max(0.25, policy.p_exploit - 0.5 * d);
+        policy.reason = "unstable_shortage";
+    end
+
+    if boundaryRatio < targetBoundary
+        d = min(0.25, targetBoundary - boundaryRatio);
+        policy.p_boundary = min(cfg.adaptive.max_boundary_prob, policy.p_boundary + d);
+        policy.p_exploit = max(0.20, policy.p_exploit - 0.5 * d);
+        if policy.reason == "default"
+            policy.reason = "boundary_shortage";
+        else
+            policy.reason = policy.reason + "+boundary_shortage";
+        end
+    end
+
+    if unsafeRate > 0.20
+        policy.p_boundary = min(cfg.adaptive.max_boundary_prob, policy.p_boundary + 0.12);
+        policy.p_exploit = max(0.20, policy.p_exploit - 0.08);
+        if policy.reason == "default"
+            policy.reason = "unsafe_fp_high";
+        else
+            policy.reason = policy.reason + "+unsafe_fp_high";
+        end
+    end
+
+    if fnRate > 0.25
+        policy.p_boundary = min(cfg.adaptive.max_boundary_prob, policy.p_boundary + 0.08);
+        if policy.reason == "default"
+            policy.reason = "fn_high";
+        else
+            policy.reason = policy.reason + "+fn_high";
+        end
+    end
+
+    p = [policy.p_exploit, policy.p_boundary, policy.p_hard_negative];
+    p = max(0.0, p);
+    s = sum(p);
+    if s <= 0
+        p = [0.60, 0.25, 0.15];
+    else
+        p = p ./ s;
+    end
+
+    policy.p_exploit = p(1);
+    policy.p_boundary = p(2);
+    policy.p_hard_negative = p(3);
+
+    r = rand();
+    if r < p(3)
+        policy.mode = "hard_negative";
+    elseif r < (p(3) + p(2))
+        policy.mode = "boundary_validation";
+    else
+        policy.mode = "exploit";
+    end
+end
+
+
+function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, policyMode, datasetState)
+    scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId);
+
+    if isstruct(policyMode)
+        policy = policyMode;
+    else
+        policy = struct('mode', string(policyMode), 'reason', "external", ...
+            'p_exploit', nan, 'p_boundary', nan, 'p_hard_negative', nan);
+    end
+
+    scenarioCfg.policy_mode = string(policy.mode);
+    scenarioCfg.policy_reason = string(policy.reason);
+    scenarioCfg.policy_weight_exploit = autosimClampNaN(policy.p_exploit, nan);
+    scenarioCfg.policy_weight_boundary = autosimClampNaN(policy.p_boundary, nan);
+    scenarioCfg.policy_weight_hard_negative = autosimClampNaN(policy.p_hard_negative, nan);
+
+    if ~isfield(cfg, 'adaptive') || ~cfg.adaptive.enable
+        return;
+    end
+
+    switch char(policy.mode)
+        case 'hard_negative'
+            scenarioCfg.hard_negative_hint = true;
+            scenarioCfg.boundary_hint = false;
+
+            wsMin = cfg.adaptive.hard_negative.wind_min_scale * cfg.wind.speed_max;
+            wsMax = cfg.adaptive.hard_negative.wind_scale * cfg.wind.speed_max;
+            scenarioCfg.wind_speed = autosimClamp(autosimRandRange(wsMin, wsMax), cfg.wind.speed_min, cfg.wind.speed_max);
+            scenarioCfg.hover_height_m = autosimClamp(scenarioCfg.hover_height_m + cfg.adaptive.hard_negative.hover_bias_m, ...
+                cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
+            scenarioCfg.gust_amp_scale = cfg.adaptive.hard_negative.gust_amp_scale;
+            scenarioCfg.dir_osc_scale = cfg.adaptive.hard_negative.dir_osc_scale;
+
+        case 'boundary_validation'
+            scenarioCfg.hard_negative_hint = false;
+            scenarioCfg.boundary_hint = true;
+
+            c = cfg.adaptive.boundary.wind_center_scale * cfg.wind.speed_max;
+            span = cfg.adaptive.boundary.wind_span_scale * cfg.wind.speed_max;
+            scenarioCfg.wind_speed = autosimClamp(autosimRandRange(c - span, c + span), cfg.wind.speed_min, cfg.wind.speed_max);
+            scenarioCfg.hover_height_m = autosimClamp(scenarioCfg.hover_height_m + cfg.adaptive.boundary.hover_bias_m, ...
+                cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
+            scenarioCfg.gust_amp_scale = cfg.adaptive.boundary.gust_amp_scale;
+            scenarioCfg.dir_osc_scale = cfg.adaptive.boundary.dir_osc_scale;
+
+            if autosimClampNaN(datasetState.falseNegativeRate, 0.0) > 0.25
+                scenarioCfg.safe_probe_ratio_boost = cfg.adaptive.safe_probe_ratio_boost;
+            end
+
+        otherwise
+            scenarioCfg.hard_negative_hint = false;
+            scenarioCfg.boundary_hint = false;
+            scenarioCfg.wind_speed = autosimClamp(cfg.adaptive.exploit.wind_scale * scenarioCfg.wind_speed, cfg.wind.speed_min, cfg.wind.speed_max);
+            scenarioCfg.hover_height_m = autosimClamp(scenarioCfg.hover_height_m + cfg.adaptive.exploit.hover_bias_m, ...
+                cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
+            scenarioCfg.gust_amp_scale = cfg.adaptive.exploit.gust_amp_scale;
+            scenarioCfg.dir_osc_scale = cfg.adaptive.exploit.dir_osc_scale;
     end
 end
 
@@ -1072,8 +1363,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             end
         end
 
+        probeBoost = 0.0;
+        if isfield(scenarioCfg, 'safe_probe_ratio_boost') && isfinite(scenarioCfg.safe_probe_ratio_boost)
+            probeBoost = autosimClamp(scenarioCfg.safe_probe_ratio_boost, 0.0, 0.20);
+        end
+        adaptiveProbLandThreshold = autosimClamp(cfg.agent.prob_land_threshold - probeBoost, 0.05, 0.99);
+        adaptiveSemanticLandThreshold = autosimClamp(cfg.agent.semantic_land_threshold - probeBoost, 0.05, 0.99);
+
         modelGateEnabled = (~semanticOnlyMode) && cfg.agent.enable_model_decision;
-        modelSaysStable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= cfg.agent.prob_land_threshold);
+        modelSaysStable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= adaptiveProbLandThreshold);
         modelSaysUnstable = hasTrainedModel && modelGateEnabled && (~modelSaysStable);
 
         if ~landingSent && cfg.agent.block_landing_if_unstable && modelSaysUnstable
@@ -1101,7 +1399,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         canLandBySemantic = hoverEvalReady && semanticOnlyMode && ...
             isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.max_tag_error_before_land) && ...
             isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
-            isfinite(semantic.context_enc) && (semantic.context_enc >= cfg.agent.semantic_land_threshold) && ...
+            isfinite(semantic.context_enc) && (semantic.context_enc >= adaptiveSemanticLandThreshold) && ...
             logical(semanticSafe(k)) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
@@ -1379,6 +1677,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     res = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
         imuAngVel, imuLinAcc, contactForce, armForceFL, armForceFR, armForceRL, armForceRR);
     res.landing_cmd_time = landingSentT;
+    res.pred_decision = "hover";
+    if landingSent
+        res.pred_decision = "land";
+    end
+    res.gt_safe_to_land = "unstable";
+    if string(res.label) == "stable"
+        res.gt_safe_to_land = "stable";
+    end
+    res.decision_outcome = autosimClassifyDecisionOutcome(res.gt_safe_to_land, res.pred_decision);
+    if isfield(scenarioCfg, 'policy_mode')
+        res.scenario_policy = string(scenarioCfg.policy_mode);
+    end
 
     n = numel(t);
     traceTbl = table();
@@ -1415,6 +1725,10 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         fn = char(cfg.ontology.semantic_feature_names(i));
         traceTbl.(['sem_' fn]) = autosimPadLen(semFeat(:, i), n);
     end
+    traceTbl.scenario_policy = repmat(string(res.scenario_policy), n, 1);
+    traceTbl.pred_decision = repmat(string(res.pred_decision), n, 1);
+    traceTbl.gt_safe_to_land = repmat(string(res.gt_safe_to_land), n, 1);
+    traceTbl.decision_outcome = repmat(string(res.decision_outcome), n, 1);
     traceTbl.final_label = repmat(string(res.label), n, 1);
 end
 
@@ -1491,6 +1805,9 @@ end
 function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, bumperContact, imuAngVel, imuLinAcc, contactForce, armFL, armFR, armRL, armRR)
     out = autosimEmptyScenarioResult();
     out.scenario_id = scenarioId;
+    if isfield(scenarioCfg, 'policy_mode')
+        out.scenario_policy = string(scenarioCfg.policy_mode);
+    end
     out.hover_height_cmd = scenarioCfg.hover_height_m;
     out.wind_speed_cmd = scenarioCfg.wind_speed;
     out.wind_dir_cmd = scenarioCfg.wind_dir;
@@ -1874,7 +2191,8 @@ function tbl = autosimSummaryTable(results)
         'mean_imu_ang_vel','max_imu_ang_vel','mean_imu_lin_acc','max_imu_lin_acc', ...
         'max_contact_force','arm_force_fl_mean','arm_force_fr_mean','arm_force_rl_mean','arm_force_rr_mean','arm_force_imbalance', ...
         'final_state', ...
-        'landing_cmd_time','launch_pid','launch_log','exception_message'
+        'landing_cmd_time','pred_decision','gt_safe_to_land','decision_outcome','scenario_policy', ...
+        'launch_pid','launch_log','exception_message'
     };
 
     cols = intersect(wanted, tbl.Properties.VariableNames, 'stable');
@@ -2018,7 +2336,7 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     modelPath = fullfile(cfg.paths.model_dir, sprintf('autosim_model_final_%s_%s.mat', ts, tag));
     plotPng = fullfile(cfg.paths.plot_dir, sprintf('autosim_result_%s_%s.png', ts, tag));
     perfCsv = fullfile(cfg.paths.data_dir, sprintf('autosim_performance_%s_%s.csv', ts, tag));
-    confHistCsv = fullfile(cfg.paths.data_dir, sprintf('autosim_confidence_hist_%s_%s.csv', ts, tag));
+    decisionCsv = fullfile(cfg.paths.data_dir, sprintf('autosim_decision_metrics_%s_%s.csv', ts, tag));
     perfPng = fullfile(cfg.paths.plot_dir, sprintf('autosim_performance_%s_%s.png', ts, tag));
     gtPredPng = fullfile(cfg.paths.plot_dir, sprintf('autosim_gt_vs_pred_%s_%s.png', ts, tag));
 
@@ -2041,7 +2359,7 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     end
 
     try
-        autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsv, confHistCsv, perfPng);
+        autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsv, decisionCsv, perfPng);
     catch ME
         warning('[AUTOSIM] Performance report save failed: %s', ME.message);
     end
@@ -2069,8 +2387,15 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     fprintf('[AUTOSIM] Saved model:   %s\n', modelPath);
     fprintf('[AUTOSIM] Saved plot:    %s\n', plotPng);
     fprintf('[AUTOSIM] Saved perf:    %s\n', perfCsv);
+    fprintf('[AUTOSIM] Saved dmetric: %s\n', decisionCsv);
     fprintf('[AUTOSIM] Saved perfpng: %s\n', perfPng);
     fprintf('[AUTOSIM] Saved gtpred:  %s\n', gtPredPng);
+
+    dEval = autosimEvaluateDecisionMetrics(summaryTbl);
+    if dEval.n_valid > 0
+        fprintf('[AUTOSIM] Decision metrics | Acc=%.3f Prec=%.3f Rec=%.3f Unsafe=%.3f F1=%.3f\n', ...
+            dEval.accuracy, dEval.precision, dEval.recall, dEval.unsafe_landing_rate, dEval.f1);
+    end
 
     finalInfo = struct();
     finalInfo.hasValidLabel = (nValid > 0);
@@ -2113,31 +2438,36 @@ end
 
 function plotState = autosimInitPlots()
     plotState = struct();
-    plotState.fig = figure('Name', 'AutoSim Learning Progress', 'NumberTitle', 'off');
+    plotState.fig = figure('Name', 'AutoSim Decision Progress', 'NumberTitle', 'off');
     autosimPlaceFigureRight(plotState.fig, [0.36, 0.46], [0.52, 0.51]);
     tl = tiledlayout(plotState.fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax1 = nexttile(tl, 1);
     plotState.ax1 = ax1;
     set(ax1, 'FontSize', 9);
-    plotState.stableLine = animatedline(ax1, 'Color', [0.20 0.60 0.20], 'LineWidth', 1.5);
-    plotState.unstableLine = animatedline(ax1, 'Color', [0.75 0.20 0.20], 'LineWidth', 1.5);
-    title(ax1, 'Scenario Outcome Trend', 'FontSize', 10);
+    plotState.accLine = animatedline(ax1, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.5);
+    plotState.precLine = animatedline(ax1, 'Color', [0.20 0.60 0.20], 'LineWidth', 1.5);
+    plotState.recLine = animatedline(ax1, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.5);
+    plotState.unsafeLine = animatedline(ax1, 'Color', [0.75 0.20 0.20], 'LineWidth', 1.6);
+    title(ax1, 'Decision Metrics Trend', 'FontSize', 10);
     xlabel(ax1, 'scenario', 'FontSize', 9);
-    ylabel(ax1, 'count', 'FontSize', 9);
+    ylabel(ax1, 'score', 'FontSize', 9);
+    ylim(ax1, [0 1]);
     grid(ax1, 'on');
-    legend(ax1, {'stable', 'unstable'}, 'Location', 'best', 'FontSize', 8);
+    legend(ax1, {'accuracy', 'precision', 'recall', 'unsafe rate'}, 'Location', 'best', 'FontSize', 8);
 
     ax2 = nexttile(tl, 2);
     plotState.ax2 = ax2;
     set(ax2, 'FontSize', 9);
-    plotState.learnNLine = animatedline(ax2, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.4);
-    plotState.stableRatioLine = animatedline(ax2, 'Color', [0.49 0.18 0.56], 'LineWidth', 1.4);
-    title(ax2, 'Incremental Learning Status', 'FontSize', 10);
+    plotState.tpLine = animatedline(ax2, 'Color', [0.20 0.60 0.20], 'LineWidth', 1.4);
+    plotState.fpLine = animatedline(ax2, 'Color', [0.75 0.20 0.20], 'LineWidth', 1.4);
+    plotState.fnLine = animatedline(ax2, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.4);
+    plotState.tnLine = animatedline(ax2, 'Color', [0.00 0.45 0.74], 'LineWidth', 1.4);
+    title(ax2, 'Decision Confusion Counts', 'FontSize', 10);
     xlabel(ax2, 'scenario', 'FontSize', 9);
-    ylabel(ax2, 'value', 'FontSize', 9);
+    ylabel(ax2, 'count', 'FontSize', 9);
     grid(ax2, 'on');
-    legend(ax2, {'train_samples', 'stable_ratio'}, 'Location', 'best', 'FontSize', 8);
+    legend(ax2, {'TP', 'FP', 'FN', 'TN'}, 'Location', 'best', 'FontSize', 8);
 end
 
 
@@ -2147,22 +2477,19 @@ function plotState = autosimUpdatePlots(plotState, results, learningHistory)
     end
 
     sIdx = numel(results);
-    labels = strings(numel(results),1);
-    for i = 1:numel(results)
-        labels(i) = results(i).label;
-    end
+    summaryTbl = autosimSummaryTable(results);
+    dEval = autosimEvaluateDecisionMetrics(summaryTbl);
 
-    nStable = sum(labels == "stable");
-    nUnstable = sum(labels == "unstable");
+    if dEval.n_valid > 0
+        addpoints(plotState.accLine, sIdx, dEval.accuracy);
+        addpoints(plotState.precLine, sIdx, dEval.precision);
+        addpoints(plotState.recLine, sIdx, dEval.recall);
+        addpoints(plotState.unsafeLine, sIdx, dEval.unsafe_landing_rate);
 
-    addpoints(plotState.stableLine, sIdx, nStable);
-    addpoints(plotState.unstableLine, sIdx, nUnstable);
-
-    if ~isempty(learningHistory)
-        nTrain = learningHistory.n_train(end);
-        stableRatio = learningHistory.stable_ratio(end);
-        addpoints(plotState.learnNLine, sIdx, nTrain);
-        addpoints(plotState.stableRatioLine, sIdx, stableRatio);
+        addpoints(plotState.tpLine, sIdx, dEval.tp);
+        addpoints(plotState.fpLine, sIdx, dEval.fp);
+        addpoints(plotState.fnLine, sIdx, dEval.fn);
+        addpoints(plotState.tnLine, sIdx, dEval.tn);
     end
 
     drawnow limitrate nocallbacks;
@@ -2314,6 +2641,10 @@ function tbl = autosimEmptyTraceTable(scenarioId)
     tbl.sem_alignment_enc = nan;
     tbl.sem_visual_enc = nan;
     tbl.sem_context_enc = nan;
+    tbl.scenario_policy = "exploit";
+    tbl.pred_decision = "hover";
+    tbl.gt_safe_to_land = "unstable";
+    tbl.decision_outcome = "TN";
     tbl.final_label = "unstable";
 end
 
@@ -2921,7 +3252,11 @@ function [speedCmd, dirCmd] = autosimComputeWindCommand(cfg, scenarioCfg, tNow, 
     if useProfileDirect
         speedCmd = max(0.0, ramp * baseSpeed);
     else
-        gustAmp = baseSpeed * cfg.wind.model_gust_amp_ratio;
+        gustScale = 1.0;
+        if isfield(scenarioCfg, 'gust_amp_scale') && isfinite(scenarioCfg.gust_amp_scale)
+            gustScale = max(0.0, scenarioCfg.gust_amp_scale);
+        end
+        gustAmp = baseSpeed * cfg.wind.model_gust_amp_ratio * gustScale;
         gust = gustAmp * sin(2.0 * pi * cfg.wind.model_gust_freq_hz * tNow);
         noise = cfg.wind.model_noise_std_speed * randn();
         speedCmd = max(0.0, ramp * (baseSpeed + gust + noise));
@@ -2931,6 +3266,11 @@ function [speedCmd, dirCmd] = autosimComputeWindCommand(cfg, scenarioCfg, tNow, 
         dirCmd = baseDir;
     else
         dirOscAmp = cfg.wind.model_dir_osc_amp_deg;
+        dirScale = 1.0;
+        if isfield(scenarioCfg, 'dir_osc_scale') && isfinite(scenarioCfg.dir_osc_scale)
+            dirScale = max(0.0, scenarioCfg.dir_osc_scale);
+        end
+        dirOscAmp = dirOscAmp * dirScale;
         if isfield(cfg.wind, 'source') && cfg.wind.source == "kma_csv"
             dirOscAmp = 0.5 * dirOscAmp;
         end
@@ -3213,35 +3553,35 @@ function vec = autosimBuildSemanticFeatures(windObs, droneObs, tagObs, semantic,
 end
 
 
-function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPath, histCsvPath, perfPngPath)
+function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPath, decisionCsvPath, perfPngPath)
     if isempty(summaryTbl) || ~ismember('scenario_id', summaryTbl.Properties.VariableNames)
         return;
     end
 
-    n = height(summaryTbl);
-    perfTbl = table();
-    perfTbl.scenario_id = summaryTbl.scenario_id;
-    if ismember('label', summaryTbl.Properties.VariableNames)
-        perfTbl.label = summaryTbl.label;
-    else
-        perfTbl.label = repmat("unknown", n, 1);
-    end
-    if ismember('success', summaryTbl.Properties.VariableNames)
-        perfTbl.success = double(summaryTbl.success);
-    else
-        perfTbl.success = zeros(n, 1);
+    dTbl = autosimBuildDecisionTable(summaryTbl);
+    n = height(dTbl);
+    if n == 0
+        return;
     end
 
-    perfTbl.cum_success_rate = nan(n,1);
+    perfTbl = dTbl;
+    perfTbl.cum_accuracy = nan(n, 1);
+    perfTbl.cum_precision = nan(n, 1);
+    perfTbl.cum_recall = nan(n, 1);
+    perfTbl.cum_unsafe_landing_rate = nan(n, 1);
+    perfTbl.cum_f1 = nan(n, 1);
+
     for i = 1:n
-        perfTbl.cum_success_rate(i) = mean(perfTbl.success(1:i) > 0.5);
+        de = autosimEvaluateDecisionMetrics(dTbl(1:i, :));
+        perfTbl.cum_accuracy(i) = de.accuracy;
+        perfTbl.cum_precision(i) = de.precision;
+        perfTbl.cum_recall(i) = de.recall;
+        perfTbl.cum_unsafe_landing_rate(i) = de.unsafe_landing_rate;
+        perfTbl.cum_f1(i) = de.f1;
     end
 
+    % Keep per-scenario confidence summary when trace data is available.
     perfTbl.mean_confidence = nan(n,1);
-    perfTbl.p10_confidence = nan(n,1);
-    perfTbl.p50_confidence = nan(n,1);
-    perfTbl.p90_confidence = nan(n,1);
-
     if ~isempty(traceStore) && ismember('scenario_id', traceStore.Properties.VariableNames) && ismember('pred_stable_prob', traceStore.Properties.VariableNames)
         for i = 1:n
             sid = perfTbl.scenario_id(i);
@@ -3249,39 +3589,47 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
             v = v(isfinite(v));
             if ~isempty(v)
                 perfTbl.mean_confidence(i) = mean(v);
-                perfTbl.p10_confidence(i) = autosimPercentile(v, 10);
-                perfTbl.p50_confidence(i) = autosimPercentile(v, 50);
-                perfTbl.p90_confidence(i) = autosimPercentile(v, 90);
             end
         end
     end
 
     writetable(perfTbl, perfCsvPath);
 
-    confVals = perfTbl.mean_confidence(isfinite(perfTbl.mean_confidence));
-    edges = 0:0.05:1;
-    centers = edges(1:end-1) + diff(edges)/2;
-    counts = histcounts(confVals, edges);
-    histTbl = table(centers(:), counts(:), 'VariableNames', {'confidence_bin_center', 'count'});
-    writetable(histTbl, histCsvPath);
+    dOverall = autosimEvaluateDecisionMetrics(dTbl);
+    dOverallTbl = struct2table(dOverall);
+    writetable(dOverallTbl, decisionCsvPath);
 
-    fig = figure('Name', 'AutoSim Scenario Performance', 'NumberTitle', 'off');
+    fig = figure('Name', 'AutoSim Decision Performance', 'NumberTitle', 'off');
     tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax1 = nexttile(tl, 1);
-    plot(ax1, perfTbl.scenario_id, perfTbl.cum_success_rate, '-o', 'LineWidth', 1.5, 'Color', [0.20 0.60 0.20]);
+    plot(ax1, perfTbl.scenario_id, perfTbl.cum_accuracy, '-', 'LineWidth', 1.6, 'Color', [0.00 0.45 0.74]);
+    hold(ax1, 'on');
+    plot(ax1, perfTbl.scenario_id, perfTbl.cum_precision, '-', 'LineWidth', 1.4, 'Color', [0.20 0.60 0.20]);
+    plot(ax1, perfTbl.scenario_id, perfTbl.cum_recall, '-', 'LineWidth', 1.4, 'Color', [0.85 0.33 0.10]);
+    plot(ax1, perfTbl.scenario_id, perfTbl.cum_unsafe_landing_rate, '-', 'LineWidth', 1.6, 'Color', [0.75 0.20 0.20]);
     ylim(ax1, [0 1]);
     xlabel(ax1, 'scenario');
-    ylabel(ax1, 'cumulative success rate');
-    title(ax1, 'Success Rate Trend');
+    ylabel(ax1, 'score');
+    title(ax1, 'Cumulative Decision Metrics');
+    legend(ax1, {'accuracy', 'precision', 'recall', 'unsafe rate'}, 'Location', 'best');
     grid(ax1, 'on');
 
     ax2 = nexttile(tl, 2);
-    bar(ax2, centers, counts, 1.0, 'FaceColor', [0.00 0.45 0.74]);
-    xlim(ax2, [0 1]);
-    xlabel(ax2, 'mean model confidence');
-    ylabel(ax2, 'scenario count');
-    title(ax2, 'Confidence Distribution');
+    metricVals = [dOverall.accuracy, dOverall.precision, dOverall.recall, dOverall.unsafe_landing_rate];
+    b = bar(ax2, metricVals, 0.70);
+    b.FaceColor = 'flat';
+    b.CData = [ ...
+        0.00 0.45 0.74; ...
+        0.20 0.60 0.20; ...
+        0.85 0.33 0.10; ...
+        0.75 0.20 0.20 ...
+    ];
+    ylim(ax2, [0 1]);
+    xticks(ax2, 1:4);
+    xticklabels(ax2, {'Accuracy','Precision','Recall','UnsafeRate'});
+    ylabel(ax2, 'score');
+    title(ax2, sprintf('Overall Decision Metrics (n=%d)', dOverall.n_valid));
     grid(ax2, 'on');
 
     exportgraphics(fig, perfPngPath, 'Resolution', 150);
@@ -3294,98 +3642,34 @@ function autosimPlotGtVsPrediction(summaryTbl, model, cfg, outPngPath)
         return;
     end
 
-    n = height(summaryTbl);
-    sid = summaryTbl.scenario_id;
-
-    gtSuccess = false(n, 1);
-    if ismember('success', summaryTbl.Properties.VariableNames)
-        gtSuccess = logical(summaryTbl.success);
-    elseif ismember('label', summaryTbl.Properties.VariableNames)
-        gtSuccess = (summaryTbl.label == "stable");
+    dTbl = autosimBuildDecisionTable(summaryTbl);
+    dEval = autosimEvaluateDecisionMetrics(dTbl);
+    if dEval.n_valid == 0
+        return;
     end
 
-    predThr = autosimClampNaN(cfg.agent.prob_land_threshold, 0.50);
+    sid = dTbl.scenario_id;
+    gtSafe = dTbl.gt_safe;
+    predLand = dTbl.pred_land;
 
-    predSuccess = false(n, 1);
-    predKnown = false(n, 1);
-    meanPredProb = nan(n, 1);
-
-    hasUsableModel = autosimIsModelReliable(model, cfg);
-    featureSchema = cfg.model.feature_names;
-    if isfield(model, 'feature_names') && ~isempty(model.feature_names)
-        featureSchema = model.feature_names;
-    end
-
-    if hasUsableModel
-        featNames = cellstr(featureSchema);
-        for i = 1:n
-            X = zeros(1, numel(featNames));
-            for j = 1:numel(featNames)
-                fn = featNames{j};
-                if ismember(fn, summaryTbl.Properties.VariableNames)
-                    X(j) = autosimToNumeric(summaryTbl{i, fn});
-                else
-                    X(j) = 0.0;
-                end
-            end
-
-            [lbl, score] = autosimPredictGaussianNB(model, X);
-            pStable = score(1);
-            if lbl(1) ~= "stable"
-                pStable = 1.0 - score(1);
-            end
-
-            pStable = autosimClampNaN(pStable, 0.0);
-            predSuccess(i) = (pStable >= predThr);
-            predKnown(i) = true;
-            meanPredProb(i) = pStable;
-        end
-    end
-
-    valid = predKnown;
-    TP = sum(predSuccess(valid) & gtSuccess(valid));
-    FP = sum(predSuccess(valid) & ~gtSuccess(valid));
-    FN = sum(~predSuccess(valid) & gtSuccess(valid));
-    TN = sum(~predSuccess(valid) & ~gtSuccess(valid));
-    nValid = TP + FP + FN + TN;
-
-    acc = nan;
-    precision = nan;
-    recall = nan;
-    f1 = nan;
-    if nValid > 0
-        acc = (TP + TN) / nValid;
-    end
-    if (TP + FP) > 0
-        precision = TP / (TP + FP);
-    end
-    if (TP + FN) > 0
-        recall = TP / (TP + FN);
-    end
-    if isfinite(precision) && isfinite(recall) && (precision + recall) > 0
-        f1 = 2 * precision * recall / (precision + recall);
-    end
-
-    fig = figure('Name', 'AutoSim GT vs Prediction', 'NumberTitle', 'off');
-    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    fig = figure('Name', 'AutoSim GT vs Decision', 'NumberTitle', 'off');
+    tl = tiledlayout(fig, 3, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax1 = nexttile(tl, 1);
-    stem(ax1, sid, double(gtSuccess), 'Color', [0.10 0.60 0.10], 'Marker', 'o', 'LineWidth', 1.0);
+    stem(ax1, sid, double(gtSafe), 'Color', [0.10 0.60 0.10], 'Marker', 'o', 'LineWidth', 1.0);
     hold(ax1, 'on');
-    if any(predKnown)
-        stem(ax1, sid(predKnown), double(predSuccess(predKnown)), 'Color', [0.85 0.33 0.10], 'Marker', 'x', 'LineWidth', 1.0);
-    end
+    stem(ax1, sid, double(predLand), 'Color', [0.85 0.33 0.10], 'Marker', 'x', 'LineWidth', 1.0);
     ylim(ax1, [-0.1 1.1]);
     yticks(ax1, [0 1]);
-    yticklabels(ax1, {'fail/unstable', 'success/stable'});
+    yticklabels(ax1, {'unsafe/hover', 'safe/land'});
     xlabel(ax1, 'scenario');
     ylabel(ax1, 'class');
-    title(ax1, 'GT Landing Outcome vs Model Predicted Outcome');
-    legend(ax1, {'GT', 'Model Prediction'}, 'Location', 'southoutside', 'Orientation', 'horizontal');
+    title(ax1, 'GT Safety vs Algorithm Decision (Land/Hover)');
+    legend(ax1, {'GT safe(1)/unsafe(0)', 'Decision land(1)/hover(0)'}, 'Location', 'southoutside', 'Orientation', 'horizontal');
     grid(ax1, 'on');
 
     ax2 = nexttile(tl, 2);
-    cm = [TP FP; FN TN];
+    cm = [dEval.tp dEval.fp; dEval.fn dEval.tn]; % rows: pred land/hover, cols: actual safe/unsafe
     imagesc(ax2, cm);
     axis(ax2, 'equal');
     axis(ax2, 'tight');
@@ -3393,24 +3677,161 @@ function autosimPlotGtVsPrediction(summaryTbl, model, cfg, outPngPath)
     colorbar(ax2);
     xticks(ax2, [1 2]);
     yticks(ax2, [1 2]);
-    xticklabels(ax2, {'GT=Success', 'GT=Fail'});
-    yticklabels(ax2, {'Pred=Success', 'Pred=Fail'});
-    title(ax2, sprintf('Confusion Matrix | Acc=%.3f Prec=%.3f Rec=%.3f F1=%.3f', acc, precision, recall, f1));
+    xticklabels(ax2, {'Actual Safe', 'Actual Unsafe'});
+    yticklabels(ax2, {'Pred Land', 'Pred Hover'});
+    title(ax2, sprintf('Confusion Matrix | Acc=%.3f Prec=%.3f Rec=%.3f Unsafe=%.3f', ...
+        dEval.accuracy, dEval.precision, dEval.recall, dEval.unsafe_landing_rate));
     for rr = 1:2
         for cc = 1:2
-            text(ax2, cc, rr, sprintf('%d', cm(rr, cc)), 'HorizontalAlignment', 'center', 'Color', 'w', 'FontWeight', 'bold');
+            txtColor = 'w';
+            if cm(rr, cc) < max(cm(:)) * 0.45
+                txtColor = 'k';
+            end
+            text(ax2, cc, rr, sprintf('%d', cm(rr, cc)), 'HorizontalAlignment', 'center', 'Color', txtColor, 'FontWeight', 'bold');
         end
     end
 
-    if ~hasUsableModel
-        subtitle(tl, 'model unavailable or unreliable for evaluation');
-    elseif isfinite(mean(meanPredProb, 'omitnan'))
-        subtitle(tl, sprintf('model-based eval | valid scenarios=%d/%d | threshold=%.2f | mean p(stable)=%.3f', nValid, n, predThr, mean(meanPredProb, 'omitnan')));
-    else
-        subtitle(tl, sprintf('model-based eval | valid scenarios=%d/%d | threshold=%.2f', nValid, n, predThr));
-    end
+    ax3 = nexttile(tl, 3);
+    metricVals = [dEval.accuracy, dEval.precision, dEval.recall, dEval.unsafe_landing_rate];
+    b = bar(ax3, metricVals, 0.70);
+    b.FaceColor = 'flat';
+    b.CData = [ ...
+        0.00 0.45 0.74; ...
+        0.20 0.60 0.20; ...
+        0.85 0.33 0.10; ...
+        0.75 0.20 0.20 ...
+    ];
+    ylim(ax3, [0 1]);
+    xticks(ax3, 1:4);
+    xticklabels(ax3, {'Accuracy','Precision','Recall','UnsafeRate'});
+    ylabel(ax3, 'score');
+    title(ax3, 'Main Decision Metrics');
+    grid(ax3, 'on');
+
+    subtitle(tl, sprintf('Decision-focused evaluation | valid scenarios=%d | TP=%d FP=%d FN=%d TN=%d', ...
+        dEval.n_valid, dEval.tp, dEval.fp, dEval.fn, dEval.tn));
 
     exportgraphics(fig, outPngPath, 'Resolution', 150);
+end
+
+
+function dTbl = autosimBuildDecisionTable(summaryTbl)
+    dTbl = table();
+    if isempty(summaryTbl) || ~ismember('scenario_id', summaryTbl.Properties.VariableNames)
+        return;
+    end
+
+    n = height(summaryTbl);
+    sid = summaryTbl.scenario_id;
+
+    gtSafe = false(n, 1);
+    gtValid = false(n, 1);
+    if ismember('gt_safe_to_land', summaryTbl.Properties.VariableNames)
+        gtLbl = string(summaryTbl.gt_safe_to_land);
+        gtSafe = (gtLbl == "stable") | (gtLbl == "safe");
+        gtValid = (gtLbl == "stable") | (gtLbl == "safe") | (gtLbl == "unstable") | (gtLbl == "unsafe");
+    elseif ismember('label', summaryTbl.Properties.VariableNames)
+        lbl = string(summaryTbl.label);
+        gtSafe = (lbl == "stable");
+        gtValid = (lbl == "stable") | (lbl == "unstable");
+    elseif ismember('success', summaryTbl.Properties.VariableNames)
+        gtSafe = logical(summaryTbl.success);
+        gtValid = true(n, 1);
+    end
+
+    predLand = false(n, 1);
+    predValid = false(n, 1);
+    if ismember('pred_decision', summaryTbl.Properties.VariableNames)
+        p = string(summaryTbl.pred_decision);
+        predLand = (p == "land");
+        predValid = (p == "land") | (p == "hover");
+    elseif ismember('landing_cmd_time', summaryTbl.Properties.VariableNames)
+        lct = summaryTbl.landing_cmd_time;
+        predLand = isfinite(lct);
+        predValid = true(n, 1);
+    end
+
+    dTbl.scenario_id = sid;
+    dTbl.gt_safe = gtSafe;
+    dTbl.pred_land = predLand;
+    dTbl.valid = gtValid & predValid;
+end
+
+
+function de = autosimEvaluateDecisionMetrics(inTbl)
+    de = struct();
+    de.tp = 0;
+    de.fp = 0;
+    de.fn = 0;
+    de.tn = 0;
+    de.n_valid = 0;
+    de.accuracy = nan;
+    de.precision = nan;
+    de.recall = nan;
+    de.f1 = nan;
+    de.unsafe_landing_rate = nan;
+    de.risk_score = nan;
+
+    if isempty(inTbl)
+        return;
+    end
+
+    if ismember('gt_safe', inTbl.Properties.VariableNames) && ismember('pred_land', inTbl.Properties.VariableNames)
+        gtSafe = logical(inTbl.gt_safe);
+        predLand = logical(inTbl.pred_land);
+        if ismember('valid', inTbl.Properties.VariableNames)
+            valid = logical(inTbl.valid);
+        else
+            valid = true(height(inTbl), 1);
+        end
+    elseif ismember('label', inTbl.Properties.VariableNames)
+        dt = autosimBuildDecisionTable(inTbl);
+        gtSafe = dt.gt_safe;
+        predLand = dt.pred_land;
+        valid = dt.valid;
+    else
+        return;
+    end
+
+    de.tp = sum(predLand(valid) & gtSafe(valid));
+    de.fp = sum(predLand(valid) & ~gtSafe(valid));
+    de.fn = sum(~predLand(valid) & gtSafe(valid));
+    de.tn = sum(~predLand(valid) & ~gtSafe(valid));
+    de.n_valid = de.tp + de.fp + de.fn + de.tn;
+
+    de.accuracy = autosimSafeDivide(de.tp + de.tn, de.n_valid);
+    de.precision = autosimSafeDivide(de.tp, de.tp + de.fp);
+    de.recall = autosimSafeDivide(de.tp, de.tp + de.fn);
+    if isfinite(de.precision) && isfinite(de.recall) && (de.precision + de.recall) > 0
+        de.f1 = 2.0 * de.precision * de.recall / (de.precision + de.recall);
+    end
+    de.unsafe_landing_rate = autosimSafeDivide(de.fp, de.fp + de.tn);
+    de.risk_score = autosimSafeDivide(de.tp + de.tn, de.tp + de.tn + 2*de.fp + de.fn);
+end
+
+
+function v = autosimSafeDivide(num, den)
+    if den <= 0
+        v = nan;
+    else
+        v = num / den;
+    end
+end
+
+
+function out = autosimClassifyDecisionOutcome(gtSafeLabel, predDecision)
+    gtSafe = (string(gtSafeLabel) == "stable") || (string(gtSafeLabel) == "safe");
+    predLand = (string(predDecision) == "land");
+
+    if gtSafe && predLand
+        out = "TP";
+    elseif (~gtSafe) && predLand
+        out = "FP";
+    elseif gtSafe && (~predLand)
+        out = "FN";
+    else
+        out = "TN";
+    end
 end
 
 
@@ -3922,6 +4343,10 @@ function s = autosimEmptyScenarioResult()
     s.final_state = nan;
 
     s.landing_cmd_time = nan;
+    s.pred_decision = "hover";
+    s.gt_safe_to_land = "unstable";
+    s.decision_outcome = "TN";
+    s.scenario_policy = "exploit";
     s.launch_pid = -1;
     s.launch_log = "";
 end

@@ -31,6 +31,7 @@ fprintf('[AUTOSIM] Scenario count: %d\n', cfg.scenario.count);
 results = repmat(autosimEmptyScenarioResult(), 0, 1);
 runStatus = "completed";
 runError = [];
+rosCtx = [];
 
 traceStore = table();
 learningHistory = table();
@@ -40,6 +41,7 @@ model = autosimCreatePlaceholderModel(cfg, 'pre_init');
 try
     [model, modelInfo] = autosimLoadOrInitModel(cfg);
     fprintf('[AUTOSIM] Initial model source: %s\n', modelInfo.source);
+    rosCtx = autosimCreateRosContext(cfg);
 
     for scenarioId = 1:cfg.scenario.count
         if autosimIsStopRequested()
@@ -65,7 +67,7 @@ try
 
         try
             pause(cfg.launch.warmup_sec);
-            [scenarioResult, scenarioTrace] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model);
+            [scenarioResult, scenarioTrace] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model, rosCtx);
             scenarioResult.launch_pid = launchInfo.pid;
             scenarioResult.launch_log = launchInfo.log_file;
         catch ME
@@ -129,6 +131,7 @@ end
 %%
 autosimCleanupProcesses(cfg);
 pause(cfg.process.kill_settle_sec);
+autosimReleaseRosContext(rosCtx);
 
 finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, model, plotState, runStatus);
 
@@ -201,7 +204,7 @@ function cfg = autosimDefaultConfig()
     cfg.launch.ready_timeout_sec = 15.0;
 
     cfg.scenario = struct();
-    cfg.scenario.count = 200;
+    cfg.scenario.count = 100;
     cfg.scenario.duration_sec = inf;
     cfg.scenario.sample_period_sec = 0.2;
     cfg.scenario.post_land_observe_sec = 3.0;
@@ -278,6 +281,8 @@ function cfg = autosimDefaultConfig()
     cfg.agent.semantic_land_threshold = 0.70;
     cfg.agent.semantic_abort_threshold = 0.40;
     cfg.agent.prob_land_threshold = 0.50;
+    cfg.agent.model_uncertain_margin = 0.12;
+    cfg.agent.model_uncertain_fallback_enable = true;
     cfg.agent.min_samples_before_decision = 8;
     cfg.agent.min_hover_eval_sec = 3.0;
     cfg.agent.min_altitude_before_land = 0.10;
@@ -450,8 +455,8 @@ function cfg = autosimDefaultConfig()
     cfg.topics.cmd_vel = '/drone/cmd_vel';
 
     cfg.ros = struct();
-    cfg.ros.enable_imu_subscription = true;
-    cfg.ros.enable_bumper_subscription = true;
+    cfg.ros.enable_imu_subscription = false;
+    cfg.ros.enable_bumper_subscription = false;
 
     cfg.shell = struct();
     cfg.shell.setup_cmd = [ ...
@@ -859,46 +864,24 @@ function info = autosimStartLaunch(cfg, scenarioCfg, scenarioId)
 end
 
 
-function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model)
-    node = ros2node(sprintf('/matlab_autosim_s%03d', scenarioId));
-    rosCleanup = []; %#ok<NASGU>
+function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model, rosCtx)
+    subState = rosCtx.subState;
+    subPose = rosCtx.subPose;
+    subVel = rosCtx.subVel;
+    subTag = rosCtx.subTag;
+    subWind = rosCtx.subWind;
+    subImu = rosCtx.subImu;
+    subBumpers = rosCtx.subBumpers;
 
-    subState = ros2subscriber(node, cfg.topics.state, 'std_msgs/Int8');
-    subPose = ros2subscriber(node, cfg.topics.pose, 'geometry_msgs/Pose');
-    subVel = ros2subscriber(node, cfg.topics.vel, 'geometry_msgs/Twist');
-    subTag = ros2subscriber(node, cfg.topics.tag_state, 'std_msgs/Float32MultiArray');
-    subWind = ros2subscriber(node, cfg.topics.wind_condition, 'std_msgs/Float32MultiArray');
-    subImu = [];
-    if isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_imu_subscription') && cfg.ros.enable_imu_subscription
-        try
-            subImu = ros2subscriber(node, cfg.topics.imu, 'sensor_msgs/msg/Imu');
-        catch
-            subImu = [];
-        end
-    end
-    subBumpers = [];
-    if isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_bumper_subscription') && cfg.ros.enable_bumper_subscription
-        try
-            subBumpers = ros2subscriber(node, cfg.topics.bumpers, 'gazebo_msgs/msg/ContactsState');
-        catch
-            subBumpers = [];
-        end
-    end
+    pubWind = rosCtx.pubWind;
+    pubTakeoff = rosCtx.pubTakeoff;
+    pubLand = rosCtx.pubLand;
+    pubCmd = rosCtx.pubCmd;
 
-    pubWind = ros2publisher(node, cfg.topics.wind_command, 'std_msgs/Float32MultiArray');
-    pubTakeoff = ros2publisher(node, cfg.topics.takeoff_cmd, 'std_msgs/Empty');
-    pubLand = ros2publisher(node, cfg.topics.land_cmd, 'std_msgs/Empty');
-    pubCmd = ros2publisher(node, cfg.topics.cmd_vel, 'geometry_msgs/Twist');
-
-    msgWind = ros2message(pubWind);
-    msgTakeoff = ros2message(pubTakeoff);
-    msgLand = ros2message(pubLand);
-    msgCmd = ros2message(pubCmd);
-
-    rosHandles = {msgCmd, msgLand, msgTakeoff, msgWind, ...
-        pubCmd, pubLand, pubTakeoff, pubWind, ...
-        subBumpers, subImu, subWind, subTag, subVel, subPose, subState, node};
-    rosCleanup = onCleanup(@() autosimCleanupRosHandles(rosHandles)); %#ok<NASGU>
+    msgWind = rosCtx.msgWind;
+    msgTakeoff = rosCtx.msgTakeoff;
+    msgLand = rosCtx.msgLand;
+    msgCmd = rosCtx.msgCmd;
 
     sampleN = 200;
 
@@ -1432,8 +1415,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         adaptiveProbLandThreshold = autosimClamp(cfg.agent.prob_land_threshold - probeBoost, 0.05, 0.99);
         adaptiveSemanticLandThreshold = autosimClamp(cfg.agent.semantic_land_threshold - probeBoost, 0.05, 0.99);
 
-        modelSaysStable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && (predLabel == "stable") && (predStableProb(k) >= adaptiveProbLandThreshold);
-        modelSaysUnstable = hasTrainedModel && modelGateEnabled && (~modelSaysStable);
+        modelUncertainMargin = 0.0;
+        if isfield(cfg.agent, 'model_uncertain_margin') && isfinite(cfg.agent.model_uncertain_margin)
+            modelUncertainMargin = max(0.0, cfg.agent.model_uncertain_margin);
+        end
+        adaptiveProbAbortThreshold = autosimClamp(adaptiveProbLandThreshold - modelUncertainMargin, 0.01, 0.95);
+
+        modelSaysStable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && ...
+            (predStableProb(k) >= adaptiveProbLandThreshold);
+        modelSaysUnstable = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && ...
+            (predStableProb(k) <= adaptiveProbAbortThreshold);
+        modelIsUncertain = hasTrainedModel && modelGateEnabled && isfinite(predStableProb(k)) && ...
+            (~modelSaysStable) && (~modelSaysUnstable);
 
         if ~landingSent && cfg.agent.block_landing_if_unstable && modelSaysUnstable
             % Only block landing decision; keep XY correction active unless explicitly frozen.
@@ -1445,6 +1438,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             if decisionTxt(k) == ""
                 decisionTxt(k) = "wait_hover_unstable";
             end
+        elseif ~landingSent && modelIsUncertain && decisionTxt(k) == ""
+            decisionTxt(k) = "wait_hover_uncertain";
         end
 
         hoverEvalReady = isFlying && (controlPhase == "xy_hold") && isfinite(decisionEvalStartT) && ...
@@ -1488,6 +1483,22 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             (~cfg.agent.no_model_require_semantic_safe || semanticSafe(k)) && ...
             ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
+        canLandByUncertainModelFallback = hoverEvalReady && hasTrainedModel && modelGateEnabled && modelIsUncertain && ...
+            isfield(cfg.agent, 'model_uncertain_fallback_enable') && cfg.agent.model_uncertain_fallback_enable && ...
+            (k >= cfg.agent.no_model_min_samples_before_land) && ...
+            isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
+            isfinite(z(k)) && (z(k) >= cfg.agent.min_altitude_before_land) && ...
+            isfinite(vzNow) && (abs(vzNow) <= cfg.agent.no_model_max_abs_vz) && ...
+            isfinite(zOscStd) && (zOscStd <= cfg.agent.no_model_max_z_osc_std) && ...
+            isfinite(zFlipRateHz) && (zFlipRateHz <= cfg.agent.no_model_max_z_flip_rate_hz) && ...
+            isfinite(xyStd) && (xyStd <= cfg.agent.no_model_max_xy_std) && ...
+            isfinite(xySpeedRms) && (xySpeedRms <= cfg.agent.no_model_max_xy_speed_rms) && ...
+            isfinite(xyRadiusNow) && (xyRadiusNow <= cfg.agent.no_model_max_xy_radius) && ...
+            isfinite(autosimNanLast(rollDeg(1:k))) && (abs(autosimNanLast(rollDeg(1:k))) <= cfg.agent.no_model_max_abs_roll_pitch_deg) && ...
+            isfinite(autosimNanLast(pitchDeg(1:k))) && (abs(autosimNanLast(pitchDeg(1:k))) <= cfg.agent.no_model_max_abs_roll_pitch_deg) && ...
+            isfinite(windSpNow) && (windSpNow <= cfg.agent.no_model_max_wind_speed) && ...
+            ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
+
         canLandByForcedTimeout = isFlying && (controlPhase == "xy_hold") && ~landingSent && isfinite(decisionEvalStartT) && ...
             isfield(cfg.control, 'land_forced_timeout_sec') && isfinite(cfg.control.land_forced_timeout_sec) && ...
             (cfg.control.land_forced_timeout_sec > 0) && ...
@@ -1523,6 +1534,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             lastDecisionT = tk;
             decisionTxt(k) = "land_by_threshold_no_model";
             controlPhase = "landing_observe";
+        elseif ~landingSent && guardLandingAllowed && canLandByUncertainModelFallback
+            send(pubLand, msgLand);
+            landingSent = true;
+            landingSentT = tk;
+            landingDecisionMode = "land";
+            executedAction = "land";
+            lastDecisionT = tk;
+            decisionTxt(k) = "land_by_model_uncertain_fallback";
+            controlPhase = "landing_observe";
         elseif ~landingSent && canLandByForcedTimeout
             send(pubLand, msgLand);
             landingSent = true;
@@ -1532,15 +1552,17 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             lastDecisionT = tk;
             decisionTxt(k) = "land_by_forced_timeout";
             controlPhase = "landing_observe";
-        elseif decisionTxt(k) == "" && hasTrainedModel && cfg.agent.enable_model_decision && ~modelSaysStable
+        elseif decisionTxt(k) == "" && hasTrainedModel && cfg.agent.enable_model_decision && modelSaysUnstable
             decisionTxt(k) = "hold_by_model_unstable";
+        elseif decisionTxt(k) == "" && hasTrainedModel && cfg.agent.enable_model_decision && modelIsUncertain
+            decisionTxt(k) = "hold_by_model_uncertain";
         elseif decisionTxt(k) == ""
             decisionTxt(k) = "track";
         end
 
         phaseTxt(k) = controlPhase;
 
-        if landingSent || canLandBySemantic || canLandByModel || canLandByNoModelThreshold || canLandByForcedTimeout
+        if landingSent || canLandBySemantic || canLandByModel || canLandByNoModelThreshold || canLandByUncertainModelFallback || canLandByForcedTimeout
             inferTxt = "LAND";
         else
             inferTxt = "NO-LAND";
@@ -1756,9 +1778,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         pause(cfg.scenario.sample_period_sec);
     end
-
-    autosimCleanupRosHandles(rosHandles);
-    clear rosCleanup;
 
     res = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
         imuAngVel, imuLinAcc, contactForce, armForceFL, armForceFR, armForceRL, armForceRR);
@@ -4478,6 +4497,65 @@ function x = autosimRandRange(a, b)
     lo = min(a, b);
     hi = max(a, b);
     x = lo + rand() * (hi - lo);
+end
+
+
+function rosCtx = autosimCreateRosContext(cfg)
+    rosCtx = struct();
+
+    nodeName = sprintf('/matlab_autosim_%s', autosimTimestamp());
+    node = ros2node(nodeName);
+
+    rosCtx.node = node;
+    rosCtx.subState = ros2subscriber(node, cfg.topics.state, 'std_msgs/Int8');
+    rosCtx.subPose = ros2subscriber(node, cfg.topics.pose, 'geometry_msgs/Pose');
+    rosCtx.subVel = ros2subscriber(node, cfg.topics.vel, 'geometry_msgs/Twist');
+    rosCtx.subTag = ros2subscriber(node, cfg.topics.tag_state, 'std_msgs/Float32MultiArray');
+    rosCtx.subWind = ros2subscriber(node, cfg.topics.wind_condition, 'std_msgs/Float32MultiArray');
+
+    rosCtx.subImu = [];
+    if isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_imu_subscription') && cfg.ros.enable_imu_subscription
+        try
+            rosCtx.subImu = ros2subscriber(node, cfg.topics.imu, 'sensor_msgs/msg/Imu');
+        catch
+            rosCtx.subImu = [];
+        end
+    end
+
+    rosCtx.subBumpers = [];
+    if isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_bumper_subscription') && cfg.ros.enable_bumper_subscription
+        try
+            rosCtx.subBumpers = ros2subscriber(node, cfg.topics.bumpers, 'gazebo_msgs/msg/ContactsState');
+        catch
+            rosCtx.subBumpers = [];
+        end
+    end
+
+    rosCtx.pubWind = ros2publisher(node, cfg.topics.wind_command, 'std_msgs/Float32MultiArray');
+    rosCtx.pubTakeoff = ros2publisher(node, cfg.topics.takeoff_cmd, 'std_msgs/Empty');
+    rosCtx.pubLand = ros2publisher(node, cfg.topics.land_cmd, 'std_msgs/Empty');
+    rosCtx.pubCmd = ros2publisher(node, cfg.topics.cmd_vel, 'geometry_msgs/Twist');
+
+    rosCtx.msgWind = ros2message(rosCtx.pubWind);
+    rosCtx.msgTakeoff = ros2message(rosCtx.pubTakeoff);
+    rosCtx.msgLand = ros2message(rosCtx.pubLand);
+    rosCtx.msgCmd = ros2message(rosCtx.pubCmd);
+    rosCtx.cleanupHandles = {rosCtx.msgCmd, rosCtx.msgLand, rosCtx.msgTakeoff, rosCtx.msgWind, ...
+        rosCtx.pubCmd, rosCtx.pubLand, rosCtx.pubTakeoff, rosCtx.pubWind, ...
+        rosCtx.subBumpers, rosCtx.subImu, rosCtx.subWind, rosCtx.subTag, rosCtx.subVel, rosCtx.subPose, rosCtx.subState, rosCtx.node};
+end
+
+
+function autosimReleaseRosContext(rosCtx)
+    if nargin < 1 || isempty(rosCtx)
+        return;
+    end
+
+    if isstruct(rosCtx) && isfield(rosCtx, 'cleanupHandles')
+        autosimCleanupRosHandles(rosCtx.cleanupHandles);
+    elseif isstruct(rosCtx) && isfield(rosCtx, 'node')
+        autosimCleanupRosHandles({rosCtx.node});
+    end
 end
 
 

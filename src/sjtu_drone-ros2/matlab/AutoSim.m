@@ -52,7 +52,7 @@ try
 
         fprintf('\n[AUTOSIM] Scenario %d/%d\n', scenarioId, cfg.scenario.count);
 
-        datasetState = autosimAnalyzeDatasetState(results, traceStore, learningHistory);
+        datasetState = autosimAnalyzeDatasetState(cfg, results, traceStore, learningHistory);
         scenarioPolicy = autosimChooseScenarioPolicy(cfg, datasetState, scenarioId);
         scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, scenarioPolicy, datasetState);
 
@@ -193,7 +193,7 @@ function cfg = autosimDefaultConfig()
     cfg.launch.ready_timeout_sec = 15.0;
 
     cfg.scenario = struct();
-    cfg.scenario.count = 100;
+    cfg.scenario.count = 30;
     cfg.scenario.duration_sec = inf;
     cfg.scenario.sample_period_sec = 0.1;
     cfg.scenario.analysis_stop_at_landing = true;
@@ -323,15 +323,15 @@ function cfg = autosimDefaultConfig()
 
     cfg.adaptive = struct();
     cfg.adaptive.enable = true;
-    cfg.adaptive.warmup_scenarios = 6;
+    cfg.adaptive.warmup_scenarios = 2;
     cfg.adaptive.target_unstable_ratio = 0.45;
     cfg.adaptive.target_boundary_ratio = 0.25;
     cfg.adaptive.boundary_margin_context = 0.10;
     cfg.adaptive.boundary_margin_prob = 0.10;
-    cfg.adaptive.recent_window = 20;
-    cfg.adaptive.base_exploit_prob = 0.60;
-    cfg.adaptive.base_boundary_prob = 0.25;
-    cfg.adaptive.base_hard_negative_prob = 0.15;
+    cfg.adaptive.recent_window = 10;
+    cfg.adaptive.base_exploit_prob = 0.45;
+    cfg.adaptive.base_boundary_prob = 0.30;
+    cfg.adaptive.base_hard_negative_prob = 0.25;
     cfg.adaptive.max_boundary_prob = 0.45;
     cfg.adaptive.max_hard_negative_prob = 0.40;
     cfg.adaptive.safe_probe_ratio_boost = 0.06;
@@ -358,9 +358,27 @@ function cfg = autosimDefaultConfig()
 
     cfg.probe = struct();
     cfg.probe.enable = true;
-    cfg.probe.exploit_prob = 0.00;
-    cfg.probe.boundary_prob = 0.20;
-    cfg.probe.hard_negative_prob = 0.55;
+    cfg.probe.exploit_prob = 0.03;
+    cfg.probe.boundary_prob = 0.40;
+    cfg.probe.hard_negative_prob = 0.82;
+    cfg.probe.max_exploit_prob = 0.10;
+    cfg.probe.max_boundary_prob = 0.70;
+    cfg.probe.max_hard_negative_prob = 0.97;
+    cfg.probe.target_recent_total_ratio = 0.30;
+    cfg.probe.target_recent_exploit_ratio = 0.08;
+    cfg.probe.target_recent_boundary_ratio = 0.55;
+    cfg.probe.target_recent_hard_negative_ratio = 0.90;
+    cfg.probe.target_recent_unsafe_probe_ratio = 0.18;
+    cfg.probe.total_shortage_gain = 0.55;
+    cfg.probe.policy_shortage_gain = 0.85;
+    cfg.probe.unsafe_shortage_gain = 0.70;
+    cfg.probe.high_fp_boost = 0.12;
+    cfg.probe.bootstrap_episode_count = 10;
+    cfg.probe.bootstrap_target_total_ratio = 0.40;
+    cfg.probe.bootstrap_exploit_prob = 0.10;
+    cfg.probe.bootstrap_boundary_prob = 0.65;
+    cfg.probe.bootstrap_hard_negative_prob = 0.95;
+    cfg.probe.bootstrap_gain = 0.60;
     cfg.probe.max_tag_error = 0.90;
     cfg.probe.min_altitude_before_land = 0.10;
     cfg.probe.require_tag_detected = true;
@@ -648,7 +666,7 @@ function scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId)
 end
 
 
-function state = autosimAnalyzeDatasetState(results, traceStore, learningHistory)
+function state = autosimAnalyzeDatasetState(cfg, results, traceStore, learningHistory)
     if nargin < 1 || isempty(results)
         summaryTbl = table();
     else
@@ -671,10 +689,20 @@ function state = autosimAnalyzeDatasetState(results, traceStore, learningHistory
     state.fn = dEval.fn;
     state.tn = dEval.tn;
     state.nValid = dEval.n_valid;
+    state.nScenarios = 0;
+    state.nProbeEpisodes = 0;
+    state.nUnsafeProbeEpisodes = 0;
+    state.recentProbeRatio = 0.0;
+    state.recentUnsafeProbeRatio = 0.0;
+    state.recentExploitProbeRatio = 0.0;
+    state.recentBoundaryProbeRatio = 0.0;
+    state.recentHardNegativeProbeRatio = 0.0;
 
     if isempty(summaryTbl)
         return;
     end
+
+    state.nScenarios = height(summaryTbl);
 
     if ismember('label', summaryTbl.Properties.VariableNames)
         lbl = string(summaryTbl.label);
@@ -689,6 +717,40 @@ function state = autosimAnalyzeDatasetState(results, traceStore, learningHistory
         if w > 0
             recent = lbl(max(1, end-w+1):end);
             state.recentUnstableRatio = sum(recent == "unstable") / numel(recent);
+        end
+    end
+
+    if ismember('probe_episode', summaryTbl.Properties.VariableNames)
+        probeEpisode = logical(autosimToNumeric(summaryTbl.probe_episode));
+        state.nProbeEpisodes = sum(probeEpisode);
+
+        unsafeLabel = false(height(summaryTbl), 1);
+        if ismember('gt_safe_to_land', summaryTbl.Properties.VariableNames)
+            gtLbl = string(summaryTbl.gt_safe_to_land);
+            unsafeLabel = (gtLbl == "unstable") | (gtLbl == "unsafe");
+        elseif ismember('label', summaryTbl.Properties.VariableNames)
+            unsafeLabel = string(summaryTbl.label) == "unstable";
+        end
+        state.nUnsafeProbeEpisodes = sum(probeEpisode & unsafeLabel);
+
+        recentWindow = 10;
+        if isfield(cfg, 'adaptive') && isfield(cfg.adaptive, 'recent_window') && isfinite(cfg.adaptive.recent_window)
+            recentWindow = max(3, round(cfg.adaptive.recent_window));
+        end
+        wProbe = min(recentWindow, height(summaryTbl));
+        if wProbe > 0
+            recentIdx = max(1, height(summaryTbl) - wProbe + 1):height(summaryTbl);
+            recentProbe = probeEpisode(recentIdx);
+            recentUnsafe = unsafeLabel(recentIdx);
+            state.recentProbeRatio = sum(recentProbe) / numel(recentProbe);
+            state.recentUnsafeProbeRatio = sum(recentProbe & recentUnsafe) / numel(recentProbe);
+
+            if ismember('scenario_policy', summaryTbl.Properties.VariableNames)
+                recentPolicy = string(summaryTbl.scenario_policy(recentIdx));
+                state.recentExploitProbeRatio = autosimPolicyProbeRatio(recentProbe, recentPolicy, "exploit");
+                state.recentBoundaryProbeRatio = autosimPolicyProbeRatio(recentProbe, recentPolicy, "boundary_validation");
+                state.recentHardNegativeProbeRatio = autosimPolicyProbeRatio(recentProbe, recentPolicy, "hard_negative");
+            end
         end
     end
 
@@ -825,6 +887,7 @@ end
 function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, policyMode, datasetState)
     scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId);
     probeProb = 0.0;
+    probeReason = "none";
 
     if isstruct(policyMode)
         policy = policyMode;
@@ -847,9 +910,6 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
         case 'hard_negative'
             scenarioCfg.hard_negative_hint = true;
             scenarioCfg.boundary_hint = false;
-            if isfield(cfg, 'probe') && isfield(cfg.probe, 'hard_negative_prob') && isfinite(cfg.probe.hard_negative_prob)
-                probeProb = cfg.probe.hard_negative_prob;
-            end
 
             wsMin = cfg.adaptive.hard_negative.wind_min_scale * cfg.wind.speed_max;
             wsMax = cfg.adaptive.hard_negative.wind_scale * cfg.wind.speed_max;
@@ -862,9 +922,6 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
         case 'boundary_validation'
             scenarioCfg.hard_negative_hint = false;
             scenarioCfg.boundary_hint = true;
-            if isfield(cfg, 'probe') && isfield(cfg.probe, 'boundary_prob') && isfinite(cfg.probe.boundary_prob)
-                probeProb = cfg.probe.boundary_prob;
-            end
 
             c = cfg.adaptive.boundary.wind_center_scale * cfg.wind.speed_max;
             span = cfg.adaptive.boundary.wind_span_scale * cfg.wind.speed_max;
@@ -881,9 +938,6 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
         otherwise
             scenarioCfg.hard_negative_hint = false;
             scenarioCfg.boundary_hint = false;
-            if isfield(cfg, 'probe') && isfield(cfg.probe, 'exploit_prob') && isfinite(cfg.probe.exploit_prob)
-                probeProb = cfg.probe.exploit_prob;
-            end
             scenarioCfg.wind_speed = autosimClamp(cfg.adaptive.exploit.wind_scale * scenarioCfg.wind_speed, cfg.wind.speed_min, cfg.wind.speed_max);
             scenarioCfg.hover_height_m = autosimClamp(scenarioCfg.hover_height_m + cfg.adaptive.exploit.hover_bias_m, ...
                 cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
@@ -892,12 +946,104 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
     end
 
     if isfield(cfg, 'probe') && isfield(cfg.probe, 'enable') && cfg.probe.enable
+        [probeProb, probeReason] = autosimComputeAdaptiveProbeProbability(cfg, datasetState, string(policy.mode));
         probeProb = autosimClamp(probeProb, 0.0, 1.0);
         scenarioCfg.probe_landing_probability = probeProb;
         if rand() < probeProb
             scenarioCfg.probe_landing_selected = true;
-            scenarioCfg.probe_landing_reason = string(policy.mode) + "_probe";
+            scenarioCfg.probe_landing_reason = probeReason;
+        else
+            scenarioCfg.probe_landing_reason = probeReason;
         end
+    end
+end
+
+
+function [probeProb, reason] = autosimComputeAdaptiveProbeProbability(cfg, datasetState, policyMode)
+    policyMode = string(policyMode);
+    probeProb = 0.0;
+    reasonParts = strings(0, 1);
+    bootstrapActive = false;
+
+    if ~isfield(cfg, 'probe') || ~isfield(cfg.probe, 'enable') || ~cfg.probe.enable
+        reason = "probe_disabled";
+        return;
+    end
+
+    switch policyMode
+        case "hard_negative"
+            probeProb = autosimClampNaN(cfg.probe.hard_negative_prob, 0.0);
+            maxProb = autosimClampNaN(cfg.probe.max_hard_negative_prob, 1.0);
+            targetPolicyRatio = autosimClampNaN(cfg.probe.target_recent_hard_negative_ratio, 0.75);
+            recentPolicyRatio = autosimClampNaN(datasetState.recentHardNegativeProbeRatio, 0.0);
+            bootstrapMinProb = autosimClampNaN(cfg.probe.bootstrap_hard_negative_prob, probeProb);
+        case "boundary_validation"
+            probeProb = autosimClampNaN(cfg.probe.boundary_prob, 0.0);
+            maxProb = autosimClampNaN(cfg.probe.max_boundary_prob, 1.0);
+            targetPolicyRatio = autosimClampNaN(cfg.probe.target_recent_boundary_ratio, 0.40);
+            recentPolicyRatio = autosimClampNaN(datasetState.recentBoundaryProbeRatio, 0.0);
+            bootstrapMinProb = autosimClampNaN(cfg.probe.bootstrap_boundary_prob, probeProb);
+        otherwise
+            probeProb = autosimClampNaN(cfg.probe.exploit_prob, 0.0);
+            maxProb = autosimClampNaN(cfg.probe.max_exploit_prob, 1.0);
+            targetPolicyRatio = autosimClampNaN(cfg.probe.target_recent_exploit_ratio, 0.05);
+            recentPolicyRatio = autosimClampNaN(datasetState.recentExploitProbeRatio, 0.0);
+            bootstrapMinProb = autosimClampNaN(cfg.probe.bootstrap_exploit_prob, probeProb);
+    end
+
+    probeProb = autosimClamp(probeProb, 0.0, 1.0);
+    maxProb = autosimClamp(maxProb, probeProb, 1.0);
+    reasonParts(end+1,1) = policyMode + "_base";
+
+    totalShortage = max(0.0, autosimClampNaN(cfg.probe.target_recent_total_ratio, 0.18) - autosimClampNaN(datasetState.recentProbeRatio, 0.0));
+    if totalShortage > 0
+        probeProb = probeProb + autosimClampNaN(cfg.probe.total_shortage_gain, 0.0) * totalShortage;
+        reasonParts(end+1,1) = "total_shortage";
+    end
+
+    policyShortage = max(0.0, targetPolicyRatio - recentPolicyRatio);
+    if policyShortage > 0
+        probeProb = probeProb + autosimClampNaN(cfg.probe.policy_shortage_gain, 0.0) * policyShortage;
+        reasonParts(end+1,1) = "policy_shortage";
+    end
+
+    if policyMode ~= "exploit"
+        unsafeShortage = max(0.0, autosimClampNaN(cfg.probe.target_recent_unsafe_probe_ratio, 0.10) - autosimClampNaN(datasetState.recentUnsafeProbeRatio, 0.0));
+        if unsafeShortage > 0
+            probeProb = probeProb + autosimClampNaN(cfg.probe.unsafe_shortage_gain, 0.0) * unsafeShortage;
+            reasonParts(end+1,1) = "unsafe_probe_shortage";
+        end
+    end
+
+    if autosimClampNaN(datasetState.unsafeLandingRate, 0.0) > 0.20 && policyMode ~= "exploit"
+        probeProb = probeProb + autosimClampNaN(cfg.probe.high_fp_boost, 0.0);
+        reasonParts(end+1,1) = "fp_high";
+    end
+
+    if autosimClampNaN(datasetState.nScenarios, 0.0) < autosimClampNaN(cfg.probe.bootstrap_episode_count, 10)
+        bootstrapActive = true;
+        probeProb = max(probeProb, autosimClamp(bootstrapMinProb, 0.0, maxProb));
+        bootstrapShortage = max(0.0, autosimClampNaN(cfg.probe.bootstrap_target_total_ratio, 0.40) - autosimClampNaN(datasetState.recentProbeRatio, 0.0));
+        if bootstrapShortage > 0
+            probeProb = probeProb + autosimClampNaN(cfg.probe.bootstrap_gain, 0.0) * bootstrapShortage;
+            reasonParts(end+1,1) = "bootstrap_shortage";
+        end
+    end
+
+    probeProb = autosimClamp(probeProb, 0.0, maxProb);
+    if bootstrapActive
+        reasonParts(end+1,1) = "bootstrap_active";
+    end
+    reason = strjoin(cellstr(reasonParts), "+");
+end
+
+
+function ratio = autosimPolicyProbeRatio(probeEpisode, policyLabels, policyName)
+    mask = string(policyLabels) == string(policyName);
+    if ~any(mask)
+        ratio = 0.0;
+    else
+        ratio = sum(probeEpisode(mask)) / sum(mask);
     end
 end
 
@@ -1055,6 +1201,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     probeLandingTriggered = false;
     probeLandingReason = "none";
     probePolicySelected = isfield(scenarioCfg, 'probe_landing_selected') && logical(scenarioCfg.probe_landing_selected);
+    requireLandingOutcomeEvaluation = false;
     landedHoldStartT = nan;
     kLast = 0;
 
@@ -1709,6 +1856,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 executedAction = "land";
                 actionSource = "probe_policy_override";
                 probeLandingTriggered = true;
+                requireLandingOutcomeEvaluation = true;
                 probeLandingReason = string(scenarioCfg.probe_landing_reason);
                 randomLandingPlanned = false;
                 lastDecisionT = tk;
@@ -1721,6 +1869,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 landingDecisionMode = "abort";
                 executedAction = "land";
                 actionSource = "forced_timeout";
+                requireLandingOutcomeEvaluation = true;
                 lastDecisionT = tk;
                 decisionTxt(k) = "land_by_forced_timeout";
                 controlPhase = "landing_observe";
@@ -1795,7 +1944,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             send(pubCmd, msgCmd);
         end
 
-        if landingSent && isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing
+        if landingSent && isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ~requireLandingOutcomeEvaluation
             break;
         end
 
@@ -1918,7 +2067,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     end
 
     postN = max(1, floor(cfg.scenario.post_land_observe_sec / cfg.scenario.sample_period_sec));
-    if isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing
+    if isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ~requireLandingOutcomeEvaluation
         postN = 0;
     end
     if stopRequested
@@ -2096,7 +2245,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         pause(max(0.0, cfg.scenario.sample_period_sec - (toc(t0) - iterStartT)));
     end
 
-    res = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
+    res = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, requireLandingOutcomeEvaluation, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
         imuAngVel, imuLinAcc, contactForce, armForceFL, armForceFR, armForceRL, armForceRR);
     res.landing_cmd_time = landingSentT;
     if isfinite(res.landing_cmd_time) && isfinite(analysisStartT)
@@ -2275,7 +2424,7 @@ function feat = autosimBuildOnlineFeatureVector(z, vz, speedAbs, rollDeg, pitchD
 end
 
 
-function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, bumperContact, imuAngVel, imuLinAcc, contactForce, armFL, armFR, armRL, armRR)
+function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, requireLandingOutcomeEvaluation, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, bumperContact, imuAngVel, imuLinAcc, contactForce, armFL, armFR, armRL, armRR)
     out = autosimEmptyScenarioResult();
     out.scenario_id = scenarioId;
     if isfield(scenarioCfg, 'policy_mode')
@@ -2322,7 +2471,7 @@ function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, z, vz, spe
     out.arm_force_imbalance = autosimNanMax([abs(armFL-armFR), abs(armRL-armRR)]);
     out.final_state = autosimNanLast(stateVal);
 
-    if isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing
+    if isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ~requireLandingOutcomeEvaluation
         [passHoverWindow, hoverFailureReason] = autosimEvaluateHoverWindowSafety(out, cfg);
         if passHoverWindow
             out.label = "stable";
@@ -4918,9 +5067,9 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, outPngPat
     windCtx = autosimBuildScenarioWindContext(summaryTbl, traceStore, sid);
 
     fig = figure('Name', 'AutoSim GT vs Decision', 'NumberTitle', 'off');
-    tl = tiledlayout(fig, 3, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-    ax1 = nexttile(tl, [1 2]);
+    ax1 = nexttile(tl, 1);
     stem(ax1, sid, double(gtSafe), 'Color', [0.10 0.60 0.10], 'Marker', 'o', 'LineWidth', 1.0);
     hold(ax1, 'on');
     stem(ax1, sid, double(predLand), 'Color', [0.85 0.33 0.10], 'Marker', 'x', 'LineWidth', 1.0);
@@ -4945,7 +5094,7 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, outPngPat
     end
     grid(ax1, 'on');
 
-    ax2 = nexttile(tl, [1 2]);
+    ax2 = nexttile(tl, 2);
     ax2LegendHandles = gobjects(0, 1);
     ax2LegendLabels = {};
 
@@ -4994,50 +5143,11 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, outPngPat
     grid(ax2, 'on');
     legend(ax2, ax2LegendHandles, ax2LegendLabels, 'Location', 'southoutside', 'Orientation', 'horizontal');
 
-    ax3 = nexttile(tl, 5);
-    cm = [dEval.tp dEval.fp; dEval.fn dEval.tn]; % rows: pred land/abort, cols: actual safe/unsafe
-    imagesc(ax3, cm);
-    axis(ax3, 'equal');
-    axis(ax3, 'tight');
-    colormap(ax3, parula(128));
-    colorbar(ax3);
-    xticks(ax3, [1 2]);
-    yticks(ax3, [1 2]);
-    xticklabels(ax3, {'Actual Safe', 'Actual Unsafe'});
-    yticklabels(ax3, {'Pred Land', 'Pred Abort'});
-    title(ax3, sprintf('Confusion Matrix | Acc=%.3f Prec=%.3f SafeRec=%.3f UnsafeReject=%.3f UnsafeLand=%.3f', ...
-        dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate));
-    for rr = 1:2
-        for cc = 1:2
-            txtColor = 'w';
-            if cm(rr, cc) < max(cm(:)) * 0.45
-                txtColor = 'k';
-            end
-            text(ax3, cc, rr, sprintf('%d', cm(rr, cc)), 'HorizontalAlignment', 'center', 'Color', txtColor, 'FontWeight', 'bold');
-        end
-    end
-
-    ax4 = nexttile(tl, 6);
-    metricVals = [dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate];
-    b = bar(ax4, metricVals, 0.70);
-    b.FaceColor = 'flat';
-    b.CData = [ ...
-        0.00 0.45 0.74; ...
-        0.20 0.60 0.20; ...
-        0.85 0.33 0.10; ...
-        0.49 0.18 0.56; ...
-        0.75 0.20 0.20 ...
-    ];
-    ylim(ax4, [0 1]);
-    xticks(ax4, 1:5);
-    xticklabels(ax4, {'Accuracy','Precision','SafeRecall','UnsafeReject','UnsafeLand'});
-    ylabel(ax4, 'score');
-    title(ax4, 'Main Decision Metrics');
-    grid(ax4, 'on');
-
     subtitle(tl, sprintf(['Decision-focused evaluation | valid=%d safe=%d unsafe=%d | ' ...
-        'TP=%d FP=%d FN=%d TN=%d | mean wind=%.2f m/s max wind=%.2f m/s'], ...
+        'TP=%d FP=%d FN=%d TN=%d | Acc=%.3f Prec=%.3f SafeRec=%.3f UnsafeReject=%.3f UnsafeLand=%.3f | ' ...
+        'mean wind=%.2f m/s max wind=%.2f m/s'], ...
         dEval.n_valid, dEval.n_safe, dEval.n_unsafe, dEval.tp, dEval.fp, dEval.fn, dEval.tn, ...
+        dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate, ...
         autosimNanMean(windCtx.mean_speed), autosimNanMean(windCtx.max_speed)));
 
     exportgraphics(fig, outPngPath, 'Resolution', 150);

@@ -193,7 +193,7 @@ function cfg = autosimDefaultConfig()
     cfg.launch.ready_timeout_sec = 15.0;
 
     cfg.scenario = struct();
-    cfg.scenario.count = 10;
+    cfg.scenario.count = 100;
     cfg.scenario.duration_sec = inf;
     cfg.scenario.sample_period_sec = 0.1;
     cfg.scenario.analysis_stop_at_landing = true;
@@ -355,6 +355,18 @@ function cfg = autosimDefaultConfig()
     cfg.adaptive.hard_negative.gust_amp_scale = 1.35;
     cfg.adaptive.hard_negative.dir_osc_scale = 1.25;
     cfg.adaptive.hard_negative.hover_bias_m = -0.10;
+
+    cfg.probe = struct();
+    cfg.probe.enable = true;
+    cfg.probe.exploit_prob = 0.00;
+    cfg.probe.boundary_prob = 0.20;
+    cfg.probe.hard_negative_prob = 0.55;
+    cfg.probe.max_tag_error = 0.90;
+    cfg.probe.min_altitude_before_land = 0.10;
+    cfg.probe.require_tag_detected = true;
+    cfg.probe.require_unsafe_signal = true;
+    cfg.probe.allow_uncertain_signal = true;
+    cfg.probe.only_when_policy_holds = true;
 
     cfg.persistence = struct();
     cfg.persistence.checkpoint_mat = fullfile(cfg.paths.data_dir, 'autosim_checkpoint_latest.mat');
@@ -621,6 +633,9 @@ function scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId)
     scenarioCfg.boundary_hint = false;
     scenarioCfg.hard_negative_hint = false;
     scenarioCfg.safe_probe_ratio_boost = 0.0;
+    scenarioCfg.probe_landing_selected = false;
+    scenarioCfg.probe_landing_probability = 0.0;
+    scenarioCfg.probe_landing_reason = "none";
     scenarioCfg.hover_height_m = autosimRandRange(cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
     scenarioCfg.wind_profile_offset_sec = 0;
     if cfg.wind.enable
@@ -809,6 +824,7 @@ end
 
 function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, policyMode, datasetState)
     scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId);
+    probeProb = 0.0;
 
     if isstruct(policyMode)
         policy = policyMode;
@@ -831,6 +847,9 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
         case 'hard_negative'
             scenarioCfg.hard_negative_hint = true;
             scenarioCfg.boundary_hint = false;
+            if isfield(cfg, 'probe') && isfield(cfg.probe, 'hard_negative_prob') && isfinite(cfg.probe.hard_negative_prob)
+                probeProb = cfg.probe.hard_negative_prob;
+            end
 
             wsMin = cfg.adaptive.hard_negative.wind_min_scale * cfg.wind.speed_max;
             wsMax = cfg.adaptive.hard_negative.wind_scale * cfg.wind.speed_max;
@@ -843,6 +862,9 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
         case 'boundary_validation'
             scenarioCfg.hard_negative_hint = false;
             scenarioCfg.boundary_hint = true;
+            if isfield(cfg, 'probe') && isfield(cfg.probe, 'boundary_prob') && isfinite(cfg.probe.boundary_prob)
+                probeProb = cfg.probe.boundary_prob;
+            end
 
             c = cfg.adaptive.boundary.wind_center_scale * cfg.wind.speed_max;
             span = cfg.adaptive.boundary.wind_span_scale * cfg.wind.speed_max;
@@ -859,11 +881,23 @@ function scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, polic
         otherwise
             scenarioCfg.hard_negative_hint = false;
             scenarioCfg.boundary_hint = false;
+            if isfield(cfg, 'probe') && isfield(cfg.probe, 'exploit_prob') && isfinite(cfg.probe.exploit_prob)
+                probeProb = cfg.probe.exploit_prob;
+            end
             scenarioCfg.wind_speed = autosimClamp(cfg.adaptive.exploit.wind_scale * scenarioCfg.wind_speed, cfg.wind.speed_min, cfg.wind.speed_max);
             scenarioCfg.hover_height_m = autosimClamp(scenarioCfg.hover_height_m + cfg.adaptive.exploit.hover_bias_m, ...
                 cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
             scenarioCfg.gust_amp_scale = cfg.adaptive.exploit.gust_amp_scale;
             scenarioCfg.dir_osc_scale = cfg.adaptive.exploit.dir_osc_scale;
+    end
+
+    if isfield(cfg, 'probe') && isfield(cfg.probe, 'enable') && cfg.probe.enable
+        probeProb = autosimClamp(probeProb, 0.0, 1.0);
+        scenarioCfg.probe_landing_probability = probeProb;
+        if rand() < probeProb
+            scenarioCfg.probe_landing_selected = true;
+            scenarioCfg.probe_landing_reason = string(policy.mode) + "_probe";
+        end
     end
 end
 
@@ -1017,6 +1051,10 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     landingSentT = nan;
     landingDecisionMode = "abort";
     executedAction = "abort";
+    actionSource = "policy_abort";
+    probeLandingTriggered = false;
+    probeLandingReason = "none";
+    probePolicySelected = isfield(scenarioCfg, 'probe_landing_selected') && logical(scenarioCfg.probe_landing_selected);
     landedHoldStartT = nan;
     kLast = 0;
 
@@ -1422,11 +1460,13 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
                 if ~tagLockAcquired && isfinite(tagLockHoldStartT) && ((tk - tagLockHoldStartT) >= cfg.learning.tag_lock_hold_sec)
                     tagLockAcquired = true;
-                    randomLandingPlanned = true;
-                    randomLandingStartT = tk + autosimRandRange(cfg.learning.random_landing_wait_min_sec, cfg.learning.random_landing_wait_max_sec);
-                    randomLandingEndT = randomLandingStartT + autosimRandRange(cfg.learning.random_cmd_duration_min_sec, cfg.learning.random_cmd_duration_max_sec);
-                    randomBiasX = autosimRandRange(-cfg.learning.random_xy_cmd_max, cfg.learning.random_xy_cmd_max);
-                    randomBiasY = autosimRandRange(-cfg.learning.random_xy_cmd_max, cfg.learning.random_xy_cmd_max);
+                    if probePolicySelected
+                        randomLandingPlanned = true;
+                        randomLandingStartT = tk + autosimRandRange(cfg.learning.random_landing_wait_min_sec, cfg.learning.random_landing_wait_max_sec);
+                        randomLandingEndT = randomLandingStartT + autosimRandRange(cfg.learning.random_cmd_duration_min_sec, cfg.learning.random_cmd_duration_max_sec);
+                        randomBiasX = autosimRandRange(-cfg.learning.random_xy_cmd_max, cfg.learning.random_xy_cmd_max);
+                        randomBiasY = autosimRandRange(-cfg.learning.random_xy_cmd_max, cfg.learning.random_xy_cmd_max);
+                    end
                 end
 
                 if randomLandingPlanned && ~landingSent
@@ -1533,7 +1573,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     cmdX = 0.0;
                     cmdY = 0.0;
                 end
-                randomLandingPlanned = false;
+                if ~probePolicySelected
+                    randomLandingPlanned = false;
+                end
                 if decisionTxt(k) == ""
                     decisionTxt(k) = "wait_hover_unstable";
                 end
@@ -1598,6 +1640,19 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 isfinite(windSpNow) && (windSpNow <= cfg.agent.no_model_max_wind_speed) && ...
                 ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
+            probeUnsafeSignal = scenarioCfg.hard_negative_hint || scenarioCfg.boundary_hint || modelSaysUnstable || ...
+                (isfield(cfg.probe, 'allow_uncertain_signal') && cfg.probe.allow_uncertain_signal && modelIsUncertain) || ...
+                (~logical(semanticSafe(k)));
+            probePolicyHold = (~canLandBySemantic) && (~canLandByModel) && (~canLandByNoModelThreshold) && (~canLandByUncertainModelFallback);
+            canLandByProbe = hoverEvalReady && probePolicySelected && randomLandingPlanned && ~landingSent && ...
+                isfinite(randomLandingStartT) && (tk >= randomLandingStartT) && ...
+                isfinite(tagErr(k)) && (tagErr(k) <= cfg.probe.max_tag_error) && ...
+                isfinite(zEvalNow) && (zEvalNow >= cfg.probe.min_altitude_before_land) && ...
+                (~cfg.probe.require_tag_detected || tagDetected) && ...
+                (~cfg.probe.only_when_policy_holds || probePolicyHold) && ...
+                (~cfg.probe.require_unsafe_signal || probeUnsafeSignal) && ...
+                ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
+
             canLandByForcedTimeout = isFlying && (controlPhase == "xy_hold") && ~landingSent && isfinite(decisionEvalStartT) && ...
                 isfield(cfg.control, 'land_forced_timeout_sec') && isfinite(cfg.control.land_forced_timeout_sec) && ...
                 (cfg.control.land_forced_timeout_sec > 0) && ...
@@ -1612,6 +1667,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 landingSentT = tk;
                 landingDecisionMode = "land";
                 executedAction = "land";
+                actionSource = "policy_semantic";
                 lastDecisionT = tk;
                 decisionTxt(k) = "land_by_ontology_ai";
                 controlPhase = "landing_observe";
@@ -1621,6 +1677,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 landingSentT = tk;
                 landingDecisionMode = "land";
                 executedAction = "land";
+                actionSource = "policy_model";
                 lastDecisionT = tk;
                 decisionTxt(k) = "land_by_model";
                 controlPhase = "landing_observe";
@@ -1630,6 +1687,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 landingSentT = tk;
                 landingDecisionMode = "land";
                 executedAction = "land";
+                actionSource = "policy_threshold";
                 lastDecisionT = tk;
                 decisionTxt(k) = "land_by_threshold_no_model";
                 controlPhase = "landing_observe";
@@ -1639,8 +1697,22 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 landingSentT = tk;
                 landingDecisionMode = "land";
                 executedAction = "land";
+                actionSource = "policy_model_uncertain_fallback";
                 lastDecisionT = tk;
                 decisionTxt(k) = "land_by_model_uncertain_fallback";
+                controlPhase = "landing_observe";
+            elseif ~landingSent && canLandByProbe
+                send(pubLand, msgLand);
+                landingSent = true;
+                landingSentT = tk;
+                landingDecisionMode = "abort";
+                executedAction = "land";
+                actionSource = "probe_policy_override";
+                probeLandingTriggered = true;
+                probeLandingReason = string(scenarioCfg.probe_landing_reason);
+                randomLandingPlanned = false;
+                lastDecisionT = tk;
+                decisionTxt(k) = "land_by_probe_policy_override";
                 controlPhase = "landing_observe";
             elseif ~landingSent && canLandByForcedTimeout
                 send(pubLand, msgLand);
@@ -1648,6 +1720,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 landingSentT = tk;
                 landingDecisionMode = "abort";
                 executedAction = "land";
+                actionSource = "forced_timeout";
                 lastDecisionT = tk;
                 decisionTxt(k) = "land_by_forced_timeout";
                 controlPhase = "landing_observe";
@@ -2031,6 +2104,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     end
     res.pred_decision = string(landingDecisionMode);
     res.executed_action = string(executedAction);
+    res.action_source = string(actionSource);
+    res.probe_episode = logical(probeLandingTriggered);
+    res.probe_reason = string(probeLandingReason);
     res.gt_safe_to_land = "unstable";
     if string(res.label) == "stable"
         res.gt_safe_to_land = "stable";
@@ -2093,6 +2169,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     traceTbl.scenario_policy = repmat(string(res.scenario_policy), n, 1);
     traceTbl.pred_decision = repmat(string(res.pred_decision), n, 1);
     traceTbl.executed_action = repmat(string(res.executed_action), n, 1);
+    traceTbl.action_source = repmat(string(res.action_source), n, 1);
+    traceTbl.probe_episode = repmat(double(res.probe_episode), n, 1);
+    traceTbl.probe_reason = repmat(string(res.probe_reason), n, 1);
     traceTbl.gt_safe_to_land = repmat(string(res.gt_safe_to_land), n, 1);
     traceTbl.decision_outcome = repmat(string(res.decision_outcome), n, 1);
     traceTbl.final_label = repmat(string(res.label), n, 1);
@@ -2697,7 +2776,7 @@ function tbl = autosimSummaryTable(results)
         'mean_imu_ang_vel','max_imu_ang_vel','mean_imu_lin_acc','max_imu_lin_acc', ...
         'max_contact_force','arm_force_fl_mean','arm_force_fr_mean','arm_force_rl_mean','arm_force_rr_mean','arm_force_imbalance', ...
         'final_state', ...
-        'landing_cmd_time','pred_decision','executed_action','gt_safe_to_land','decision_outcome', ...
+        'landing_cmd_time','pred_decision','executed_action','action_source','probe_episode','probe_reason','gt_safe_to_land','decision_outcome', ...
         'semantic_environment','semantic_drone_state','semantic_visual_state','semantic_landing_context', ...
         'semantic_relation','semantic_integration','landing_feasibility','scenario_policy', ...
         'launch_pid','launch_log','exception_message'
@@ -2881,7 +2960,7 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
     end
 
     try
-        autosimPlotGtVsPrediction(summaryTbl, model, cfg, gtPredPng);
+        autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, gtPredPng);
     catch ME
         warning('[AUTOSIM] GT-vs-pred plot failed: %s', ME.message);
     end
@@ -2909,8 +2988,8 @@ function finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, 
 
     dEval = autosimEvaluateDecisionMetrics(summaryTbl);
     if dEval.n_valid > 0
-        fprintf('[AUTOSIM] Decision metrics | Acc=%.3f Prec=%.3f Rec=%.3f Unsafe=%.3f F1=%.3f\n', ...
-            dEval.accuracy, dEval.precision, dEval.recall, dEval.unsafe_landing_rate, dEval.f1);
+        fprintf('[AUTOSIM] Decision metrics | Acc=%.3f Prec=%.3f SafeRec=%.3f UnsafeReject=%.3f UnsafeLand=%.3f F1=%.3f\n', ...
+            dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate, dEval.f1);
     end
 
     finalInfo = struct();
@@ -2971,7 +3050,7 @@ function plotState = autosimInitPlots()
     ylabel(ax1, 'score', 'FontSize', 9);
     ylim(ax1, [0 1]);
     grid(ax1, 'on');
-    legend(ax1, {'accuracy', 'precision', 'recall', 'unsafe rate'}, 'Location', 'best', 'FontSize', 8);
+    legend(ax1, {'accuracy', 'precision', 'safe recall', 'unsafe landing rate'}, 'Location', 'best', 'FontSize', 8);
 
     ax2 = nexttile(tl, 2);
     plotState.ax2 = ax2;
@@ -3554,6 +3633,9 @@ function tbl = autosimEmptyTraceTable(scenarioId)
     tbl.scenario_policy = "exploit";
     tbl.pred_decision = "abort";
     tbl.executed_action = "abort";
+    tbl.action_source = "policy_abort";
+    tbl.probe_episode = 0;
+    tbl.probe_reason = "none";
     tbl.gt_safe_to_land = "unstable";
     tbl.decision_outcome = "TN";
     tbl.final_label = "unstable";
@@ -4794,31 +4876,32 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
     xlabel(ax1, 'scenario');
     ylabel(ax1, 'score');
     title(ax1, 'Cumulative Decision Metrics');
-    legend(ax1, {'accuracy', 'precision', 'recall', 'unsafe rate'}, 'Location', 'best');
+    legend(ax1, {'accuracy', 'precision', 'safe recall', 'unsafe landing rate'}, 'Location', 'best');
     grid(ax1, 'on');
 
     ax2 = nexttile(tl, 2);
-    metricVals = [dOverall.accuracy, dOverall.precision, dOverall.recall, dOverall.unsafe_landing_rate];
+    metricVals = [dOverall.accuracy, dOverall.precision, dOverall.recall, dOverall.specificity, dOverall.unsafe_landing_rate];
     b = bar(ax2, metricVals, 0.70);
     b.FaceColor = 'flat';
     b.CData = [ ...
         0.00 0.45 0.74; ...
         0.20 0.60 0.20; ...
         0.85 0.33 0.10; ...
+        0.49 0.18 0.56; ...
         0.75 0.20 0.20 ...
     ];
     ylim(ax2, [0 1]);
-    xticks(ax2, 1:4);
-    xticklabels(ax2, {'Accuracy','Precision','Recall','UnsafeRate'});
+    xticks(ax2, 1:5);
+    xticklabels(ax2, {'Accuracy','Precision','SafeRecall','UnsafeReject','UnsafeLand'});
     ylabel(ax2, 'score');
-    title(ax2, sprintf('Overall Decision Metrics (n=%d)', dOverall.n_valid));
+    title(ax2, sprintf('Overall Decision Metrics (valid=%d, unsafe=%d)', dOverall.n_valid, dOverall.n_unsafe));
     grid(ax2, 'on');
 
     exportgraphics(fig, perfPngPath, 'Resolution', 150);
 end
 
 
-function autosimPlotGtVsPrediction(summaryTbl, model, cfg, outPngPath)
+function autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, outPngPath)
     if isempty(summaryTbl) || ~ismember('scenario_id', summaryTbl.Properties.VariableNames)
         return;
     end
@@ -4832,67 +4915,251 @@ function autosimPlotGtVsPrediction(summaryTbl, model, cfg, outPngPath)
     sid = dTbl.scenario_id;
     gtSafe = dTbl.gt_safe;
     predLand = dTbl.pred_land;
+    windCtx = autosimBuildScenarioWindContext(summaryTbl, traceStore, sid);
 
     fig = figure('Name', 'AutoSim GT vs Decision', 'NumberTitle', 'off');
-    tl = tiledlayout(fig, 3, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(fig, 3, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-    ax1 = nexttile(tl, 1);
+    ax1 = nexttile(tl, [1 2]);
     stem(ax1, sid, double(gtSafe), 'Color', [0.10 0.60 0.10], 'Marker', 'o', 'LineWidth', 1.0);
     hold(ax1, 'on');
     stem(ax1, sid, double(predLand), 'Color', [0.85 0.33 0.10], 'Marker', 'x', 'LineWidth', 1.0);
+    mismatchMask = dTbl.valid & (gtSafe ~= predLand);
+    if any(mismatchMask)
+        scatter(ax1, sid(mismatchMask), 0.5 * ones(sum(mismatchMask), 1), 44, ...
+            'd', 'MarkerFaceColor', [0.95 0.78 0.12], 'MarkerEdgeColor', [0.15 0.15 0.15], ...
+            'LineWidth', 0.8);
+    end
     ylim(ax1, [-0.1 1.1]);
     yticks(ax1, [0 1]);
     yticklabels(ax1, {'unsafe/hover', 'safe/land'});
     xlabel(ax1, 'scenario');
     ylabel(ax1, 'class');
     title(ax1, 'GT Safety vs Algorithm Decision (Land/Abort)');
-    legend(ax1, {'GT safe(1)/unsafe(0)', 'Decision land(1)/abort(0)'}, 'Location', 'southoutside', 'Orientation', 'horizontal');
+    if any(mismatchMask)
+        legend(ax1, {'GT safe(1)/unsafe(0)', 'Decision land(1)/abort(0)', 'decision mismatch'}, ...
+            'Location', 'southoutside', 'Orientation', 'horizontal');
+    else
+        legend(ax1, {'GT safe(1)/unsafe(0)', 'Decision land(1)/abort(0)'}, ...
+            'Location', 'southoutside', 'Orientation', 'horizontal');
+    end
     grid(ax1, 'on');
 
-    ax2 = nexttile(tl, 2);
+    ax2 = nexttile(tl, [1 2]);
+    ax2LegendHandles = gobjects(0, 1);
+    ax2LegendLabels = {};
+
+    yyaxis(ax2, 'left');
+    hold(ax2, 'on');
+    hCmd = plot(ax2, sid, windCtx.speed_cmd, '--', 'LineWidth', 1.2, 'Color', [0.45 0.45 0.45]);
+    hMean = plot(ax2, sid, windCtx.mean_speed, '-', 'LineWidth', 1.6, 'Color', [0.00 0.45 0.74]);
+    hMax = plot(ax2, sid, windCtx.max_speed, '-', 'LineWidth', 1.4, 'Color', [0.75 0.20 0.20]);
+    ylabel(ax2, 'wind speed [m/s]');
+    ax2LegendHandles(end+1:end+3,1) = [hCmd; hMean; hMax];
+    ax2LegendLabels(end+1:end+3) = {'cmd speed', 'mean speed', 'max speed'};
+
+    yyaxis(ax2, 'right');
+    hold(ax2, 'on');
+    dirMin = -180;
+    dirMax = 180;
+    if isfield(cfg, 'wind')
+        if isfield(cfg.wind, 'direction_min') && isfinite(cfg.wind.direction_min)
+            dirMin = cfg.wind.direction_min;
+        end
+        if isfield(cfg.wind, 'direction_max') && isfinite(cfg.wind.direction_max)
+            dirMax = cfg.wind.direction_max;
+        end
+    end
+    windCats = unique(windCtx.characteristic, 'stable');
+    windCats = windCats(strlength(windCats) > 0);
+    if isempty(windCats)
+        windCats = "unknown";
+    end
+    windColors = lines(numel(windCats));
+    for i = 1:numel(windCats)
+        mask = (windCtx.characteristic == windCats(i)) & isfinite(windCtx.direction_deg);
+        if ~any(mask)
+            continue;
+        end
+        hCat = scatter(ax2, sid(mask), windCtx.direction_deg(mask), 34, ...
+            'filled', 'MarkerFaceColor', windColors(i,:), 'MarkerEdgeColor', [0.12 0.12 0.12], ...
+            'LineWidth', 0.6);
+        ax2LegendHandles(end+1,1) = hCat;
+        ax2LegendLabels{end+1} = char("dir | " + autosimWindLegendLabel(windCats(i))); %#ok<AGROW>
+    end
+    ylabel(ax2, 'wind direction [deg]');
+    ylim(ax2, [dirMin dirMax]);
+    xlabel(ax2, 'scenario');
+    title(ax2, 'Per-Episode Wind Context');
+    grid(ax2, 'on');
+    legend(ax2, ax2LegendHandles, ax2LegendLabels, 'Location', 'southoutside', 'Orientation', 'horizontal');
+
+    ax3 = nexttile(tl, 5);
     cm = [dEval.tp dEval.fp; dEval.fn dEval.tn]; % rows: pred land/abort, cols: actual safe/unsafe
-    imagesc(ax2, cm);
-    axis(ax2, 'equal');
-    axis(ax2, 'tight');
-    colormap(ax2, parula(128));
-    colorbar(ax2);
-    xticks(ax2, [1 2]);
-    yticks(ax2, [1 2]);
-    xticklabels(ax2, {'Actual Safe', 'Actual Unsafe'});
-    yticklabels(ax2, {'Pred Land', 'Pred Abort'});
-    title(ax2, sprintf('Confusion Matrix | Acc=%.3f Prec=%.3f Rec=%.3f Unsafe=%.3f', ...
-        dEval.accuracy, dEval.precision, dEval.recall, dEval.unsafe_landing_rate));
+    imagesc(ax3, cm);
+    axis(ax3, 'equal');
+    axis(ax3, 'tight');
+    colormap(ax3, parula(128));
+    colorbar(ax3);
+    xticks(ax3, [1 2]);
+    yticks(ax3, [1 2]);
+    xticklabels(ax3, {'Actual Safe', 'Actual Unsafe'});
+    yticklabels(ax3, {'Pred Land', 'Pred Abort'});
+    title(ax3, sprintf('Confusion Matrix | Acc=%.3f Prec=%.3f SafeRec=%.3f UnsafeReject=%.3f UnsafeLand=%.3f', ...
+        dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate));
     for rr = 1:2
         for cc = 1:2
             txtColor = 'w';
             if cm(rr, cc) < max(cm(:)) * 0.45
                 txtColor = 'k';
             end
-            text(ax2, cc, rr, sprintf('%d', cm(rr, cc)), 'HorizontalAlignment', 'center', 'Color', txtColor, 'FontWeight', 'bold');
+            text(ax3, cc, rr, sprintf('%d', cm(rr, cc)), 'HorizontalAlignment', 'center', 'Color', txtColor, 'FontWeight', 'bold');
         end
     end
 
-    ax3 = nexttile(tl, 3);
-    metricVals = [dEval.accuracy, dEval.precision, dEval.recall, dEval.unsafe_landing_rate];
-    b = bar(ax3, metricVals, 0.70);
+    ax4 = nexttile(tl, 6);
+    metricVals = [dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate];
+    b = bar(ax4, metricVals, 0.70);
     b.FaceColor = 'flat';
     b.CData = [ ...
         0.00 0.45 0.74; ...
         0.20 0.60 0.20; ...
         0.85 0.33 0.10; ...
+        0.49 0.18 0.56; ...
         0.75 0.20 0.20 ...
     ];
-    ylim(ax3, [0 1]);
-    xticks(ax3, 1:4);
-    xticklabels(ax3, {'Accuracy','Precision','Recall','UnsafeRate'});
-    ylabel(ax3, 'score');
-    title(ax3, 'Main Decision Metrics');
-    grid(ax3, 'on');
+    ylim(ax4, [0 1]);
+    xticks(ax4, 1:5);
+    xticklabels(ax4, {'Accuracy','Precision','SafeRecall','UnsafeReject','UnsafeLand'});
+    ylabel(ax4, 'score');
+    title(ax4, 'Main Decision Metrics');
+    grid(ax4, 'on');
 
-    subtitle(tl, sprintf('Decision-focused evaluation | valid scenarios=%d | TP=%d FP=%d FN=%d TN=%d', ...
-        dEval.n_valid, dEval.tp, dEval.fp, dEval.fn, dEval.tn));
+    subtitle(tl, sprintf(['Decision-focused evaluation | valid=%d safe=%d unsafe=%d | ' ...
+        'TP=%d FP=%d FN=%d TN=%d | mean wind=%.2f m/s max wind=%.2f m/s'], ...
+        dEval.n_valid, dEval.n_safe, dEval.n_unsafe, dEval.tp, dEval.fp, dEval.fn, dEval.tn, ...
+        autosimNanMean(windCtx.mean_speed), autosimNanMean(windCtx.max_speed)));
 
     exportgraphics(fig, outPngPath, 'Resolution', 150);
+end
+
+
+function windCtx = autosimBuildScenarioWindContext(summaryTbl, traceStore, scenarioIds)
+    n = numel(scenarioIds);
+    windCtx = struct();
+    windCtx.speed_cmd = nan(n, 1);
+    windCtx.mean_speed = nan(n, 1);
+    windCtx.max_speed = nan(n, 1);
+    windCtx.direction_deg = nan(n, 1);
+    windCtx.characteristic = repmat("unknown", n, 1);
+
+    if isempty(summaryTbl) || ~ismember('scenario_id', summaryTbl.Properties.VariableNames)
+        return;
+    end
+
+    [isMatched, loc] = ismember(scenarioIds, summaryTbl.scenario_id);
+    matchedIdx = find(isMatched);
+    if any(isMatched)
+        matchedLoc = loc(isMatched);
+        if ismember('wind_speed_cmd', summaryTbl.Properties.VariableNames)
+            windCtx.speed_cmd(matchedIdx) = double(summaryTbl.wind_speed_cmd(matchedLoc));
+        end
+        if ismember('mean_wind_speed', summaryTbl.Properties.VariableNames)
+            windCtx.mean_speed(matchedIdx) = double(summaryTbl.mean_wind_speed(matchedLoc));
+        end
+        if ismember('max_wind_speed', summaryTbl.Properties.VariableNames)
+            windCtx.max_speed(matchedIdx) = double(summaryTbl.max_wind_speed(matchedLoc));
+        end
+        if ismember('wind_dir_cmd', summaryTbl.Properties.VariableNames)
+            windCtx.direction_deg(matchedIdx) = double(summaryTbl.wind_dir_cmd(matchedLoc));
+        end
+        if ismember('semantic_environment', summaryTbl.Properties.VariableNames)
+            baseLabels = string(summaryTbl.semantic_environment(matchedLoc));
+            validLabelMask = strlength(strtrim(baseLabels)) > 0 & baseLabels ~= "unknown";
+            windCtx.characteristic(matchedIdx(validLabelMask)) = baseLabels(validLabelMask);
+        end
+    end
+
+    if isempty(traceStore) || ~ismember('scenario_id', traceStore.Properties.VariableNames)
+        return;
+    end
+
+    hasWindSpeed = ismember('wind_speed', traceStore.Properties.VariableNames);
+    hasCmdSpeed = ismember('wind_cmd_speed', traceStore.Properties.VariableNames);
+    hasCmdDir = ismember('wind_cmd_dir', traceStore.Properties.VariableNames);
+    hasWindRisk = ismember('semantic_wind_risk', traceStore.Properties.VariableNames);
+    hasEnvironment = ismember('semantic_environment', traceStore.Properties.VariableNames);
+
+    for i = 1:n
+        rows = (traceStore.scenario_id == scenarioIds(i));
+        if ~any(rows)
+            continue;
+        end
+
+        if hasWindSpeed && (~isfinite(windCtx.mean_speed(i)) || ~isfinite(windCtx.max_speed(i)))
+            windVals = double(traceStore.wind_speed(rows));
+            windVals = windVals(isfinite(windVals));
+            if ~isempty(windVals)
+                if ~isfinite(windCtx.mean_speed(i))
+                    windCtx.mean_speed(i) = mean(windVals);
+                end
+                if ~isfinite(windCtx.max_speed(i))
+                    windCtx.max_speed(i) = max(windVals);
+                end
+            end
+        end
+
+        if hasCmdSpeed && ~isfinite(windCtx.speed_cmd(i))
+            cmdSpeedVals = double(traceStore.wind_cmd_speed(rows));
+            cmdSpeedVals = cmdSpeedVals(isfinite(cmdSpeedVals));
+            if ~isempty(cmdSpeedVals)
+                windCtx.speed_cmd(i) = cmdSpeedVals(find(isfinite(cmdSpeedVals), 1, 'last'));
+            end
+        end
+
+        if hasCmdDir && ~isfinite(windCtx.direction_deg(i))
+            dirVals = double(traceStore.wind_cmd_dir(rows));
+            dirVals = dirVals(isfinite(dirVals));
+            if ~isempty(dirVals)
+                windCtx.direction_deg(i) = dirVals(find(isfinite(dirVals), 1, 'last'));
+            end
+        end
+
+        label = "unknown";
+        if hasWindRisk
+            label = autosimLastMeaningfulLabel(traceStore.semantic_wind_risk(rows));
+        end
+        if (strlength(label) == 0 || label == "unknown") && hasEnvironment
+            label = autosimLastMeaningfulLabel(traceStore.semantic_environment(rows));
+        end
+        if strlength(label) > 0 && label ~= "unknown"
+            windCtx.characteristic(i) = label;
+        end
+    end
+end
+
+
+function label = autosimLastMeaningfulLabel(values)
+    label = "unknown";
+    if isempty(values)
+        return;
+    end
+    values = string(values(:));
+    values = strtrim(values);
+    validMask = strlength(values) > 0 & values ~= "unknown" & values ~= "<missing>";
+    if any(validMask)
+        label = values(find(validMask, 1, 'last'));
+    end
+end
+
+
+function label = autosimWindLegendLabel(token)
+    token = string(token);
+    if strlength(token) == 0 || token == "unknown"
+        label = "unknown";
+        return;
+    end
+    label = autosimVizCompactToken(token);
 end
 
 
@@ -4946,9 +5213,13 @@ function de = autosimEvaluateDecisionMetrics(inTbl)
     de.fn = 0;
     de.tn = 0;
     de.n_valid = 0;
+    de.n_safe = 0;
+    de.n_unsafe = 0;
     de.accuracy = nan;
     de.precision = nan;
     de.recall = nan;
+    de.specificity = nan;
+    de.balanced_accuracy = nan;
     de.f1 = nan;
     de.unsafe_landing_rate = nan;
     de.risk_score = nan;
@@ -4979,10 +5250,18 @@ function de = autosimEvaluateDecisionMetrics(inTbl)
     de.fn = sum(~predLand(valid) & gtSafe(valid));
     de.tn = sum(~predLand(valid) & ~gtSafe(valid));
     de.n_valid = de.tp + de.fp + de.fn + de.tn;
+    de.n_safe = de.tp + de.fn;
+    de.n_unsafe = de.fp + de.tn;
 
     de.accuracy = autosimSafeDivide(de.tp + de.tn, de.n_valid);
     de.precision = autosimSafeDivide(de.tp, de.tp + de.fp);
     de.recall = autosimSafeDivide(de.tp, de.tp + de.fn);
+    de.specificity = autosimSafeDivide(de.tn, de.tn + de.fp);
+    validBalanced = [de.recall, de.specificity];
+    validBalanced = validBalanced(isfinite(validBalanced));
+    if ~isempty(validBalanced)
+        de.balanced_accuracy = mean(validBalanced);
+    end
     if isfinite(de.precision) && isfinite(de.recall) && (de.precision + de.recall) > 0
         de.f1 = 2.0 * de.precision * de.recall / (de.precision + de.recall);
     end
@@ -5931,6 +6210,9 @@ function s = autosimEmptyScenarioResult()
     s.landing_cmd_time = nan;
     s.pred_decision = "abort";
     s.executed_action = "abort";
+    s.action_source = "policy_abort";
+    s.probe_episode = false;
+    s.probe_reason = "none";
     s.gt_safe_to_land = "unstable";
     s.decision_outcome = "TN";
     s.semantic_environment = "unknown";

@@ -1,6 +1,6 @@
 # generated from ament_cmake_export_libraries/cmake/template/ament_cmake_export_libraries.cmake.in
 
-set(_exported_libraries "sjtu_drone_description__rosidl_generator_c;sjtu_drone_description__rosidl_typesupport_c;sjtu_drone_description__rosidl_typesupport_cpp;plugin_drone")
+set(_exported_libraries "plugin_drone")
 set(_exported_library_names "")
 
 # populate sjtu_drone_description_LIBRARIES

@@ -313,68 +313,14 @@ message(STATUS "Execute custom install script")
 # install(DIRECTORY "include/" "DESTINATION" "include")
 ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "include/" "DESTINATION" "include")
 
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_index/share/ament_index/resource_index/rosidl_interfaces/sjtu_drone_description" "DESTINATION" "share/ament_index/resource_index/rosidl_interfaces")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_index/share/ament_index/resource_index/rosidl_interfaces/sjtu_drone_description" "DESTINATION" "share/ament_index/resource_index/rosidl_interfaces")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.h")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_c/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.h")
+# install("TARGETS" "wind_plugin" "ARCHIVE_DESTINATION" "lib" "LIBRARY_DESTINATION" "lib" "RUNTIME_DESTINATION" "bin")
+include("/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_symlink_install_targets_0_${CMAKE_INSTALL_CONFIG_NAME}.cmake")
 
 # install(FILES "/opt/ros/humble/lib/python3.10/site-packages/ament_package/template/environment_hook/library_path.sh" "DESTINATION" "share/sjtu_drone_description/environment")
 ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/opt/ros/humble/lib/python3.10/site-packages/ament_package/template/environment_hook/library_path.sh" "DESTINATION" "share/sjtu_drone_description/environment")
 
 # install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_environment_hooks/library_path.dsv" "DESTINATION" "share/sjtu_drone_description/environment")
 ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_environment_hooks/library_path.dsv" "DESTINATION" "share/sjtu_drone_description/environment")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_fastrtps_c/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN_EXCLUDE" "*.cpp")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_fastrtps_c/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN_EXCLUDE" "*.cpp")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_cpp/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.hpp")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_cpp/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.hpp")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_fastrtps_cpp/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN_EXCLUDE" "*.cpp")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_fastrtps_cpp/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN_EXCLUDE" "*.cpp")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_introspection_c/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.h")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_introspection_c/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.h")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_introspection_cpp/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.hpp")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_typesupport_introspection_cpp/sjtu_drone_description/" "DESTINATION" "include/sjtu_drone_description/sjtu_drone_description" "PATTERN" "*.hpp")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_environment_hooks/pythonpath.sh" "DESTINATION" "share/sjtu_drone_description/environment")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_environment_hooks/pythonpath.sh" "DESTINATION" "share/sjtu_drone_description/environment")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_environment_hooks/pythonpath.dsv" "DESTINATION" "share/sjtu_drone_description/environment")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_environment_hooks/pythonpath.dsv" "DESTINATION" "share/sjtu_drone_description/environment")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_python/sjtu_drone_description/sjtu_drone_description.egg-info/" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description-0.0.0-py3.10.egg-info")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_python/sjtu_drone_description/sjtu_drone_description.egg-info/" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description-0.0.0-py3.10.egg-info")
-
-# install(DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_py/sjtu_drone_description/" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description" "PATTERN_EXCLUDE" "*.pyc" "PATTERN_EXCLUDE" "__pycache__")
-ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_generator_py/sjtu_drone_description/" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description" "PATTERN_EXCLUDE" "*.pyc" "PATTERN_EXCLUDE" "__pycache__")
-
-# install("TARGETS" "sjtu_drone_description__rosidl_typesupport_fastrtps_c__pyext" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description")
-include("/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_symlink_install_targets_0_${CMAKE_INSTALL_CONFIG_NAME}.cmake")
-
-# install("TARGETS" "sjtu_drone_description__rosidl_typesupport_introspection_c__pyext" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description")
-include("/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_symlink_install_targets_1_${CMAKE_INSTALL_CONFIG_NAME}.cmake")
-
-# install("TARGETS" "sjtu_drone_description__rosidl_typesupport_c__pyext" "DESTINATION" "local/lib/python3.10/dist-packages/sjtu_drone_description")
-include("/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_symlink_install_targets_2_${CMAKE_INSTALL_CONFIG_NAME}.cmake")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_adapter/sjtu_drone_description/srv/SetWind.idl" "DESTINATION" "share/sjtu_drone_description/srv")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_adapter/sjtu_drone_description/srv/SetWind.idl" "DESTINATION" "share/sjtu_drone_description/srv")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/srv/SetWind.srv" "DESTINATION" "share/sjtu_drone_description/srv")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/srv/SetWind.srv" "DESTINATION" "share/sjtu_drone_description/srv")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/srv/SetWind_Request.msg" "DESTINATION" "share/sjtu_drone_description/srv")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/srv/SetWind_Request.msg" "DESTINATION" "share/sjtu_drone_description/srv")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/srv/SetWind_Response.msg" "DESTINATION" "share/sjtu_drone_description/srv")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/srv/SetWind_Response.msg" "DESTINATION" "share/sjtu_drone_description/srv")
-
-# install("TARGETS" "wind_plugin" "ARCHIVE_DESTINATION" "lib" "LIBRARY_DESTINATION" "lib" "RUNTIME_DESTINATION" "bin")
-include("/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_symlink_install_targets_3_${CMAKE_INSTALL_CONFIG_NAME}.cmake")
 
 # install(DIRECTORY "models" "urdf" "worlds" "DESTINATION" "share/sjtu_drone_description")
 ament_cmake_symlink_install_directory("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" DIRECTORY "models" "urdf" "worlds" "DESTINATION" "share/sjtu_drone_description")
@@ -415,9 +361,6 @@ ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/s
 # install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_index/share/ament_index/resource_index/packages/sjtu_drone_description" "DESTINATION" "share/ament_index/resource_index/packages")
 ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_index/share/ament_index/resource_index/packages/sjtu_drone_description" "DESTINATION" "share/ament_index/resource_index/packages")
 
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/rosidl_cmake-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/rosidl_cmake-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-
 # install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_export_include_directories/ament_cmake_export_include_directories-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
 ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_export_include_directories/ament_cmake_export_include_directories-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
 
@@ -426,15 +369,6 @@ ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/s
 
 # install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_export_targets/ament_cmake_export_targets-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
 ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_export_targets/ament_cmake_export_targets-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/rosidl_cmake_export_typesupport_targets-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/rosidl_cmake_export_typesupport_targets-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_export_dependencies/ament_cmake_export_dependencies-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_export_dependencies/ament_cmake_export_dependencies-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-
-# install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/rosidl_cmake_export_typesupport_libraries-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
-ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/rosidl_cmake/rosidl_cmake_export_typesupport_libraries-extras.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
 
 # install(FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_core/sjtu_drone_descriptionConfig.cmake" "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_core/sjtu_drone_descriptionConfig-version.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")
 ament_cmake_symlink_install_files("/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description" FILES "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_core/sjtu_drone_descriptionConfig.cmake" "/home/j/INCSL/IICC26_ws/build/sjtu_drone_description/ament_cmake_core/sjtu_drone_descriptionConfig-version.cmake" "DESTINATION" "share/sjtu_drone_description/cmake")

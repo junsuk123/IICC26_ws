@@ -1,6 +1,6 @@
 # generated from ament_cmake_export_include_directories/cmake/ament_cmake_export_include_directories-extras.cmake.in
 
-set(_exported_include_dirs "${sjtu_drone_description_DIR}/../../../include/sjtu_drone_description;${sjtu_drone_description_DIR}/../../../include")
+set(_exported_include_dirs "${sjtu_drone_description_DIR}/../../../include")
 
 # append include directories to sjtu_drone_description_INCLUDE_DIRS
 # warn about not existing paths

@@ -163,13 +163,6 @@ wind_plugin_EXTERNAL_OBJECTS =
 /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /usr/lib/x86_64-linux-gnu/libOgreTerrain.so
 /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /usr/lib/x86_64-linux-gnu/libOgrePaging.so
 /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /usr/lib/x86_64-linux-gnu/libignition-common3-graphics.so.3.14.0
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librcutils.so
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librcpputils.so
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librosidl_typesupport_c.so
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librosidl_typesupport_cpp.so
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librosidl_runtime_c.so
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librosidl_typesupport_introspection_c.so
-/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librosidl_typesupport_introspection_cpp.so
 /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librmw_implementation.so
 /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/libament_index_cpp.so
 /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/plugins/libwind_plugin.so: /opt/ros/humble/lib/librcl_logging_spdlog.so

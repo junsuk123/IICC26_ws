@@ -1,0 +1,9 @@
+# MATLAB ROS2 custom message generated artifacts
+matlab_msg_ws/matlab_msg_gen/glnxa64/build/
+matlab_msg_ws/matlab_msg_gen/glnxa64/install/
+matlab_msg_ws/matlab_msg_gen/glnxa64/log/
+
+# MATLAB-generated binaries and cache files
+*.so
+*.mex*
+*.mat

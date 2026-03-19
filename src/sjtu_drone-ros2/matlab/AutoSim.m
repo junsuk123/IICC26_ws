@@ -17,6 +17,11 @@ clear; clc; close all;
 thisDir = fileparts(mfilename('fullpath'));
 if ~isempty(thisDir)
     addpath(thisDir);
+    modDir = fullfile(thisDir, 'modules');
+    if exist(modDir, 'dir')
+        addpath(modDir);
+    end
+    autosimAddGeneratedMsgPath(thisDir);
 end
 
 autosimClearStopRequest();
@@ -53,6 +58,9 @@ model = autosimCreatePlaceholderModel(cfg, 'pre_init');
 try
     [model, modelInfo] = autosimLoadOrInitModel(cfg);
     fprintf('[AUTOSIM] Initial model source: %s\n', modelInfo.source);
+
+    launchInfo = struct('pid', -1, 'log_file', "");
+    launchActive = false;
     rosCtx = autosimCreateRosContext(cfg);
 
     for scenarioId = 1:cfg.scenario.count
@@ -76,13 +84,26 @@ try
                 char(string(scenarioCfg.target_case)), scenarioCfg.wind_speed, scenarioCfg.wind_dir);
         end
 
-        autosimCleanupProcesses(cfg);
-        pause(cfg.process.kill_settle_sec);
-
-        launchInfo = autosimStartLaunch(cfg, scenarioCfg, scenarioId);
+        if (~launchActive) || (~isfield(cfg.process, 'reuse_simulation_with_reset')) || (~cfg.process.reuse_simulation_with_reset)
+            launchInfo = autosimStartLaunch(cfg, scenarioCfg, scenarioId);
+            launchActive = true;
+            preRunPauseSec = cfg.launch.warmup_sec;
+        else
+            resetOk = autosimResetSimulationForScenario(cfg, rosCtx, scenarioId, scenarioCfg);
+            if ~resetOk
+                warning('[AUTOSIM] Reset path failed, relaunching simulation for scenario %d.', scenarioId);
+                launchInfo = autosimStartLaunch(cfg, scenarioCfg, scenarioId);
+                launchActive = true;
+                preRunPauseSec = cfg.launch.warmup_sec;
+            else
+                preRunPauseSec = 0.0;
+            end
+        end
 
         try
-            pause(cfg.launch.warmup_sec);
+            if preRunPauseSec > 0
+                pause(preRunPauseSec);
+            end
             [scenarioResult, scenarioTrace] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model, rosCtx);
             scenarioResult.launch_pid = launchInfo.pid;
             scenarioResult.launch_log = launchInfo.log_file;
@@ -117,7 +138,11 @@ try
         results(end+1,1) = scenarioResult; %#ok<SAGROW>
         traceStore = [traceStore; scenarioTrace]; %#ok<AGROW>
 
-        [model, learnInfo] = autosimIncrementalTrainAndSave(cfg, results, model, scenarioId);
+        if autosimPipelineTrainEnabled(cfg)
+            [model, learnInfo] = autosimIncrementalTrainAndSave(cfg, results, model, scenarioId);
+        else
+            learnInfo = autosimLearningDisabledInfo(scenarioId);
+        end
         learningHistory = [learningHistory; struct2table(learnInfo)]; %#ok<AGROW>
 
         plotState = autosimUpdatePlots(plotState, results, learningHistory);
@@ -125,9 +150,10 @@ try
         autosimSaveCheckpoint(cfg, results, traceStore, learningHistory, model, runStatus, "scenario_end");
         autosimPrintStats(results, scenarioId, cfg.scenario.count, learnInfo);
 
-        if cfg.process.stop_after_each_scenario
+        if cfg.process.stop_after_each_scenario && (~isfield(cfg.process, 'reuse_simulation_with_reset') || ~cfg.process.reuse_simulation_with_reset)
             autosimCleanupProcesses(cfg, launchInfo.pid);
             pause(cfg.process.kill_settle_sec);
+            launchActive = false;
         end
 
         if autosimIsStopRequested()
@@ -201,9 +227,10 @@ function cfg = autosimDefaultConfig()
         'source /opt/ros/humble/setup.bash && ' ...
         'source /home/j/INCSL/IICC26_ws/install/setup.bash && ' ...
         'ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py ' ...
+        'initial_x:=0.0 initial_y:=0.0 ' ...
         'takeoff_hover_height:=%0.2f ' ...
         'takeoff_vertical_speed:=0.2 ' ...
-        'use_gui:=false use_rviz:=false use_teleop:=false ' ...
+        'use_gui:=false use_rviz:=true use_teleop:=false ' ...
         'use_apriltag:=true apriltag_camera:=/drone/bottom ' ...
         'apriltag_image:=image_raw apriltag_tags:=tags apriltag_type:=umich ' ...
         'apriltag_bridge_topic:=/landing_tag_state ' ...
@@ -293,6 +320,10 @@ function cfg = autosimDefaultConfig()
     cfg.validation.boundary_dir_osc_scale = 1.05;
     cfg.validation.hard_dir_osc_scale = 1.20;
 
+    cfg.pipeline = struct();
+    % "joint" | "train_only" | "validate_only"
+    cfg.pipeline.mode = "joint";
+
     cfg.control = struct();
     cfg.control.takeoff_retry_sec = 1.0;
     cfg.control.hover_settle_sec = 3.0;
@@ -328,6 +359,18 @@ function cfg = autosimDefaultConfig()
     cfg.control.pose_hold_cmd_limit = 0.35;
     cfg.control.land_cmd_alt_m = 0.22;
     cfg.control.land_forced_timeout_sec = 30.0;
+    cfg.control.landing_use_z_tracking = true;
+    cfg.control.landing_descent_rate_mps = 0.24;
+    cfg.control.landing_descent_rate_near_ground_mps = 0.10;
+    cfg.control.landing_near_ground_alt_m = 0.45;
+    cfg.control.landing_min_target_alt_m = 0.05;
+    cfg.control.landing_z_kp = 1.25;
+    cfg.control.landing_z_cmd_limit_mps = 0.35;
+    cfg.control.landing_lock_enable = true;
+    cfg.control.landing_lock_min_stable_frames = 8;
+    cfg.control.landing_lock_max_tag_error = 0.12;
+    cfg.control.landing_lock_xy_follow_enable = true;
+    cfg.control.landing_lock_xy_blend_alpha = 0.20;
 
     cfg.agent = struct();
     cfg.agent.enable_model_decision = true;
@@ -472,7 +515,21 @@ function cfg = autosimDefaultConfig()
     cfg.persistence.trace_csv = fullfile(cfg.paths.data_dir, 'autosim_trace_latest.csv');
 
     cfg.process = struct();
-    cfg.process.stop_after_each_scenario = true;
+    cfg.process.stop_after_each_scenario = false;
+    cfg.process.reuse_simulation_with_reset = true;
+    cfg.process.force_land_before_reset = true;
+    cfg.process.force_land_publish_count = 3;
+    cfg.process.force_land_publish_interval_sec = 0.20;
+    cfg.process.force_land_wait_timeout_sec = 8.0;
+    cfg.process.reset_publish_count = 3;
+    cfg.process.reset_publish_interval_sec = 0.12;
+    cfg.process.reset_settle_sec = 2.0;
+    cfg.process.reset_wait_landed_timeout_sec = 4.0;
+    cfg.process.takeoff_after_reset = true;
+    cfg.process.takeoff_publish_count = 2;
+    cfg.process.takeoff_publish_interval_sec = 0.20;
+    cfg.process.takeoff_wait_flying_timeout_sec = 8.0;
+    cfg.process.takeoff_settle_sec = 1.0;
     cfg.process.kill_settle_sec = 2.0;
     cfg.process.cleanup_verify_timeout_sec = 8.0;
 
@@ -491,6 +548,12 @@ function cfg = autosimDefaultConfig()
     cfg.thresholds.final_imu_lin_acc_rms_max = 11.0;
     cfg.thresholds.final_contact_force_max_n = 50.0;
     cfg.thresholds.final_arm_force_imbalance_max_n = 40.0;
+    cfg.thresholds.final_arm_force_peak_max_n = 35.0;
+    cfg.thresholds.require_contact_metrics = true;
+    cfg.thresholds.use_mass_scaled_impact_thresholds = true;
+    cfg.thresholds.mass_scaled_contact_force_factor = 3.8;
+    cfg.thresholds.mass_scaled_arm_imbalance_factor = 1.4;
+    cfg.thresholds.mass_scaled_arm_peak_factor = 1.5;
 
     cfg.model = struct();
     % Use only decision-time observable features so train/inference distributions match.
@@ -569,6 +632,14 @@ function cfg = autosimDefaultConfig()
     cfg.ontology_ai.context_w = [-1.10, 0.95, 0.90, 0.60, -1.15, -0.80, -0.65, -0.70];
     cfg.ontology_ai.context_b = 0.48;
 
+    cfg.modules = struct();
+    cfg.modules.enable = true;
+    cfg.modules.use_wind_engine = true;
+    cfg.modules.use_ai_engine = true;
+    cfg.modules.use_learning_engine = true;
+    % Keep ontology engine optional until its logic fully matches legacy reasoning.
+    cfg.modules.use_ontology_engine = false;
+
     cfg.topics = struct();
     cfg.topics.state = '/drone/state';
     cfg.topics.pose = '/drone/gt_pose';
@@ -580,11 +651,19 @@ function cfg = autosimDefaultConfig()
     cfg.topics.wind_command = '/wind_command';
     cfg.topics.land_cmd = '/drone/land';
     cfg.topics.takeoff_cmd = '/drone/takeoff';
+    cfg.topics.reset_cmd = '/drone/reset';
     cfg.topics.cmd_vel = '/drone/cmd_vel';
 
     cfg.ros = struct();
     cfg.ros.enable_imu_subscription = false;
-    cfg.ros.enable_bumper_subscription = false;
+    cfg.ros.enable_bumper_subscription = true;
+    cfg.ros.bumper_msg_type_candidates = ["gazebo_msgs/msg/ContactsState", "gazebo_msgs/ContactsState", "ros_gz_interfaces/msg/Contacts"];
+    cfg.ros.bumper_topic_type_detect_enable = true;
+    cfg.ros.bumper_topic_type_detect_timeout_sec = 2.0;
+    cfg.ros.bumper_subscribe_retry_count = 8;
+    cfg.ros.bumper_subscribe_retry_interval_sec = 0.5;
+    cfg.ros.bumper_skip_retry_if_msg_unsupported = true;
+    cfg.ros.bumper_log_missing_msg_support = true;
     cfg.ros.prioritize_tag_callback = true;
     cfg.ros.receive_timeout_sec = 0.002;
     cfg.ros.health_log_enable = true;
@@ -752,7 +831,7 @@ function [model, info] = autosimLoadOrInitModel(cfg)
                 error('Forced model path does not exist: %s', modelPath);
             end
 
-            S = load(modelPath);
+            S = load(modelPath, 'model');
             if ~isfield(S, 'model')
                 error('Forced model file does not contain variable "model": %s', modelPath);
             end
@@ -869,114 +948,32 @@ end
 
 function mode = autosimValidationMode(cfg, scenarioId)
     mode = "boundary";
-    if ~isfield(cfg, 'validation') || ~isfield(cfg.validation, 'mode_cycle')
-        return;
-    end
-
-    cycle = string(cfg.validation.mode_cycle(:));
-    cycle = cycle(strlength(cycle) > 0);
-    if isempty(cycle)
-        return;
-    end
-
-    idx = mod(max(1, scenarioId) - 1, numel(cycle)) + 1;
-    mode = cycle(idx);
-end
-
-
-function scenarioCfg = autosimApplyValidationScenarioConfig(cfg, scenarioCfg, scenarioId)
-    if ~isfield(cfg, 'validation') || ~isfield(cfg.validation, 'enable') || ~cfg.validation.enable
-        return;
-    end
-
-    mode = autosimValidationMode(cfg, scenarioId);
-    scenarioCfg.validation_mode = mode;
-
-    profile = autosimGetKmaWindProfile(cfg);
-    if isempty(profile) || ~isfield(profile, 'speed_sec') || isempty(profile.speed_sec)
-        return;
-    end
-
-    speedVals = double(profile.speed_sec(:));
-    dirVals = double(profile.dir_sec(:));
-    valid = isfinite(speedVals) & isfinite(dirVals);
-    if ~any(valid)
-        return;
-    end
-
-    sourceIdx = find(valid);
-    speedValid = speedVals(valid);
-    dirValid = dirVals(valid);
-
-    switch mode
-        case "easy"
-            q = autosimGetValidationQuantileRange(cfg.validation, 'easy_speed_quantile', [0.05, 0.35]);
-            hoverRatio = autosimClampNaN(cfg.validation.easy_hover_ratio, 0.80);
-            gustScale = autosimClampNaN(cfg.validation.easy_gust_amp_scale, 0.90);
-            dirScale = autosimClampNaN(cfg.validation.easy_dir_osc_scale, 0.90);
-        case "hard"
-            q = autosimGetValidationQuantileRange(cfg.validation, 'hard_speed_quantile', [0.70, 0.95]);
-            hoverRatio = autosimClampNaN(cfg.validation.hard_hover_ratio, 0.20);
-            gustScale = autosimClampNaN(cfg.validation.hard_gust_amp_scale, 1.25);
-            dirScale = autosimClampNaN(cfg.validation.hard_dir_osc_scale, 1.20);
-        otherwise
-            q = autosimGetValidationQuantileRange(cfg.validation, 'boundary_speed_quantile', [0.35, 0.70]);
-            hoverRatio = autosimClampNaN(cfg.validation.boundary_hover_ratio, 0.50);
-            gustScale = autosimClampNaN(cfg.validation.boundary_gust_amp_scale, 1.05);
-            dirScale = autosimClampNaN(cfg.validation.boundary_dir_osc_scale, 1.05);
-    end
-
-    q = min(max(sort(q), 0.0), 1.0);
-    lo = prctile(speedValid, 100 * q(1));
-    hi = prctile(speedValid, 100 * q(2));
-    speedMask = (speedValid >= lo) & (speedValid <= hi);
-
-    cycle = string(cfg.validation.mode_cycle(:));
-    cycle = cycle(strlength(cycle) > 0);
-    if isempty(cycle)
-        cycle = ["easy"; "boundary"; "hard"];
-    end
-    dirBinCount = max(1, round(autosimClampNaN(cfg.validation.direction_bin_count, 8)));
-    dirEdges = linspace(-180.0, 180.0, dirBinCount + 1);
-    dirBin = mod(floor((max(1, scenarioId) - 1) / numel(cycle)), dirBinCount) + 1;
-    dirMask = (dirValid >= dirEdges(dirBin)) & (dirValid <= dirEdges(dirBin + 1));
-
-    idxPool = sourceIdx(speedMask & dirMask);
-    if isempty(idxPool)
-        idxPool = sourceIdx(speedMask);
-    end
-    if isempty(idxPool)
-        idxPool = sourceIdx;
-    end
-
-    seedBase = autosimClampNaN(cfg.validation.seed_base, 20260313);
-    stream = RandStream('mt19937ar', 'Seed', mod(seedBase + 4099 * max(1, scenarioId), 2147483646) + 1);
-    pick = idxPool(randi(stream, numel(idxPool)));
-
-    scenarioCfg.wind_speed = profile.speed_sec(pick);
-    scenarioCfg.wind_dir = profile.dir_sec(pick);
-    scenarioCfg.wind_profile_offset_sec = max(0, pick - 1);
-    scenarioCfg.hover_height_m = autosimInterpolate(cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m, hoverRatio);
-    scenarioCfg.gust_amp_scale = gustScale;
-    scenarioCfg.dir_osc_scale = dirScale;
-end
-
-
-function q = autosimGetValidationQuantileRange(vcfg, fieldName, fallback)
-    q = fallback;
-    if isfield(vcfg, fieldName)
-        tmp = double(vcfg.(fieldName));
-        if numel(tmp) >= 2 && all(isfinite(tmp(1:2)))
-            q = tmp(1:2);
+    if autosimIsModuleEnabled(cfg, 'learning_engine')
+        try
+            mode = autosim_learning_engine('validation_mode', cfg, scenarioId);
+            return;
+        catch
         end
     end
 end
 
 
-function v = autosimInterpolate(a, b, t)
-    t = autosimClampNaN(t, 0.5);
-    t = min(max(t, 0.0), 1.0);
-    v = a + (b - a) * t;
+function scenarioCfg = autosimApplyValidationScenarioConfig(cfg, scenarioCfg, scenarioId)
+    if ~autosimPipelineValidationEnabled(cfg)
+        return;
+    end
+    if ~isfield(cfg, 'validation') || ~isfield(cfg.validation, 'enable') || ~cfg.validation.enable
+        return;
+    end
+
+    profile = autosimGetKmaWindProfile(cfg);
+    if autosimIsModuleEnabled(cfg, 'learning_engine')
+        try
+            scenarioCfg = autosim_learning_engine('apply_validation_scenario_config', cfg, scenarioCfg, scenarioId, profile);
+            return;
+        catch
+        end
+    end
 end
 
 
@@ -1189,7 +1186,7 @@ function policy = autosimChooseScenarioPolicy(cfg, datasetState, scenarioId)
     policy.p_boundary = autosimClampNaN(cfg.adaptive.base_boundary_prob, 0.25);
     policy.p_hard_negative = autosimClampNaN(cfg.adaptive.base_hard_negative_prob, 0.15);
     
-    if isfield(cfg, 'validation') && isfield(cfg.validation, 'enable') && cfg.validation.enable
+    if autosimPipelineValidationEnabled(cfg) && isfield(cfg, 'validation') && isfield(cfg.validation, 'enable') && cfg.validation.enable
         policy.mode = autosimValidationMode(cfg, scenarioId);
         policy.reason = "validation_schedule";
         policy.p_exploit = nan;
@@ -1606,6 +1603,249 @@ function info = autosimStartLaunch(cfg, scenarioCfg, scenarioId)
 end
 
 
+function ok = autosimResetSimulationForScenario(cfg, rosCtx, scenarioId, scenarioCfg)
+    ok = false;
+    if nargin < 2 || isempty(rosCtx) || ~isstruct(rosCtx)
+        return;
+    end
+    if ~isfield(rosCtx, 'pubReset') || isempty(rosCtx.pubReset) || ~isfield(rosCtx, 'msgReset') || isempty(rosCtx.msgReset)
+        warning('[AUTOSIM] Reset publisher unavailable; cannot reuse simulation for scenario %d.', scenarioId);
+        return;
+    end
+    
+    hoverHeightForReset = nan;
+    if nargin >= 4 && isstruct(scenarioCfg) && isfield(scenarioCfg, 'hover_height_m') && isfinite(scenarioCfg.hover_height_m)
+        hoverHeightForReset = scenarioCfg.hover_height_m;
+    end
+
+    % Stop residual command to avoid carry-over motion after reset.
+    if isfield(rosCtx, 'pubCmd') && ~isempty(rosCtx.pubCmd) && isfield(rosCtx, 'msgCmd') && ~isempty(rosCtx.msgCmd)
+        try
+            rosCtx.msgCmd.linear.x = 0.0;
+            rosCtx.msgCmd.linear.y = 0.0;
+            rosCtx.msgCmd.linear.z = 0.0;
+            rosCtx.msgCmd.angular.x = 0.0;
+            rosCtx.msgCmd.angular.y = 0.0;
+            rosCtx.msgCmd.angular.z = 0.0;
+            send(rosCtx.pubCmd, rosCtx.msgCmd);
+        catch
+        end
+    end
+
+    nPub = 3;
+    dtPub = 0.12;
+    settleSec = 2.0;
+    landedTimeoutSec = 4.0;
+    forceLandBeforeReset = true;
+    nLandPub = 3;
+    dtLandPub = 0.20;
+    forceLandTimeoutSec = 8.0;
+    takeoffAfterReset = true;
+    nTakeoffPub = 2;
+    dtTakeoffPub = 0.20;
+    flyingTimeoutSec = 8.0;
+    takeoffSettleSec = 1.0;
+    landStateValue = 0;
+    flyingStateValue = 1;
+    if isfield(cfg, 'process')
+        if isfield(cfg.process, 'force_land_before_reset')
+            forceLandBeforeReset = logical(cfg.process.force_land_before_reset);
+        end
+        if isfield(cfg.process, 'force_land_publish_count') && isfinite(cfg.process.force_land_publish_count)
+            nLandPub = max(1, round(cfg.process.force_land_publish_count));
+        end
+        if isfield(cfg.process, 'force_land_publish_interval_sec') && isfinite(cfg.process.force_land_publish_interval_sec)
+            dtLandPub = max(0.01, cfg.process.force_land_publish_interval_sec);
+        end
+        if isfield(cfg.process, 'force_land_wait_timeout_sec') && isfinite(cfg.process.force_land_wait_timeout_sec)
+            forceLandTimeoutSec = max(0.0, cfg.process.force_land_wait_timeout_sec);
+        end
+        if isfield(cfg.process, 'reset_publish_count') && isfinite(cfg.process.reset_publish_count)
+            nPub = max(1, round(cfg.process.reset_publish_count));
+        end
+        if isfield(cfg.process, 'reset_publish_interval_sec') && isfinite(cfg.process.reset_publish_interval_sec)
+            dtPub = max(0.01, cfg.process.reset_publish_interval_sec);
+        end
+        if isfield(cfg.process, 'reset_settle_sec') && isfinite(cfg.process.reset_settle_sec)
+            settleSec = max(0.0, cfg.process.reset_settle_sec);
+        end
+        if isfield(cfg.process, 'reset_wait_landed_timeout_sec') && isfinite(cfg.process.reset_wait_landed_timeout_sec)
+            landedTimeoutSec = max(0.0, cfg.process.reset_wait_landed_timeout_sec);
+        end
+        if isfield(cfg.process, 'takeoff_after_reset')
+            takeoffAfterReset = logical(cfg.process.takeoff_after_reset);
+        end
+        if isfield(cfg.process, 'takeoff_publish_count') && isfinite(cfg.process.takeoff_publish_count)
+            nTakeoffPub = max(1, round(cfg.process.takeoff_publish_count));
+        end
+        if isfield(cfg.process, 'takeoff_publish_interval_sec') && isfinite(cfg.process.takeoff_publish_interval_sec)
+            dtTakeoffPub = max(0.01, cfg.process.takeoff_publish_interval_sec);
+        end
+        if isfield(cfg.process, 'takeoff_wait_flying_timeout_sec') && isfinite(cfg.process.takeoff_wait_flying_timeout_sec)
+            flyingTimeoutSec = max(0.0, cfg.process.takeoff_wait_flying_timeout_sec);
+        end
+        if isfield(cfg.process, 'takeoff_settle_sec') && isfinite(cfg.process.takeoff_settle_sec)
+            takeoffSettleSec = max(0.0, cfg.process.takeoff_settle_sec);
+        end
+    end
+    if isfield(cfg, 'thresholds') && isfield(cfg.thresholds, 'land_state_value') && isfinite(cfg.thresholds.land_state_value)
+        landStateValue = round(cfg.thresholds.land_state_value);
+    end
+    if landStateValue == 0
+        flyingStateValue = 1;
+    end
+
+    if forceLandBeforeReset
+        if isfield(rosCtx, 'pubLand') && ~isempty(rosCtx.pubLand) && isfield(rosCtx, 'msgLand') && ~isempty(rosCtx.msgLand)
+            try
+                for i = 1:nLandPub
+                    send(rosCtx.pubLand, rosCtx.msgLand);
+                    pause(dtLandPub);
+                end
+            catch ME
+                warning('[AUTOSIM] Pre-reset land publish failed for scenario %d: %s', scenarioId, ME.message);
+            end
+        end
+
+        if forceLandTimeoutSec > 0
+            landedNow = autosimWaitForStateValue(rosCtx, landStateValue, forceLandTimeoutSec);
+            if ~landedNow
+                warning('[AUTOSIM] Scenario %d did not confirm landed before reset; continuing with reset.', scenarioId);
+            else
+                fprintf('[AUTOSIM] Scenario %d pre-reset landing confirmed.\n', scenarioId);
+            end
+        end
+    end
+
+    try
+        for i = 1:nPub
+            send(rosCtx.pubReset, rosCtx.msgReset);
+            pause(dtPub);
+        end
+    catch ME
+        warning('[AUTOSIM] Reset publish failed for scenario %d: %s', scenarioId, ME.message);
+        return;
+    end
+
+    if settleSec > 0
+        pause(settleSec);
+    end
+
+    if landedTimeoutSec > 0
+        landedAfterReset = autosimWaitForStateValue(rosCtx, landStateValue, landedTimeoutSec);
+        if landedAfterReset
+            fprintf('[AUTOSIM] Scenario %d reset complete (state=landed).\n', scenarioId);
+        else
+            warning('[AUTOSIM] Scenario %d reset landed-state confirmation timed out; continuing.', scenarioId);
+        end
+    end
+
+    if isfinite(hoverHeightForReset)
+        autosimSetDronePositionToOrigin(rosCtx, hoverHeightForReset, scenarioId);
+    end
+
+    if takeoffAfterReset
+        if ~(isfield(rosCtx, 'pubTakeoff') && ~isempty(rosCtx.pubTakeoff) && isfield(rosCtx, 'msgTakeoff') && ~isempty(rosCtx.msgTakeoff))
+            warning('[AUTOSIM] Takeoff publisher unavailable after reset for scenario %d.', scenarioId);
+            return;
+        end
+
+        try
+            for i = 1:nTakeoffPub
+                send(rosCtx.pubTakeoff, rosCtx.msgTakeoff);
+                pause(dtTakeoffPub);
+            end
+        catch ME
+            warning('[AUTOSIM] Post-reset takeoff publish failed for scenario %d: %s', scenarioId, ME.message);
+            return;
+        end
+
+        if flyingTimeoutSec > 0
+            flyingNow = autosimWaitForStateValue(rosCtx, flyingStateValue, flyingTimeoutSec);
+            if ~flyingNow
+                warning('[AUTOSIM] Scenario %d failed to reach flying state after reset/takeoff.', scenarioId);
+                return;
+            end
+        end
+
+        if takeoffSettleSec > 0
+            pause(takeoffSettleSec);
+        end
+        fprintf('[AUTOSIM] Scenario %d reset + takeoff complete.\n', scenarioId);
+    end
+
+    ok = true;
+    if ~takeoffAfterReset
+        fprintf('[AUTOSIM] Scenario %d reset command sent; proceeding after settle delay.\n', scenarioId);
+    end
+end
+
+
+function ok = autosimWaitForStateValue(rosCtx, expectedState, timeoutSec)
+    ok = false;
+    if timeoutSec <= 0
+        return;
+    end
+    if ~isfield(rosCtx, 'subState') || isempty(rosCtx.subState)
+        return;
+    end
+
+    t0 = tic;
+    while toc(t0) < timeoutSec
+        stMsg = autosimTryReceive(rosCtx.subState, 0.10);
+        if ~isempty(stMsg)
+            try
+                if double(stMsg.data) == expectedState
+                    ok = true;
+                    return;
+                end
+            catch
+            end
+        end
+        pause(0.02);
+    end
+end
+
+
+function autosimSetDronePositionToOrigin(rosCtx, hoverHeightM, scenarioId)
+    if ~isfield(rosCtx, 'node') || isempty(rosCtx.node)
+        return;
+    end
+
+    svcName = '/gazebo/set_model_state';
+    try
+        client = ros2svcclient(rosCtx.node, svcName, 'gazebo_msgs/srv/SetModelState');
+        if isempty(client)
+            return;
+        end
+
+        req = ros2message(client);
+        req.model_state.model_name = 'drone';
+        req.model_state.pose.position.x = 0.0;
+        req.model_state.pose.position.y = 0.0;
+        req.model_state.pose.position.z = double(hoverHeightM);
+        req.model_state.pose.orientation.x = 0.0;
+        req.model_state.pose.orientation.y = 0.0;
+        req.model_state.pose.orientation.z = 0.0;
+        req.model_state.pose.orientation.w = 1.0;
+        req.model_state.twist.linear.x = 0.0;
+        req.model_state.twist.linear.y = 0.0;
+        req.model_state.twist.linear.z = 0.0;
+        req.model_state.twist.angular.x = 0.0;
+        req.model_state.twist.angular.y = 0.0;
+        req.model_state.twist.angular.z = 0.0;
+        req.model_state.reference_frame = 'world';
+
+        resp = call(client, req, 'Timeout', 2.0);
+        if ~isempty(resp)
+            fprintf('[AUTOSIM] Scenario %d drone position reset to origin (0.0, 0.0, %.2f).\\n', scenarioId, hoverHeightM);
+        end
+    catch ME
+        warning('[AUTOSIM] Scenario %d gazebo set_model_state failed: %s', scenarioId, ME.message);
+    end
+end
+
+
 function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, model, rosCtx)
     subState = rosCtx.subState;
     subPose = rosCtx.subPose;
@@ -1614,6 +1854,39 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     subWind = rosCtx.subWind;
     subImu = rosCtx.subImu;
     subBumpers = rosCtx.subBumpers;
+    bumperMsgType = "";
+    bumperMsgUnsupported = false;
+    if isfield(rosCtx, 'bumper_msg_type')
+        bumperMsgType = string(rosCtx.bumper_msg_type);
+    end
+    if isfield(rosCtx, 'bumper_msg_unsupported')
+        bumperMsgUnsupported = logical(rosCtx.bumper_msg_unsupported);
+    end
+
+    skipRetryIfUnsupported = true;
+    if isfield(cfg, 'ros') && isfield(cfg.ros, 'bumper_skip_retry_if_msg_unsupported')
+        skipRetryIfUnsupported = logical(cfg.ros.bumper_skip_retry_if_msg_unsupported);
+    end
+
+    if isempty(subBumpers) && isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_bumper_subscription') && cfg.ros.enable_bumper_subscription && ...
+            ~(skipRetryIfUnsupported && bumperMsgUnsupported)
+        [subBumpers, bumperMsgType, bumperDiag] = autosimCreateBumperSubscriber(rosCtx.node, cfg, true);
+        if isstruct(bumperDiag) && isfield(bumperDiag, 'msg_unsupported')
+            bumperMsgUnsupported = logical(bumperDiag.msg_unsupported);
+        end
+        if ~isempty(subBumpers)
+            fprintf('[AUTOSIM] Bumper subscriber connected: %s (%s)\n', cfg.topics.bumpers, bumperMsgType);
+        else
+            warning('[AUTOSIM] Bumper subscriber unavailable on %s. Contact-metric requirement will be relaxed for this scenario.', cfg.topics.bumpers);
+        end
+    end
+
+    cfgEval = cfg;
+    if isempty(subBumpers)
+        if isfield(cfgEval, 'thresholds')
+            cfgEval.thresholds.require_contact_metrics = false;
+        end
+    end
 
     pubWind = rosCtx.pubWind;
     pubTakeoff = rosCtx.pubTakeoff;
@@ -1715,9 +1988,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
     landingSent = false;
     landingSentT = nan;
-    landingDecisionMode = "abort";
-    executedAction = "abort";
-    actionSource = "policy_abort";
+    landingStartZ = nan;
+    landingTargetZ = nan;
+    landingPadLockX = nan;
+    landingPadLockY = nan;
+    landingPadLockValid = false;
+    landingPadStableFrames = 0;
+    landingDecisionMode = "HoldLanding";
+    executedAction = "HoldLanding";
+    actionSource = "policy_hold";
     targetCase = "none";
     if isfield(scenarioCfg, 'target_case')
         targetCase = string(scenarioCfg.target_case);
@@ -1894,7 +2173,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         if ~isempty(subBumpers)
             bumpMsg = autosimTryReceive(subBumpers, recvTimeoutSec);
             if ~isempty(bumpMsg)
-                [contact(k), contactForce(k), armForceFL(k), armForceFR(k), armForceRL(k), armForceRR(k)] = autosimParseContactForces(bumpMsg);
+                [contact(k), contactForce(k), armForceFL(k), armForceFR(k), armForceRL(k), armForceRR(k)] = autosimParseContactForces(bumpMsg, bumperMsgType);
             end
         end
 
@@ -1958,13 +2237,58 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             tagLockReadyNow = e <= cfg.learning.tag_lock_error_max;
         end
 
+        lockErrMax = cfg.learning.tag_lock_error_max;
+        if isfield(cfg.control, 'landing_lock_max_tag_error') && isfinite(cfg.control.landing_lock_max_tag_error)
+            lockErrMax = max(0.0, cfg.control.landing_lock_max_tag_error);
+        end
+        lockMinFrames = 8;
+        if isfield(cfg.control, 'landing_lock_min_stable_frames') && isfinite(cfg.control.landing_lock_min_stable_frames)
+            lockMinFrames = max(1, round(cfg.control.landing_lock_min_stable_frames));
+        end
+        lockAlpha = 0.20;
+        if isfield(cfg.control, 'landing_lock_xy_blend_alpha') && isfinite(cfg.control.landing_lock_xy_blend_alpha)
+            lockAlpha = autosimClamp(cfg.control.landing_lock_xy_blend_alpha, 0.0, 1.0);
+        end
+        lockEnable = isfield(cfg.control, 'landing_lock_enable') && cfg.control.landing_lock_enable;
+
+        lockReadyNow = false;
+        if predOk && isfinite(uPred) && isfinite(vPred)
+            lockReadyNow = sqrt((uPred - cfg.control.target_u)^2 + (vPred - cfg.control.target_v)^2) <= lockErrMax;
+        elseif tagDetected && isfinite(uTag) && isfinite(vTag)
+            lockReadyNow = sqrt((uTag - cfg.control.target_u)^2 + (vTag - cfg.control.target_v)^2) <= lockErrMax;
+        end
+
+        if lockEnable && isFlying && (controlPhase == "xy_hold")
+            if lockReadyNow && isfinite(xNow) && isfinite(yNow)
+                landingPadStableFrames = landingPadStableFrames + 1;
+                if ~landingPadLockValid
+                    landingPadLockX = xNow;
+                    landingPadLockY = yNow;
+                else
+                    landingPadLockX = (1.0 - lockAlpha) * landingPadLockX + lockAlpha * xNow;
+                    landingPadLockY = (1.0 - lockAlpha) * landingPadLockY + lockAlpha * yNow;
+                end
+                if landingPadStableFrames >= lockMinFrames
+                    if ~landingPadLockValid
+                        fprintf('[AUTOSIM] s%03d landing lock acquired at (x=%.2f, y=%.2f), stable_frames=%d\n', ...
+                            scenarioId, landingPadLockX, landingPadLockY, landingPadStableFrames);
+                    end
+                    landingPadLockValid = true;
+                end
+            else
+                landingPadStableFrames = 0;
+            end
+        end
+
         cmdX = 0.0;
         cmdY = 0.0;
+        cmdZ = 0.0;
 
-        if landingSent
-            controlPhase = "landing_observe";
-        else
-            switch char(controlPhase)
+        if landingSent && controlPhase ~= "landing_track"
+            controlPhase = "landing_track";
+        end
+
+        switch char(controlPhase)
                 case 'pre_takeoff_stabilize'
                     if cfg.control.pre_takeoff_require_tag_centered
                         centerReadyNow = predOk && isfinite(uPred) && isfinite(vPred) && ...
@@ -2051,7 +2375,51 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
                             cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
                     end
-            end
+
+                case 'landing_track'
+                    if ~isFlying
+                        cmdX = 0.0;
+                        cmdY = 0.0;
+                        cmdZ = 0.0;
+                    else
+                        useLandingLockXY = isfield(cfg.control, 'landing_lock_enable') && cfg.control.landing_lock_enable && ...
+                            isfield(cfg.control, 'landing_lock_xy_follow_enable') && cfg.control.landing_lock_xy_follow_enable && ...
+                            landingPadLockValid;
+
+                        if useLandingLockXY
+                            pidX = autosimPidInit();
+                            pidY = autosimPidInit();
+                            tagLostSearchStartT = nan;
+                            [cmdX, cmdY] = autosimComputePoseHoldToTarget(cfg, xNow, yNow, landingPadLockX, landingPadLockY);
+                        else
+                            [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
+                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
+                        end
+
+                        if isfield(cfg.control, 'landing_use_z_tracking') && cfg.control.landing_use_z_tracking
+                            if isfinite(zNow)
+                                zRef = landingStartZ - cfg.control.landing_descent_rate_mps * max(0.0, tk - landingSentT);
+                                zRef = max(cfg.control.landing_min_target_alt_m, zRef);
+                                landingTargetZ = zRef;
+                                zErr = landingTargetZ - zNow;
+                                cmdZ = autosimClamp(cfg.control.landing_z_kp * zErr, ...
+                                    -abs(cfg.control.landing_z_cmd_limit_mps), abs(cfg.control.landing_z_cmd_limit_mps));
+
+                                nearGround = zNow <= cfg.control.landing_near_ground_alt_m;
+                                if nearGround
+                                    cmdZ = max(cmdZ, -abs(cfg.control.landing_descent_rate_near_ground_mps));
+                                else
+                                    cmdZ = max(cmdZ, -abs(cfg.control.landing_descent_rate_mps));
+                                end
+                            end
+                        else
+                            if isfinite(zNow) && (zNow <= cfg.control.landing_near_ground_alt_m)
+                                cmdZ = -abs(cfg.control.landing_descent_rate_near_ground_mps);
+                            else
+                                cmdZ = -abs(cfg.control.landing_descent_rate_mps);
+                            end
+                        end
+                    end
         end
 
         if analysisActive
@@ -2079,9 +2447,11 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             temporalHistN = max(12, round(max([cfg.ontology.gust_base_window_sec, cfg.ontology.temporal_long_window_sec]) / cfg.scenario.sample_period_sec));
             windObs = struct( ...
                 'wind_speed', windSpNow, ...
+                'wind_velocity', windSpNow, ...
                 'wind_direction', windDirNow, ...
                 'wind_speed_hist', windSpeedHist(1:windSpeedHistCount), ...
                 'wind_dir_hist', windDirHist(1:windDirHistCount), ...
+                'wind_acceleration', autosimComputeWindAcceleration(windSpeedHist(1:windSpeedHistCount), cfg.scenario.sample_period_sec), ...
                 'dt', cfg.scenario.sample_period_sec);
             droneObs = struct( ...
                 'position', [xEvalNow; yEvalNow; zEvalNow], ...
@@ -2121,7 +2491,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             semFeat(k, :) = semVec;
             analysisDataSeen = true;
 
-            if cfg.learning.enable && isFlying && (controlPhase == "xy_hold")
+            if autosimPipelineTrainEnabled(cfg) && cfg.learning.enable && isFlying && (controlPhase == "xy_hold")
                 if tagLockReadyNow
                     if ~isfinite(tagLockHoldStartT)
                         tagLockHoldStartT = tk;
@@ -2176,7 +2546,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
             feat = autosimBuildOnlineFeatureVector(z(activeIdx), vz(activeIdx), speedAbs(activeIdx), rollDeg(activeIdx), pitchDeg(activeIdx), ...
                 tagErr(activeIdx), windSpeed(activeIdx), contact(activeIdx), imuAngVel(activeIdx), imuLinAcc(activeIdx), ...
-                contactForce(activeIdx), armForceFL(activeIdx), armForceFR(activeIdx), armForceRL(activeIdx), armForceRR(activeIdx), semVec, cfg);
+                contactForce(activeIdx), armForceFL(activeIdx), armForceFR(activeIdx), armForceRL(activeIdx), armForceRR(activeIdx), semVec, cfg, ...
+                windObs.wind_velocity, windObs.wind_acceleration);
             featureSchema = cfg.model.feature_names;
             if isfield(model, 'feature_names') && ~isempty(model.feature_names)
                 featureSchema = model.feature_names;
@@ -2187,7 +2558,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             semanticStableProb = autosimClampNaN(semantic.landing_feasibility, 0.0);
             decisionStableProb = semanticStableProb;
             if modelGateEnabled
-                [predLabel, predScore] = autosimPredictModel(model, feat, featureSchema);
+                [predLabel, predScore] = autosimPredictModel(model, feat, featureSchema, cfg);
                 if predLabel == "stable"
                     predStableProb(k) = predScore;
                 else
@@ -2258,7 +2629,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 visualEncNow = autosimClampNaN(semantic.visual_enc, 0.0);
                 windRiskEncNow = autosimClampNaN(semantic.wind_risk_enc, 1.0);
                 relationConflicting = isfield(semantic, 'semantic_relation') && (string(semantic.semantic_relation) == "conflicting");
-                abortRecommended = isfield(semantic, 'semantic_integration') && (string(semantic.semantic_integration) == "abort_recommended");
+                abortRecommended = isfield(semantic, 'semantic_integration') && (string(semantic.semantic_integration) == "hold_landing_recommended");
                 blockConflicting = ~isfield(cfg.agent, 'ontology_guard_block_conflicting_relation') || cfg.agent.ontology_guard_block_conflicting_relation;
 
                 ontologyGuardForModel = ...
@@ -2389,9 +2760,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     ((tk - decisionEvalStartT) >= hoverTimeoutSec) && ...
                     ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
                 if hoverTimeoutHit && ~hoverTimeoutDecisionDone
-                    landingDecisionMode = "abort";
-                    executedAction = "abort";
-                    actionSource = "timeout_hover_abort";
+                    landingDecisionMode = "HoldLanding";
+                    executedAction = "HoldLanding";
+                    actionSource = "timeout_hover_hold";
                     lastDecisionT = tk;
                     hoverTimeoutDecisionDone = true;
                     decisionTxt(k) = "abort_by_hover_timeout";
@@ -2405,71 +2776,122 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
             guardLandingAllowed = ~cfg.agent.block_landing_if_unstable || ~modelSaysUnstable;
 
+            landingTriggeredNow = ~landingSent && (canLandBySemantic || canLandByModel || canLandByNoModelThreshold || ...
+                canLandByUncertainModelFallback || canLandByProbe || canLandByForcedTimeout);
+            if landingTriggeredNow && ~landingPadLockValid && isfinite(xEvalNow) && isfinite(yEvalNow)
+                landingPadLockX = xEvalNow;
+                landingPadLockY = yEvalNow;
+                landingPadLockValid = true;
+                fprintf('[AUTOSIM] s%03d landing lock fallback captured at (x=%.2f, y=%.2f)\n', scenarioId, landingPadLockX, landingPadLockY);
+            end
+
             if ~landingSent && guardLandingAllowed && canLandBySemantic
-                send(pubLand, msgLand);
                 landingSent = true;
                 landingSentT = tk;
-                landingDecisionMode = "land";
-                executedAction = "land";
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "AttemptLanding";
+                executedAction = "AttemptLanding";
                 actionSource = "policy_semantic";
                 lastDecisionT = tk;
-                decisionTxt(k) = "land_by_ontology_ai";
-                controlPhase = "landing_observe";
+                decisionTxt(k) = "start_landing_track_by_ontology_ai";
+                controlPhase = "landing_track";
             elseif ~landingSent && guardLandingAllowed && canLandByModel
-                send(pubLand, msgLand);
                 landingSent = true;
                 landingSentT = tk;
-                landingDecisionMode = "land";
-                executedAction = "land";
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "AttemptLanding";
+                executedAction = "AttemptLanding";
                 actionSource = "policy_model";
                 lastDecisionT = tk;
-                decisionTxt(k) = "land_by_model";
-                controlPhase = "landing_observe";
+                decisionTxt(k) = "start_landing_track_by_model";
+                controlPhase = "landing_track";
             elseif ~landingSent && guardLandingAllowed && canLandByNoModelThreshold
-                send(pubLand, msgLand);
                 landingSent = true;
                 landingSentT = tk;
-                landingDecisionMode = "land";
-                executedAction = "land";
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "AttemptLanding";
+                executedAction = "AttemptLanding";
                 actionSource = "policy_threshold";
                 lastDecisionT = tk;
-                decisionTxt(k) = "land_by_threshold_no_model";
-                controlPhase = "landing_observe";
+                decisionTxt(k) = "start_landing_track_by_threshold_no_model";
+                controlPhase = "landing_track";
             elseif ~landingSent && guardLandingAllowed && canLandByUncertainModelFallback
-                send(pubLand, msgLand);
                 landingSent = true;
                 landingSentT = tk;
-                landingDecisionMode = "land";
-                executedAction = "land";
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "AttemptLanding";
+                executedAction = "AttemptLanding";
                 actionSource = "policy_model_uncertain_fallback";
                 lastDecisionT = tk;
-                decisionTxt(k) = "land_by_model_uncertain_fallback";
-                controlPhase = "landing_observe";
+                decisionTxt(k) = "start_landing_track_by_model_uncertain_fallback";
+                controlPhase = "landing_track";
             elseif ~landingSent && canLandByProbe
-                send(pubLand, msgLand);
                 landingSent = true;
                 landingSentT = tk;
-                landingDecisionMode = "abort";
-                executedAction = "land";
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "HoldLanding";
+                executedAction = "AttemptLanding";
                 actionSource = "probe_policy_override";
                 probeLandingTriggered = true;
                 requireLandingOutcomeEvaluation = true;
                 probeLandingReason = string(scenarioCfg.probe_landing_reason);
                 randomLandingPlanned = false;
                 lastDecisionT = tk;
-                decisionTxt(k) = "land_by_probe_policy_override";
-                controlPhase = "landing_observe";
+                decisionTxt(k) = "start_landing_track_by_probe_policy_override";
+                controlPhase = "landing_track";
             elseif ~landingSent && canLandByForcedTimeout
-                send(pubLand, msgLand);
                 landingSent = true;
                 landingSentT = tk;
-                landingDecisionMode = "abort";
-                executedAction = "land";
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "HoldLanding";
+                executedAction = "AttemptLanding";
                 actionSource = "forced_timeout";
                 requireLandingOutcomeEvaluation = true;
                 lastDecisionT = tk;
-                decisionTxt(k) = "land_by_forced_timeout";
-                controlPhase = "landing_observe";
+                decisionTxt(k) = "start_landing_track_by_forced_timeout";
+                controlPhase = "landing_track";
             elseif decisionTxt(k) == "" && hasTrainedModel && cfg.agent.enable_model_decision && modelSaysUnstable
                 decisionTxt(k) = "hold_by_model_unstable";
             elseif decisionTxt(k) == "" && hasTrainedModel && cfg.agent.enable_model_decision && modelIsUncertain
@@ -2481,9 +2903,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             phaseTxt(k) = controlPhase;
 
             if landingSent || canLandBySemantic || canLandByModel || canLandByNoModelThreshold || canLandByUncertainModelFallback || canLandByForcedTimeout
-                inferTxt = "LAND";
+                inferTxt = "ATTEMPT_LANDING";
             else
-                inferTxt = "NO-LAND";
+                inferTxt = "HOLD_LANDING";
             end
 
             vizState = struct();
@@ -2525,23 +2947,19 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             autosimUpdateScenarioRealtimePlot(liveViz, vizState);
         end
 
-        if landingSent
-            cmdX = 0.0;
-            cmdY = 0.0;
-        end
-
         % Keep publishing cmd_vel so the topic is always alive for debugging/monitoring.
         if isFlying || cfg.control.publish_cmd_always
             msgCmd.linear.x = cmdX;
             msgCmd.linear.y = cmdY;
-            msgCmd.linear.z = 0.0;
+            msgCmd.linear.z = cmdZ;
             msgCmd.angular.x = 0.0;
             msgCmd.angular.y = 0.0;
             msgCmd.angular.z = 0.0;
             send(pubCmd, msgCmd);
         end
 
-        if landingSent && isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ~requireLandingOutcomeEvaluation
+        if landingSent && isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ...
+                ~requireLandingOutcomeEvaluation && isfinite(landedHoldStartT) && ((tk - landedHoldStartT) >= cfg.scenario.early_stop_after_landing_sec)
             break;
         end
 
@@ -2660,7 +3078,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     send(pubCmd, msgCmd);
 
     if ~landingSent
-        fprintf('[AUTOSIM] s%03d ended without LAND inference, so no landing command was sent.\n', scenarioId);
+        fprintf('[AUTOSIM] s%03d ended without LAND inference, so landing trajectory was not started.\n', scenarioId);
     end
 
     postN = max(1, floor(cfg.scenario.post_land_observe_sec / cfg.scenario.sample_period_sec));
@@ -2748,7 +3166,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         if ~isempty(subBumpers)
             bumpMsg = autosimTryReceive(subBumpers, recvTimeoutSec);
             if ~isempty(bumpMsg)
-                [cNow, fNow, flNow, frNow, rlNow, rrNow] = autosimParseContactForces(bumpMsg);
+                [cNow, fNow, flNow, frNow, rlNow, rrNow] = autosimParseContactForces(bumpMsg, bumperMsgType);
                 contact(end+1,1) = cNow; %#ok<AGROW>
                 contactForce(end+1,1) = fNow; %#ok<AGROW>
                 armForceFL(end+1,1) = flNow; %#ok<AGROW>
@@ -2776,9 +3194,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         decisionTxt(end+1,1) = "post_observe"; %#ok<AGROW>
         t(end+1,1) = toc(t0); %#ok<AGROW>
 
-        inferPost = "NO-LAND";
+        inferPost = "HOLD_LANDING";
         if landingSent
-            inferPost = "LAND";
+            inferPost = "ATTEMPT_LANDING";
         end
         predPost = autosimNanLast(predStableProb);
         if ~isfinite(predPost)
@@ -2842,7 +3260,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         pause(max(0.0, cfg.scenario.sample_period_sec - (toc(t0) - iterStartT)));
     end
 
-    res = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, requireLandingOutcomeEvaluation, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
+    res = autosimSummarizeAndLabel(cfgEval, scenarioId, scenarioCfg, requireLandingOutcomeEvaluation, z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, stateVal, contact, ...
         imuAngVel, imuLinAcc, contactForce, armForceFL, armForceFR, armForceRL, armForceRR);
     res.landing_cmd_time = landingSentT;
     if isfinite(res.landing_cmd_time) && isfinite(analysisStartT)
@@ -2976,12 +3394,28 @@ function out = autosimLastFinite(x, fallback)
 end
 
 
-function feat = autosimBuildOnlineFeatureVector(z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, contact, imuAngVel, imuLinAcc, contactForce, armFL, armFR, armRL, armRR, semVec, cfg)
+function feat = autosimBuildOnlineFeatureVector(z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, contact, imuAngVel, imuLinAcc, contactForce, armFL, armFR, armRL, armRR, semVec, cfg, windVelocity, windAcceleration)
     if nargin < 16
         semVec = [];
     end
     if nargin < 17
         cfg = [];
+    end
+    if nargin < 18
+        windVelocity = [];
+    end
+    if nargin < 19
+        windAcceleration = [];
+    end
+
+    if autosimIsModuleEnabled(cfg, 'ai_engine')
+        try
+            feat = autosim_ai_engine('build_online_features', z, vz, speedAbs, rollDeg, pitchDeg, tagErr, windSpeed, contact, imuAngVel, imuLinAcc, contactForce, armFL, armFR, armRL, armRR, semVec, cfg, windVelocity, windAcceleration);
+            if isstruct(feat)
+                return;
+            end
+        catch
+        end
     end
 
     feat = struct();
@@ -3072,7 +3506,18 @@ function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, requireLan
     out.arm_force_fr_mean = autosimNanMean(armFR);
     out.arm_force_rl_mean = autosimNanMean(armRL);
     out.arm_force_rr_mean = autosimNanMean(armRR);
+    out.arm_force_fl_peak = autosimNanMax(armFL);
+    out.arm_force_fr_peak = autosimNanMax(armFR);
+    out.arm_force_rl_peak = autosimNanMax(armRL);
+    out.arm_force_rr_peak = autosimNanMax(armRR);
+    out.arm_force_peak_max = autosimNanMax([out.arm_force_fl_peak, out.arm_force_fr_peak, out.arm_force_rl_peak, out.arm_force_rr_peak]);
     out.arm_force_imbalance = autosimNanMax([abs(armFL-armFR), abs(armRL-armRR)]);
+    [impactWeightN, impactTotalLimitN, impactImbalanceLimitN, impactArmPeakLimitN] = autosimComputeImpactThresholds(cfg);
+    out.impact_weight_n = impactWeightN;
+    out.impact_total_force_limit_n = impactTotalLimitN;
+    out.impact_arm_imbalance_limit_n = impactImbalanceLimitN;
+    out.impact_arm_peak_limit_n = impactArmPeakLimitN;
+    out.contact_metrics_available = isfinite(out.max_contact_force) && isfinite(out.arm_force_imbalance) && isfinite(out.arm_force_peak_max);
     out.final_state = autosimNanLast(stateVal);
 
     if isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ~requireLandingOutcomeEvaluation
@@ -3103,11 +3548,17 @@ function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, requireLan
     condTdVz = isfinite(out.max_abs_vz) && (out.max_abs_vz <= c.final_touchdown_abs_vz_max);
     condImuAng = (~isfinite(out.max_imu_ang_vel)) || (out.max_imu_ang_vel <= c.final_imu_ang_vel_rms_max);
     condImuAcc = (~isfinite(out.max_imu_lin_acc)) || (out.max_imu_lin_acc <= c.final_imu_lin_acc_rms_max);
-    condContactForce = (~isfinite(out.max_contact_force)) || (out.max_contact_force <= c.final_contact_force_max_n);
-    condArmBalance = (~isfinite(out.arm_force_imbalance)) || (out.arm_force_imbalance <= c.final_arm_force_imbalance_max_n);
+    if isfield(c, 'require_contact_metrics') && c.require_contact_metrics
+        condContactMetricsAvailable = out.contact_metrics_available;
+    else
+        condContactMetricsAvailable = true;
+    end
+    condContactForce = (~isfinite(out.max_contact_force)) || (out.max_contact_force <= out.impact_total_force_limit_n);
+    condArmBalance = (~isfinite(out.arm_force_imbalance)) || (out.arm_force_imbalance <= out.impact_arm_imbalance_limit_n);
+    condArmPeak = (~isfinite(out.arm_force_peak_max)) || (out.arm_force_peak_max <= out.impact_arm_peak_limit_n);
 
     passAll = condState && condAlt && condSpeed && condRoll && condPitch && condTag && condStdZ && condStdVz && condVzOsc && condTdAcc && condTdVz && ...
-        condImuAng && condImuAcc && condContactForce && condArmBalance;
+        condImuAng && condImuAcc && condContactMetricsAvailable && condContactForce && condArmBalance && condArmPeak;
 
     if passAll
         out.label = "stable";
@@ -3117,7 +3568,7 @@ function out = autosimSummarizeAndLabel(cfg, scenarioId, scenarioCfg, requireLan
         out.label = "unstable";
         out.success = false;
         out.failure_reason = autosimBuildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condVzOsc, condTdAcc, condTdVz, ...
-            condImuAng, condImuAcc, condContactForce, condArmBalance);
+            condImuAng, condImuAcc, condContactMetricsAvailable, condContactForce, condArmBalance, condArmPeak);
     end
 end
 
@@ -3133,10 +3584,17 @@ function [passAll, reason] = autosimEvaluateHoverWindowSafety(out, cfg)
     condWind = (~isfinite(out.max_wind_speed)) || (out.max_wind_speed <= cfg.agent.no_model_max_wind_speed);
     condImuAng = (~isfinite(out.max_imu_ang_vel)) || (out.max_imu_ang_vel <= cfg.thresholds.final_imu_ang_vel_rms_max);
     condImuAcc = (~isfinite(out.max_imu_lin_acc)) || (out.max_imu_lin_acc <= cfg.thresholds.final_imu_lin_acc_rms_max);
-    condContactForce = (~isfinite(out.max_contact_force)) || (out.max_contact_force <= cfg.thresholds.final_contact_force_max_n);
-    condArmBalance = (~isfinite(out.arm_force_imbalance)) || (out.arm_force_imbalance <= cfg.thresholds.final_arm_force_imbalance_max_n);
+    if isfield(cfg.thresholds, 'require_contact_metrics') && cfg.thresholds.require_contact_metrics
+        condContactMetricsAvailable = out.contact_metrics_available;
+    else
+        condContactMetricsAvailable = true;
+    end
+    condContactForce = (~isfinite(out.max_contact_force)) || (out.max_contact_force <= out.impact_total_force_limit_n);
+    condArmBalance = (~isfinite(out.arm_force_imbalance)) || (out.arm_force_imbalance <= out.impact_arm_imbalance_limit_n);
+    condArmPeak = (~isfinite(out.arm_force_peak_max)) || (out.arm_force_peak_max <= out.impact_arm_peak_limit_n);
 
-    passAll = condAlt && condSpeed && condRoll && condPitch && condTag && condStdZ && condStdVz && condWind && condImuAng && condImuAcc && condContactForce && condArmBalance;
+    passAll = condAlt && condSpeed && condRoll && condPitch && condTag && condStdZ && condStdVz && condWind && condImuAng && condImuAcc && ...
+        condContactMetricsAvailable && condContactForce && condArmBalance && condArmPeak;
 
     parts = strings(0,1);
     if ~condAlt, parts(end+1,1) = "hover_altitude_low"; end %#ok<AGROW>
@@ -3149,8 +3607,10 @@ function [passAll, reason] = autosimEvaluateHoverWindowSafety(out, cfg)
     if ~condWind, parts(end+1,1) = "wind_high"; end %#ok<AGROW>
     if ~condImuAng, parts(end+1,1) = "imu_angular_rate_high"; end %#ok<AGROW>
     if ~condImuAcc, parts(end+1,1) = "imu_linear_accel_high"; end %#ok<AGROW>
+    if ~condContactMetricsAvailable, parts(end+1,1) = "contact_metrics_unavailable"; end %#ok<AGROW>
     if ~condContactForce, parts(end+1,1) = "contact_force_high"; end %#ok<AGROW>
     if ~condArmBalance, parts(end+1,1) = "arm_force_imbalance_high"; end %#ok<AGROW>
+    if ~condArmPeak, parts(end+1,1) = "arm_peak_impact_high"; end %#ok<AGROW>
 
     if isempty(parts)
         reason = "";
@@ -3160,7 +3620,7 @@ function [passAll, reason] = autosimEvaluateHoverWindowSafety(out, cfg)
 end
 
 
-function reason = autosimBuildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condVzOsc, condTdAcc, condTdVz, condImuAng, condImuAcc, condContactForce, condArmBalance)
+function reason = autosimBuildFailureReason(condState, condAlt, condSpeed, condRoll, condPitch, condTag, condStdZ, condStdVz, condVzOsc, condTdAcc, condTdVz, condImuAng, condImuAcc, condContactMetricsAvailable, condContactForce, condArmBalance, condArmPeak)
     parts = strings(0,1);
     if ~condState, parts(end+1,1) = "state_not_landed"; end %#ok<AGROW>
     if ~condAlt, parts(end+1,1) = "altitude_high"; end %#ok<AGROW>
@@ -3175,13 +3635,45 @@ function reason = autosimBuildFailureReason(condState, condAlt, condSpeed, condR
     if ~condTdVz, parts(end+1,1) = "touchdown_vz_peak_high"; end %#ok<AGROW>
     if ~condImuAng, parts(end+1,1) = "imu_angular_rate_high"; end %#ok<AGROW>
     if ~condImuAcc, parts(end+1,1) = "imu_linear_accel_high"; end %#ok<AGROW>
+    if ~condContactMetricsAvailable, parts(end+1,1) = "contact_metrics_unavailable"; end %#ok<AGROW>
     if ~condContactForce, parts(end+1,1) = "contact_force_high"; end %#ok<AGROW>
     if ~condArmBalance, parts(end+1,1) = "arm_force_imbalance"; end %#ok<AGROW>
+    if ~condArmPeak, parts(end+1,1) = "arm_peak_impact_high"; end %#ok<AGROW>
 
     if isempty(parts)
         reason = "unknown";
     else
         reason = strjoin(parts, ';');
+    end
+end
+
+
+function [weightN, totalLimitN, imbalanceLimitN, armPeakLimitN] = autosimComputeImpactThresholds(cfg)
+    massKg = 1.4;
+    grav = 9.81;
+    if isfield(cfg, 'wind') && isfield(cfg.wind, 'physics')
+        if isfield(cfg.wind.physics, 'mass_kg') && isfinite(cfg.wind.physics.mass_kg) && (cfg.wind.physics.mass_kg > 0)
+            massKg = cfg.wind.physics.mass_kg;
+        end
+        if isfield(cfg.wind.physics, 'gravity_mps2') && isfinite(cfg.wind.physics.gravity_mps2) && (cfg.wind.physics.gravity_mps2 > 0)
+            grav = cfg.wind.physics.gravity_mps2;
+        end
+    end
+
+    weightN = massKg * grav;
+    totalLimitN = cfg.thresholds.final_contact_force_max_n;
+    imbalanceLimitN = cfg.thresholds.final_arm_force_imbalance_max_n;
+    armPeakLimitN = cfg.thresholds.final_arm_force_peak_max_n;
+
+    useMassScaled = isfield(cfg.thresholds, 'use_mass_scaled_impact_thresholds') && cfg.thresholds.use_mass_scaled_impact_thresholds;
+    if useMassScaled
+        totalFactor = autosimClampNaN(cfg.thresholds.mass_scaled_contact_force_factor, 3.8);
+        imbalanceFactor = autosimClampNaN(cfg.thresholds.mass_scaled_arm_imbalance_factor, 1.4);
+        armPeakFactor = autosimClampNaN(cfg.thresholds.mass_scaled_arm_peak_factor, 1.5);
+
+        totalLimitN = totalFactor * weightN;
+        imbalanceLimitN = imbalanceFactor * weightN;
+        armPeakLimitN = armPeakFactor * weightN;
     end
 end
 
@@ -3271,124 +3763,27 @@ end
 
 function [model, info] = autosimIncrementalTrainAndSave(cfg, results, modelPrev, scenarioId)
     tbl = autosimSummaryTable(results);
+    if autosimIsModuleEnabled(cfg, 'learning_engine')
+        try
+            [model, info] = autosim_learning_engine('incremental_train_and_save', cfg, tbl, modelPrev, scenarioId);
+            return;
+        catch
+        end
+    end
 
-    valid = false(height(tbl), 1);
+    model = modelPrev;
+    info = autosimLearningDisabledInfo(scenarioId);
+    info.skip_reason = "learning_engine_unavailable";
     if ismember('label', tbl.Properties.VariableNames)
         valid = (tbl.label == "stable") | (tbl.label == "unstable");
-    end
-
-    info = struct();
-    info.scenario_id = scenarioId;
-    info.model_updated = false;
-    info.n_train = sum(valid);
-    info.stable_ratio = 0.0;
-    info.n_stable = 0;
-    info.n_unstable = 0;
-    info.skip_reason = "";
-    info.model_path = "";
-
-    if ~isfield(cfg, 'learning') || ~isfield(cfg.learning, 'enable') || ~cfg.learning.enable
-        model = modelPrev;
-        info.skip_reason = "learning_disabled";
-        return;
-    end
-
-    if sum(valid) < cfg.learning.bootstrap_min_samples
-        model = modelPrev;
-        info.skip_reason = "insufficient_total_samples";
-        return;
-    end
-
-    if isfield(cfg.learning, 'min_scenarios_before_first_update') && isfinite(cfg.learning.min_scenarios_before_first_update)
-        if scenarioId < cfg.learning.min_scenarios_before_first_update
-            model = modelPrev;
-            info.skip_reason = "warmup_before_first_update";
-            return;
+        info.n_train = sum(valid);
+        if any(valid)
+            y = string(tbl.label(valid));
+            info.n_stable = sum(y == "stable");
+            info.n_unstable = sum(y == "unstable");
+            info.stable_ratio = info.n_stable / max(1, info.n_train);
         end
     end
-
-    if isfield(cfg.learning, 'save_every_scenario') && ~cfg.learning.save_every_scenario
-        updateEvery = 1;
-        if isfield(cfg.learning, 'update_every_n_scenarios') && isfinite(cfg.learning.update_every_n_scenarios)
-            updateEvery = max(1, round(cfg.learning.update_every_n_scenarios));
-        end
-        if mod(max(1, scenarioId), updateEvery) ~= 0
-            model = modelPrev;
-            info.skip_reason = "cadence_skip";
-            return;
-        end
-    end
-
-    trainTbl = tbl(valid, :);
-    y = string(trainTbl.label);
-    y(y ~= "stable") = "unstable";
-
-    nStable = sum(y == "stable");
-    nUnstable = sum(y == "unstable");
-    nTrain = numel(y);
-    minorityRatio = min(nStable, nUnstable) / max(1, nTrain);
-    info.n_stable = nStable;
-    info.n_unstable = nUnstable;
-    info.stable_ratio = mean(y == "stable");
-
-    minStable = 1;
-    minUnstable = 1;
-    minMinorityRatio = 0.0;
-    forceAfterStale = inf;
-    if isfield(cfg.learning, 'min_stable_samples_for_update') && isfinite(cfg.learning.min_stable_samples_for_update)
-        minStable = max(1, round(cfg.learning.min_stable_samples_for_update));
-    end
-    if isfield(cfg.learning, 'min_unstable_samples_for_update') && isfinite(cfg.learning.min_unstable_samples_for_update)
-        minUnstable = max(1, round(cfg.learning.min_unstable_samples_for_update));
-    end
-    if isfield(cfg.learning, 'minority_ratio_floor_for_update') && isfinite(cfg.learning.minority_ratio_floor_for_update)
-        minMinorityRatio = max(0.0, min(0.5, cfg.learning.minority_ratio_floor_for_update));
-    end
-    if isfield(cfg.learning, 'force_update_after_stale_scenarios') && isfinite(cfg.learning.force_update_after_stale_scenarios)
-        forceAfterStale = max(1, round(cfg.learning.force_update_after_stale_scenarios));
-    end
-
-    lastUpdateScenario = nan;
-    if isstruct(modelPrev) && isfield(modelPrev, 'last_update_scenario') && isfinite(modelPrev.last_update_scenario)
-        lastUpdateScenario = double(modelPrev.last_update_scenario);
-    end
-    staleScenarioCount = inf;
-    if isfinite(lastUpdateScenario)
-        staleScenarioCount = max(0, scenarioId - lastUpdateScenario);
-    end
-    allowForcedRefresh = (nUnstable >= 1) && (staleScenarioCount >= forceAfterStale);
-
-    if ~allowForcedRefresh && (nStable < minStable || nUnstable < minUnstable || minorityRatio < minMinorityRatio)
-        model = modelPrev;
-        info.skip_reason = "class_imbalance_guard";
-        return;
-    end
-
-    featNames = cellstr(cfg.model.feature_names);
-    X = zeros(height(trainTbl), numel(featNames));
-    for i = 1:numel(featNames)
-        col = featNames{i};
-        if ismember(col, trainTbl.Properties.VariableNames)
-            X(:,i) = autosimToNumeric(trainTbl.(col));
-        end
-    end
-
-    model = autosimTrainGaussianNB(X, y, cfg.model.feature_names, cfg.model.prior_uniform_blend);
-    model.schema_version = string(cfg.model.schema_version);
-    model.n_train = nTrain;
-    model.n_stable = nStable;
-    model.n_unstable = nUnstable;
-    model.stable_ratio = info.stable_ratio;
-    model.minority_ratio = minorityRatio;
-    model.last_update_scenario = scenarioId;
-
-    ts = autosimTimestamp();
-    modelPath = fullfile(cfg.paths.model_dir, sprintf('autosim_model_%s_s%03d.mat', ts, scenarioId));
-    save(modelPath, 'model');
-
-    info.model_updated = true;
-    info.model_path = string(modelPath);
-    info.skip_reason = "";
 end
 
 
@@ -3533,7 +3928,9 @@ function tbl = autosimSummaryTable(results)
         'final_altitude','final_abs_speed','final_abs_roll_deg','final_abs_pitch_deg','final_tag_error', ...
         'stability_std_z','stability_std_vz','stability_std_vz_osc','touchdown_accel_rms','contact_count', ...
         'mean_imu_ang_vel','max_imu_ang_vel','mean_imu_lin_acc','max_imu_lin_acc', ...
-        'max_contact_force','arm_force_fl_mean','arm_force_fr_mean','arm_force_rl_mean','arm_force_rr_mean','arm_force_imbalance', ...
+        'max_contact_force','arm_force_fl_mean','arm_force_fr_mean','arm_force_rl_mean','arm_force_rr_mean', ...
+        'arm_force_fl_peak','arm_force_fr_peak','arm_force_rl_peak','arm_force_rr_peak','arm_force_peak_max','arm_force_imbalance', ...
+        'impact_weight_n','impact_total_force_limit_n','impact_arm_imbalance_limit_n','impact_arm_peak_limit_n','contact_metrics_available', ...
         'final_state', ...
         'landing_cmd_time','pred_decision','executed_action','action_source','probe_episode','probe_reason','gt_safe_to_land','decision_outcome', ...
         'semantic_environment','semantic_drone_state','semantic_visual_state','semantic_landing_context', ...
@@ -3546,7 +3943,19 @@ function tbl = autosimSummaryTable(results)
 end
 
 
-function [predLabel, predScore] = autosimPredictModel(model, featStruct, featureNames)
+function [predLabel, predScore] = autosimPredictModel(model, featStruct, featureNames, cfg)
+    if nargin < 4
+        cfg = [];
+    end
+
+    if autosimIsModuleEnabled(cfg, 'ai_engine')
+        try
+            [predLabel, predScore] = autosim_ai_engine('predict_model', model, featStruct, featureNames);
+            return;
+        catch
+        end
+    end
+
     X = zeros(1, numel(featureNames));
     for i = 1:numel(featureNames)
         fn = char(featureNames(i));
@@ -3555,13 +3964,30 @@ function [predLabel, predScore] = autosimPredictModel(model, featStruct, feature
         end
     end
 
-    [lbl, score] = autosimPredictGaussianNB(model, X);
+    [lbl, score] = autosimPredictGaussianNB(model, X, cfg);
     predLabel = lbl(1);
     predScore = score(1);
 end
 
 
-function model = autosimTrainGaussianNB(X, y, featureNames, priorUniformBlend)
+function model = autosimTrainGaussianNB(X, y, featureNames, priorUniformBlend, cfg)
+    if nargin < 5
+        cfg = [];
+    end
+
+    if autosimIsModuleEnabled(cfg, 'ai_engine')
+        try
+            model = autosim_ai_engine('train_gnb', X, y, featureNames, priorUniformBlend);
+            if isstruct(model)
+                model.kind = "gaussian_nb";
+                model.created_at = string(datetime('now'));
+                model.placeholder = false;
+                return;
+            end
+        catch
+        end
+    end
+
     X = autosimSanitize(X);
     cls = unique(y);
     nClass = numel(cls);
@@ -3600,7 +4026,19 @@ function model = autosimTrainGaussianNB(X, y, featureNames, priorUniformBlend)
 end
 
 
-function [predLabel, predScore] = autosimPredictGaussianNB(model, X)
+function [predLabel, predScore] = autosimPredictGaussianNB(model, X, cfg)
+    if nargin < 3
+        cfg = [];
+    end
+
+    if autosimIsModuleEnabled(cfg, 'ai_engine')
+        try
+            [predLabel, predScore] = autosim_ai_engine('predict_gnb', model, X);
+            return;
+        catch
+        end
+    end
+
     X = autosimSanitize(X);
     if isrow(X)
         X = reshape(X, 1, []);
@@ -3635,6 +4073,92 @@ end
 
 function x = autosimSanitize(x)
     x(~isfinite(x)) = 0.0;
+end
+
+
+function tf = autosimIsModuleEnabled(cfg, moduleName)
+    tf = false;
+    if nargin < 2
+        return;
+    end
+
+    mn = lower(string(moduleName));
+    if isempty(cfg)
+        % Allow module use for utility/model functions where cfg is not threaded.
+        baseEnable = true;
+        useFlag = true;
+    else
+        baseEnable = ~(isfield(cfg, 'modules') && isfield(cfg.modules, 'enable') && ~logical(cfg.modules.enable));
+        useFlag = true;
+        if isfield(cfg, 'modules')
+            switch mn
+                case "wind_engine"
+                    if isfield(cfg.modules, 'use_wind_engine')
+                        useFlag = logical(cfg.modules.use_wind_engine);
+                    end
+                case "ai_engine"
+                    if isfield(cfg.modules, 'use_ai_engine')
+                        useFlag = logical(cfg.modules.use_ai_engine);
+                    end
+                case "learning_engine"
+                    if isfield(cfg.modules, 'use_learning_engine')
+                        useFlag = logical(cfg.modules.use_learning_engine);
+                    end
+                case "ontology_engine"
+                    if isfield(cfg.modules, 'use_ontology_engine')
+                        useFlag = logical(cfg.modules.use_ontology_engine);
+                    end
+            end
+        end
+    end
+
+    if ~baseEnable || ~useFlag
+        return;
+    end
+
+    switch mn
+        case "wind_engine"
+            tf = exist('autosim_wind_sim', 'file') == 2;
+        case "ai_engine"
+            tf = exist('autosim_ai_engine', 'file') == 2;
+        case "learning_engine"
+            tf = exist('autosim_learning_engine', 'file') == 2;
+        case "ontology_engine"
+            tf = exist('autosim_ontology_engine', 'file') == 2;
+        otherwise
+            tf = false;
+    end
+end
+
+
+function tf = autosimPipelineTrainEnabled(cfg)
+    tf = true;
+    if isfield(cfg, 'pipeline') && isfield(cfg.pipeline, 'mode')
+        mode = lower(string(cfg.pipeline.mode));
+        tf = ~(mode == "validate_only");
+    end
+end
+
+
+function tf = autosimPipelineValidationEnabled(cfg)
+    tf = true;
+    if isfield(cfg, 'pipeline') && isfield(cfg.pipeline, 'mode')
+        mode = lower(string(cfg.pipeline.mode));
+        tf = ~(mode == "train_only");
+    end
+end
+
+
+function info = autosimLearningDisabledInfo(scenarioId)
+    info = struct();
+    info.scenario_id = scenarioId;
+    info.model_updated = false;
+    info.n_train = 0;
+    info.stable_ratio = 0.0;
+    info.n_stable = 0;
+    info.n_unstable = 0;
+    info.skip_reason = "pipeline_train_disabled";
+    info.model_path = "";
 end
 
 
@@ -4351,12 +4875,12 @@ function [color, textOut] = autosimVizDecisionBadge(integration, inferTxt, feasi
     integration = string(integration);
     inferTxt = string(inferTxt);
     switch integration
-        case "clear_to_land"
+        case "attempt_landing_recommended"
             color = [0.72 0.89 0.74];
-            titleTxt = "LAND";
-        case "abort_recommended"
+            titleTxt = "ATTEMPT_LANDING";
+        case "hold_landing_recommended"
             color = [0.94 0.76 0.76];
-            titleTxt = "ABORT";
+            titleTxt = "HOLD_LANDING";
         otherwise
             color = [0.95 0.90 0.70];
             titleTxt = "REASSESS";
@@ -4415,8 +4939,8 @@ function tbl = autosimEmptyTraceTable(scenarioId)
     tbl.sem_context_enc = nan;
     tbl.scenario_policy = "exploit";
     tbl.target_case = "none";
-    tbl.pred_decision = "abort";
-    tbl.executed_action = "abort";
+    tbl.pred_decision = "HoldLanding";
+    tbl.executed_action = "HoldLanding";
     tbl.action_source = "policy_abort";
     tbl.probe_episode = 0;
     tbl.probe_reason = "none";
@@ -5044,7 +5568,7 @@ function [angVelNorm, linAccNorm] = autosimParseImuMetrics(msg)
 end
 
 
-function [hasContact, totalForce, fFL, fFR, fRL, fRR] = autosimParseContactForces(msg)
+function [hasContact, totalForce, fFL, fFR, fRL, fRR] = autosimParseContactForces(msg, msgTypeHint)
     hasContact = 0;
     totalForce = nan;
     fFL = nan;
@@ -5052,58 +5576,277 @@ function [hasContact, totalForce, fFL, fFR, fRL, fRR] = autosimParseContactForce
     fRL = nan;
     fRR = nan;
 
-    try
-        states = msg.states;
-    catch
+    if nargin < 2
+        msgTypeHint = "";
+    end
+
+    parsed = false;
+
+    [okStates, states] = autosimTryGetMessageField(msg, ["states", "States", "contacts", "Contacts", "contact_states", "contactStates"]);
+    if okStates
+        parsed = true;
+
+        nState = numel(states);
+        if nState <= 0
+            hasContact = 0;
+            totalForce = 0.0;
+            fFL = 0.0;
+            fFR = 0.0;
+            fRL = 0.0;
+            fRR = 0.0;
+            return;
+        end
+
+        hasContact = 1;
+        totalForce = 0.0;
+        fFL = 0.0;
+        fFR = 0.0;
+        fRL = 0.0;
+        fRR = 0.0;
+
+        for i = 1:nState
+            st = states(i);
+
+            c1 = "";
+            c2 = "";
+            [okC1, c1Val] = autosimTryGetMessageField(st, ["collision1_name", "collision1Name", "collision_1_name", "name1", "collision_a"]);
+            if okC1
+                c1 = string(c1Val);
+            end
+            [okC2, c2Val] = autosimTryGetMessageField(st, ["collision2_name", "collision2Name", "collision_2_name", "name2", "collision_b"]);
+            if okC2
+                c2 = string(c2Val);
+            end
+            armKey = autosimContactArmKey(c1 + " " + c2);
+
+            forceSum = 0.0;
+            [okWrench, wrenches] = autosimTryGetMessageField(st, ["wrenches", "Wrenches", "contact_wrenches", "wrench", "forces"]);
+            if okWrench
+                for j = 1:numel(wrenches)
+                    wj = wrenches(j);
+                    [okForce, forceObj] = autosimTryGetMessageField(wj, ["force", "Force", "total", "vector"]);
+                    if okForce
+                        [okFx, fxVal] = autosimTryGetMessageField(forceObj, ["x", "X"]);
+                        [okFy, fyVal] = autosimTryGetMessageField(forceObj, ["y", "Y"]);
+                        [okFz, fzVal] = autosimTryGetMessageField(forceObj, ["z", "Z"]);
+                        if okFx && okFy && okFz
+                            fx = double(fxVal);
+                            fy = double(fyVal);
+                            fz = double(fzVal);
+                            forceSum = forceSum + sqrt(fx*fx + fy*fy + fz*fz);
+                        end
+                    else
+                        % Some custom messages flatten forces directly in each wrench entry.
+                        forceSum = forceSum + autosimParseForceScalarFromCustomWrench(wj);
+                    end
+                end
+            else
+                forceSum = autosimParseForceScalarFromCustomWrench(st);
+            end
+
+            totalForce = totalForce + forceSum;
+            switch armKey
+                case "fl"
+                    fFL = fFL + forceSum;
+                case "fr"
+                    fFR = fFR + forceSum;
+                case "rl"
+                    fRL = fRL + forceSum;
+                case "rr"
+                    fRR = fRR + forceSum;
+            end
+        end
+
+        if totalForce <= 0
+            hasContact = 0;
+        end
         return;
     end
 
-    nState = numel(states);
-    if nState <= 0
+    % Flat custom message path: parse scalar force fields or numeric vector payload.
+    [okTotal, totalVal] = autosimTryGetMessageField(msg, ["total_force", "totalForce", "contact_force", "impact_force", "force_total", "force", "sum_force"]);
+    [okFl, flVal] = autosimTryGetMessageField(msg, ["arm_force_fl", "arm_fl_force", "fl_force", "force_fl", "front_left_force"]);
+    [okFr, frVal] = autosimTryGetMessageField(msg, ["arm_force_fr", "arm_fr_force", "fr_force", "force_fr", "front_right_force"]);
+    [okRl, rlVal] = autosimTryGetMessageField(msg, ["arm_force_rl", "arm_rl_force", "rl_force", "force_rl", "rear_left_force"]);
+    [okRr, rrVal] = autosimTryGetMessageField(msg, ["arm_force_rr", "arm_rr_force", "rr_force", "force_rr", "rear_right_force"]);
+
+    if okTotal || okFl || okFr || okRl || okRr
+        parsed = true;
+        totalForce = autosimCastFiniteOrDefault(totalVal, 0.0);
+        fFL = autosimCastFiniteOrDefault(flVal, 0.0);
+        fFR = autosimCastFiniteOrDefault(frVal, 0.0);
+        fRL = autosimCastFiniteOrDefault(rlVal, 0.0);
+        fRR = autosimCastFiniteOrDefault(rrVal, 0.0);
+        if ~okTotal
+            totalForce = fFL + fFR + fRL + fRR;
+        end
+        [okHas, hasVal] = autosimTryGetMessageField(msg, ["has_contact", "hasContact", "contact", "in_contact", "collision"]);
+        if okHas
+            hasContact = double(logical(hasVal));
+        else
+            hasContact = double(totalForce > 0.0);
+        end
         return;
     end
 
-    hasContact = 1;
-    totalForce = 0.0;
-    fFL = 0.0;
-    fFR = 0.0;
-    fRL = 0.0;
-    fRR = 0.0;
+    [okData, dataVal] = autosimTryGetMessageField(msg, ["data", "Data", "values", "forces"]);
+    if okData
+        dataNum = autosimToNumericVector(dataVal);
+        if numel(dataNum) >= 6
+            parsed = true;
+            hasContact = double(dataNum(1) > 0.5);
+            totalForce = max(0.0, dataNum(2));
+            fFL = max(0.0, dataNum(3));
+            fFR = max(0.0, dataNum(4));
+            fRL = max(0.0, dataNum(5));
+            fRR = max(0.0, dataNum(6));
+            if totalForce <= 0
+                totalForce = fFL + fFR + fRL + fRR;
+            end
+            if hasContact == 0
+                hasContact = double(totalForce > 0.0);
+            end
+            return;
+        elseif numel(dataNum) == 5
+            parsed = true;
+            totalForce = max(0.0, dataNum(1));
+            fFL = max(0.0, dataNum(2));
+            fFR = max(0.0, dataNum(3));
+            fRL = max(0.0, dataNum(4));
+            fRR = max(0.0, dataNum(5));
+            hasContact = double(totalForce > 0.0);
+            return;
+        end
+    end
 
-    for i = 1:nState
-        st = states(i);
+    if strlength(string(msgTypeHint)) > 0 && contains(lower(string(msgTypeHint)), "contact")
+        % If the topic type says contact but parser couldn't map fields, report zeros instead of NaN.
+        hasContact = 0;
+        totalForce = 0.0;
+        fFL = 0.0;
+        fFR = 0.0;
+        fRL = 0.0;
+        fRR = 0.0;
+        return;
+    end
 
-        c1 = "";
-        c2 = "";
-        try, c1 = string(st.collision1_name); catch, end
-        try, c2 = string(st.collision2_name); catch, end
-        armKey = autosimContactArmKey(c1 + " " + c2);
+    if parsed
+        return;
+    end
+end
 
-        forceSum = 0.0;
+
+function [ok, value] = autosimTryGetMessageField(obj, names)
+    ok = false;
+    value = [];
+    if nargin < 2 || isempty(names) || isempty(obj)
+        return;
+    end
+
+    names = string(names(:));
+
+    for i = 1:numel(names)
+        nm = char(names(i));
         try
-            wrenches = st.wrenches;
-            for j = 1:numel(wrenches)
-                wj = wrenches(j);
-                fx = double(wj.force.x);
-                fy = double(wj.force.y);
-                fz = double(wj.force.z);
-                forceSum = forceSum + sqrt(fx*fx + fy*fy + fz*fz);
+            if isstruct(obj) && isfield(obj, nm)
+                value = obj.(nm);
+                ok = true;
+                return;
             end
         catch
-            forceSum = 0.0;
         end
 
-        totalForce = totalForce + forceSum;
-        switch armKey
-            case "fl"
-                fFL = fFL + forceSum;
-            case "fr"
-                fFR = fFR + forceSum;
-            case "rl"
-                fRL = fRL + forceSum;
-            case "rr"
-                fRR = fRR + forceSum;
+        try
+            if isobject(obj) && isprop(obj, nm)
+                value = obj.(nm);
+                ok = true;
+                return;
+            end
+        catch
         end
+    end
+
+    objFields = strings(0,1);
+    try
+        if isstruct(obj)
+            objFields = string(fieldnames(obj));
+        elseif isobject(obj)
+            objFields = string(properties(obj));
+        end
+    catch
+    end
+
+    if isempty(objFields)
+        return;
+    end
+
+    lowerFields = lower(objFields);
+    for i = 1:numel(names)
+        target = lower(strrep(char(names(i)), '-', '_'));
+        target = regexprep(target, '[^a-z0-9_]', '');
+        for j = 1:numel(objFields)
+            cand = lower(strrep(char(objFields(j)), '-', '_'));
+            cand = regexprep(cand, '[^a-z0-9_]', '');
+            if strcmp(cand, target)
+                try
+                    value = obj.(char(objFields(j)));
+                    ok = true;
+                    return;
+                catch
+                end
+            end
+        end
+    end
+end
+
+
+function forceScalar = autosimParseForceScalarFromCustomWrench(obj)
+    forceScalar = 0.0;
+    [okMag, magVal] = autosimTryGetMessageField(obj, ["magnitude", "force", "norm", "value", "total_force"]);
+    if okMag && isscalar(magVal)
+        v = double(magVal);
+        if isfinite(v)
+            forceScalar = abs(v);
+            return;
+        end
+    end
+
+    [okFx, fxVal] = autosimTryGetMessageField(obj, ["fx", "force_x", "x"]);
+    [okFy, fyVal] = autosimTryGetMessageField(obj, ["fy", "force_y", "y"]);
+    [okFz, fzVal] = autosimTryGetMessageField(obj, ["fz", "force_z", "z"]);
+    if okFx && okFy && okFz
+        fx = double(fxVal);
+        fy = double(fyVal);
+        fz = double(fzVal);
+        if isfinite(fx) && isfinite(fy) && isfinite(fz)
+            forceScalar = sqrt(fx*fx + fy*fy + fz*fz);
+        end
+    end
+end
+
+
+function v = autosimCastFiniteOrDefault(x, defaultVal)
+    v = defaultVal;
+    try
+        x = double(x);
+        if ~isempty(x)
+            x = x(1);
+        end
+        if isfinite(x)
+            v = x;
+        end
+    catch
+    end
+end
+
+
+function vec = autosimToNumericVector(x)
+    vec = [];
+    try
+        vec = double(x(:));
+        vec = vec(isfinite(vec));
+    catch
+        vec = [];
     end
 end
 
@@ -5124,6 +5867,16 @@ end
 
 
 function [speedCmd, dirCmd] = autosimComputeWindCommand(cfg, scenarioCfg, tNow, windArmed)
+    if autosimIsModuleEnabled(cfg, 'wind_engine')
+        try
+            [speedCmd, dirCmd] = autosim_wind_sim('compute_command', cfg, scenarioCfg, tNow, windArmed);
+            if isfinite(speedCmd) && isfinite(dirCmd)
+                return;
+            end
+        catch
+        end
+    end
+
     if ~windArmed || ~cfg.wind.enable
         speedCmd = 0.0;
         dirCmd = 0.0;
@@ -5195,6 +5948,16 @@ end
 
 
 function cap = autosimGetWindCommandCap(cfg)
+    if autosimIsModuleEnabled(cfg, 'wind_engine')
+        try
+            cap = autosim_wind_sim('get_cap', cfg);
+            if isfinite(cap)
+                return;
+            end
+        catch
+        end
+    end
+
     cap = inf;
     if isfield(cfg, 'wind') && isfield(cfg.wind, 'speed_max') && isfinite(cfg.wind.speed_max) && cfg.wind.speed_max > 0
         cap = min(cap, cfg.wind.speed_max);
@@ -5492,6 +6255,35 @@ function label = autosimPhysicsSourceLabel(val, pathA, pathB, kind)
     end
 end
 
+function windAcc = autosimComputeWindAcceleration(windSpeedHist, dt)
+% Compute WindAcceleration from wind speed history.
+% WindAcceleration = rate of change of wind speed (dv/dt in m/s^2)
+%
+% Uses linear trend of recent samples to estimate acceleration with noise robustness.
+    
+    windSpeedHist = double(windSpeedHist(:));
+    windSpeedHist = windSpeedHist(isfinite(windSpeedHist));
+    
+    if numel(windSpeedHist) < 2 || ~isfinite(dt) || dt <= 0
+        windAcc = 0.0;
+        return;
+    end
+    
+    % Use most recent 60% of samples to capture current trend
+    windowSize = max(2, round(0.6 * numel(windSpeedHist)));
+    recentSamples = windSpeedHist(max(1, end-windowSize+1):end);
+    
+    if numel(recentSamples) < 2
+        windAcc = 0.0;
+        return;
+    end
+    
+    % Linear fit: acceleration is the slope of wind speed vs time
+    t = (0:numel(recentSamples)-1)' * dt;
+    p = polyfit(t, recentSamples, 1);
+    windAcc = p(1);  % Slope in m/s per second
+end
+
 
 function jitterPx = autosimComputeTagJitterPx(histUV, count, minSamples)
     jitterPx = nan;
@@ -5530,6 +6322,16 @@ end
 
 
 function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
+    if autosimIsModuleEnabled(cfg, 'ontology_engine')
+        try
+            onto = autosim_ontology_engine('build_state', windObs, droneObs, tagObs, cfg);
+            if isstruct(onto)
+                return;
+            end
+        catch
+        end
+    end
+
     dt = max(1e-3, autosimClampNaN(windObs.dt, 0.2));
 
     wsHist = windObs.wind_speed_hist(:);
@@ -5645,6 +6447,16 @@ end
 
 
 function semantic = autosimOntologyReasoning(onto, cfg)
+    if autosimIsModuleEnabled(cfg, 'ontology_engine')
+        try
+            semantic = autosim_ontology_engine('reason', onto, cfg);
+            if isstruct(semantic)
+                return;
+            end
+        catch
+        end
+    end
+
     w = onto.entities.WindCondition;
     g = onto.entities.Gust;
     tp = onto.entities.TemporalPattern;
@@ -5853,6 +6665,16 @@ end
 
 
 function vec = autosimBuildSemanticFeatures(windObs, droneObs, tagObs, semantic, cfg)
+    if autosimIsModuleEnabled(cfg, 'ontology_engine')
+        try
+            vec = autosim_ontology_engine('build_features', windObs, droneObs, tagObs, semantic, cfg);
+            if isnumeric(vec)
+                return;
+            end
+        catch
+        end
+    end
+
     vec = [ ...
         autosimNormalize01(windObs.wind_speed, 0.0, cfg.wind.speed_max), ...
         autosimWrapTo180(windObs.wind_direction) / 180.0, ...
@@ -6326,9 +7148,9 @@ function dTbl = autosimBuildDecisionTable(summaryTbl, decisionField)
     predHover = false(n, 1);
     if ismember(decisionField, string(summaryTbl.Properties.VariableNames))
         p = string(summaryTbl.(char(decisionField)));
-        predLand = (p == "land");
+        predLand = (p == "AttemptLanding");
         predHover = (p == "hover");
-        predValid = (p == "land") | (p == "abort");
+        predValid = (p == "AttemptLanding") | (p == "HoldLanding");
     elseif ismember('landing_cmd_time', summaryTbl.Properties.VariableNames)
         lct = summaryTbl.landing_cmd_time;
         predLand = isfinite(lct);
@@ -6439,7 +7261,7 @@ end
 
 function out = autosimClassifyDecisionOutcome(gtSafeLabel, predDecision)
     gtSafe = (string(gtSafeLabel) == "stable") || (string(gtSafeLabel) == "safe");
-    predLand = (string(predDecision) == "land");
+    predLand = (string(predDecision) == "AttemptLanding");
 
     if gtSafe && predLand
         out = "TP";
@@ -6698,6 +7520,23 @@ function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTracki
             cmdY = autosimClamp(rSearch * sin(th), -abs(cfg.control.search_spiral_cmd_max), abs(cfg.control.search_spiral_cmd_max));
         end
     end
+end
+
+
+function [cmdX, cmdY] = autosimComputePoseHoldToTarget(cfg, xNow, yNow, xRef, yRef)
+    cmdX = 0.0;
+    cmdY = 0.0;
+    if ~isfinite(xNow) || ~isfinite(yNow) || ~isfinite(xRef) || ~isfinite(yRef)
+        return;
+    end
+
+    kp = autosimClampNaN(cfg.control.pose_hold_kp, 0.45);
+    lim = abs(autosimClampNaN(cfg.control.pose_hold_cmd_limit, 0.35));
+    errX = xRef - xNow;
+    errY = yRef - yNow;
+
+    cmdX = autosimClamp(kp * errX, -lim, lim);
+    cmdY = autosimClamp(kp * errY, -lim, lim);
 end
 
 
@@ -7029,10 +7868,202 @@ function v = autosimNanLast(x)
 end
 
 
+function autosimAddGeneratedMsgPath(thisDir)
+    % Try common ros2genmsg outputs near this repo so custom interfaces are available
+    % even when savepath cannot write to system pathdef.m.
+    candidates = {
+        fullfile(thisDir, 'matlab_msg_gen', 'glnxa64', 'install', 'm'), ...
+        fullfile(thisDir, 'matlab_msg_gen_ros2', 'glnxa64', 'install', 'm'), ...
+        fullfile(thisDir, '..', '..', '..', 'matlab_msg_ws', 'matlab_msg_gen', 'glnxa64', 'install', 'm'), ...
+        fullfile(thisDir, '..', '..', '..', 'matlab_msg_ws', 'matlab_msg_gen_ros2', 'glnxa64', 'install', 'm') ...
+    };
+
+    for i = 1:numel(candidates)
+        p = char(candidates{i});
+        if exist(p, 'dir')
+            addpath(p);
+            return;
+        end
+    end
+end
+
+
 function x = autosimRandRange(a, b)
     lo = min(a, b);
     hi = max(a, b);
     x = lo + rand() * (hi - lo);
+end
+
+
+function [sub, msgType, diag] = autosimCreateBumperSubscriber(node, cfg, allowTopicProbe)
+    sub = [];
+    msgType = "";
+    diag = struct('msg_unsupported', false, 'last_error', "");
+
+    if nargin < 3
+        allowTopicProbe = false;
+    end
+
+    retryCount = 1;
+    retryIntervalSec = 0.0;
+    logMissingMsgSupport = true;
+    if isfield(cfg, 'ros')
+        if isfield(cfg.ros, 'bumper_subscribe_retry_count') && isfinite(cfg.ros.bumper_subscribe_retry_count)
+            retryCount = max(1, round(cfg.ros.bumper_subscribe_retry_count));
+        end
+        if isfield(cfg.ros, 'bumper_subscribe_retry_interval_sec') && isfinite(cfg.ros.bumper_subscribe_retry_interval_sec)
+            retryIntervalSec = max(0.0, cfg.ros.bumper_subscribe_retry_interval_sec);
+        end
+        if isfield(cfg.ros, 'bumper_log_missing_msg_support')
+            logMissingMsgSupport = logical(cfg.ros.bumper_log_missing_msg_support);
+        end
+    end
+
+    lastErr = "";
+
+    for attempt = 1:retryCount
+        candidates = strings(0,1);
+        if allowTopicProbe
+            detectedType = autosimDetectTopicType(cfg, cfg.topics.bumpers);
+            if strlength(detectedType) > 0
+                candidates(end+1,1) = string(detectedType); %#ok<AGROW>
+            end
+        end
+
+        if isfield(cfg, 'ros') && isfield(cfg.ros, 'bumper_msg_type_candidates')
+            try
+                candidates = [candidates; string(cfg.ros.bumper_msg_type_candidates(:))]; %#ok<AGROW>
+            catch
+            end
+        end
+
+        if isfield(cfg, 'ros') && isfield(cfg.ros, 'bumper_msg_type')
+            oneType = string(cfg.ros.bumper_msg_type);
+            if strlength(oneType) > 0
+                candidates = [candidates; oneType]; %#ok<AGROW>
+            end
+        end
+
+        candidates = unique(candidates(strlength(candidates) > 0), 'stable');
+        candidates = autosimExpandMsgTypeCandidates(candidates);
+        for i = 1:numel(candidates)
+            cand = char(candidates(i));
+            try
+                sub = ros2subscriber(node, cfg.topics.bumpers, cand);
+                msgType = string(cand);
+                return;
+            catch ME
+                lastErr = string(ME.message);
+            end
+        end
+
+        % Fallback: let MATLAB infer topic type from ROS graph when possible.
+        try
+            sub = ros2subscriber(node, cfg.topics.bumpers);
+            msgType = "auto";
+            return;
+        catch ME
+            lastErr = string(ME.message);
+        end
+
+        if attempt < retryCount && retryIntervalSec > 0
+            pause(retryIntervalSec);
+        end
+    end
+
+    diag.last_error = lastErr;
+    if autosimLooksLikeMissingMatlabMsgSupport(lastErr)
+        diag.msg_unsupported = true;
+        if logMissingMsgSupport
+            warning(['[AUTOSIM] MATLAB ROS2 message support appears missing for bumper topic type. ' ...
+                'Build interfaces with ros2genmsg (e.g., your ROS2 ws/src) and restart MATLAB. ' ...
+                'Last error: %s'], lastErr);
+        end
+    end
+end
+
+
+function tf = autosimLooksLikeMissingMatlabMsgSupport(errText)
+    tf = false;
+    s = lower(string(errText));
+    if strlength(s) == 0
+        return;
+    end
+
+    tf = contains(s, "message type") || contains(s, "unknown message") || contains(s, "not found") || ...
+        contains(s, "cannot resolve") || contains(s, "interface") || contains(s, "does not exist");
+end
+
+
+function candidatesOut = autosimExpandMsgTypeCandidates(candidatesIn)
+    candidatesOut = strings(0,1);
+    if isempty(candidatesIn)
+        return;
+    end
+
+    for i = 1:numel(candidatesIn)
+        t = string(strtrim(candidatesIn(i)));
+        if strlength(t) == 0
+            continue;
+        end
+
+        candidatesOut(end+1,1) = t; %#ok<AGROW>
+
+        if contains(t, "/msg/")
+            candidatesOut(end+1,1) = replace(t, "/msg/", "/"); %#ok<AGROW>
+        else
+            parts = split(t, "/");
+            if numel(parts) == 2
+                candidatesOut(end+1,1) = parts(1) + "/msg/" + parts(2); %#ok<AGROW>
+            end
+        end
+    end
+
+    candidatesOut = unique(candidatesOut(strlength(candidatesOut) > 0), 'stable');
+end
+
+
+function msgType = autosimDetectTopicType(cfg, topicName)
+    msgType = "";
+
+    detectEnabled = true;
+    timeoutSec = 2.0;
+    if isfield(cfg, 'ros') && isfield(cfg.ros, 'bumper_topic_type_detect_enable')
+        detectEnabled = logical(cfg.ros.bumper_topic_type_detect_enable);
+    end
+    if isfield(cfg, 'ros') && isfield(cfg.ros, 'bumper_topic_type_detect_timeout_sec') && isfinite(cfg.ros.bumper_topic_type_detect_timeout_sec)
+        timeoutSec = max(0.5, cfg.ros.bumper_topic_type_detect_timeout_sec);
+    end
+    if ~detectEnabled
+        return;
+    end
+
+    setupCmd = "";
+    if isfield(cfg, 'shell') && isfield(cfg.shell, 'setup_cmd')
+        setupCmd = string(cfg.shell.setup_cmd);
+    end
+
+    topic = string(topicName);
+    if strlength(topic) <= 0
+        return;
+    end
+
+    cli = "ros2 topic info " + topic;
+    if strlength(setupCmd) > 0
+        fullCmd = sprintf('bash -i -c "%s && timeout %gs %s"', char(setupCmd), timeoutSec, char(cli));
+    else
+        fullCmd = sprintf('bash -i -c "timeout %gs %s"', timeoutSec, char(cli));
+    end
+
+    [st, out] = system(char(fullCmd));
+    if st ~= 0 || strlength(string(out)) <= 0
+        return;
+    end
+
+    tok = regexp(char(out), 'Type:\s*([^\s]+)', 'tokens', 'once');
+    if ~isempty(tok)
+        msgType = string(strtrim(tok{1}));
+    end
 end
 
 
@@ -7078,25 +8109,28 @@ function rosCtx = autosimCreateRosContext(cfg)
     end
 
     rosCtx.subBumpers = [];
+    rosCtx.bumper_msg_type = "";
+    rosCtx.bumper_msg_unsupported = false;
     if isfield(cfg, 'ros') && isfield(cfg.ros, 'enable_bumper_subscription') && cfg.ros.enable_bumper_subscription
-        try
-            rosCtx.subBumpers = ros2subscriber(node, cfg.topics.bumpers, 'gazebo_msgs/msg/ContactsState');
-        catch
-            rosCtx.subBumpers = [];
+        [rosCtx.subBumpers, rosCtx.bumper_msg_type, bumperDiag] = autosimCreateBumperSubscriber(node, cfg, false);
+        if isstruct(bumperDiag) && isfield(bumperDiag, 'msg_unsupported')
+            rosCtx.bumper_msg_unsupported = logical(bumperDiag.msg_unsupported);
         end
     end
 
     rosCtx.pubWind = ros2publisher(node, cfg.topics.wind_command, 'std_msgs/Float32MultiArray');
     rosCtx.pubTakeoff = ros2publisher(node, cfg.topics.takeoff_cmd, 'std_msgs/Empty');
     rosCtx.pubLand = ros2publisher(node, cfg.topics.land_cmd, 'std_msgs/Empty');
+    rosCtx.pubReset = ros2publisher(node, cfg.topics.reset_cmd, 'std_msgs/Empty');
     rosCtx.pubCmd = ros2publisher(node, cfg.topics.cmd_vel, 'geometry_msgs/Twist');
 
     rosCtx.msgWind = ros2message(rosCtx.pubWind);
     rosCtx.msgTakeoff = ros2message(rosCtx.pubTakeoff);
     rosCtx.msgLand = ros2message(rosCtx.pubLand);
+    rosCtx.msgReset = ros2message(rosCtx.pubReset);
     rosCtx.msgCmd = ros2message(rosCtx.pubCmd);
-    rosCtx.cleanupHandles = {rosCtx.msgCmd, rosCtx.msgLand, rosCtx.msgTakeoff, rosCtx.msgWind, ...
-        rosCtx.pubCmd, rosCtx.pubLand, rosCtx.pubTakeoff, rosCtx.pubWind, ...
+    rosCtx.cleanupHandles = {rosCtx.msgCmd, rosCtx.msgReset, rosCtx.msgLand, rosCtx.msgTakeoff, rosCtx.msgWind, ...
+        rosCtx.pubCmd, rosCtx.pubReset, rosCtx.pubLand, rosCtx.pubTakeoff, rosCtx.pubWind, ...
         rosCtx.subBumpers, rosCtx.subImu, rosCtx.subWind, rosCtx.subTag, rosCtx.subVel, rosCtx.subPose, rosCtx.subState, rosCtx.node};
 end
 
@@ -7383,12 +8417,22 @@ function s = autosimEmptyScenarioResult()
     s.arm_force_fr_mean = nan;
     s.arm_force_rl_mean = nan;
     s.arm_force_rr_mean = nan;
+    s.arm_force_fl_peak = nan;
+    s.arm_force_fr_peak = nan;
+    s.arm_force_rl_peak = nan;
+    s.arm_force_rr_peak = nan;
+    s.arm_force_peak_max = nan;
     s.arm_force_imbalance = nan;
+    s.impact_weight_n = nan;
+    s.impact_total_force_limit_n = nan;
+    s.impact_arm_imbalance_limit_n = nan;
+    s.impact_arm_peak_limit_n = nan;
+    s.contact_metrics_available = false;
     s.final_state = nan;
 
     s.landing_cmd_time = nan;
-    s.pred_decision = "abort";
-    s.executed_action = "abort";
+    s.pred_decision = "HoldLanding";
+    s.executed_action = "HoldLanding";
     s.action_source = "policy_abort";
     s.probe_episode = false;
     s.probe_reason = "none";

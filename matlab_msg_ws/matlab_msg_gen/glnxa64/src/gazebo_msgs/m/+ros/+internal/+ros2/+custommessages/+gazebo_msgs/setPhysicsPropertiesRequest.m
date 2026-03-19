@@ -1,0 +1,35 @@
+function [data, info] = setPhysicsPropertiesRequest
+%SetPhysicsProperties gives an empty data for gazebo_msgs/SetPhysicsPropertiesRequest
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/SetPhysicsPropertiesRequest';
+[data.time_step, info.time_step] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.max_update_rate, info.max_update_rate] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.gravity, info.gravity] = ros.internal.ros2.messages.geometry_msgs.vector3;
+info.gravity.MLdataType = 'struct';
+[data.ode_config, info.ode_config] = ros.internal.ros2.custommessages.gazebo_msgs.oDEPhysics;
+info.ode_config.MLdataType = 'struct';
+info.MessageType = 'gazebo_msgs/SetPhysicsPropertiesRequest';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,17);
+info.MatPath{1} = 'time_step';
+info.MatPath{2} = 'max_update_rate';
+info.MatPath{3} = 'gravity';
+info.MatPath{4} = 'gravity.x';
+info.MatPath{5} = 'gravity.y';
+info.MatPath{6} = 'gravity.z';
+info.MatPath{7} = 'ode_config';
+info.MatPath{8} = 'ode_config.auto_disable_bodies';
+info.MatPath{9} = 'ode_config.sor_pgs_precon_iters';
+info.MatPath{10} = 'ode_config.sor_pgs_iters';
+info.MatPath{11} = 'ode_config.sor_pgs_w';
+info.MatPath{12} = 'ode_config.sor_pgs_rms_error_tol';
+info.MatPath{13} = 'ode_config.contact_surface_layer';
+info.MatPath{14} = 'ode_config.contact_max_correcting_vel';
+info.MatPath{15} = 'ode_config.cfm';
+info.MatPath{16} = 'ode_config.erp';
+info.MatPath{17} = 'ode_config.max_contacts';

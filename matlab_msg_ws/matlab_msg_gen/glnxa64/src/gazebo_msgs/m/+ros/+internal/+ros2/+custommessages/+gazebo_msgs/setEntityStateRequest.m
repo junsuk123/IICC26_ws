@@ -1,0 +1,36 @@
+function [data, info] = setEntityStateRequest
+%SetEntityState gives an empty data for gazebo_msgs/SetEntityStateRequest
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/SetEntityStateRequest';
+[data.state, info.state] = ros.internal.ros2.custommessages.gazebo_msgs.entityState;
+info.state.MLdataType = 'struct';
+info.MessageType = 'gazebo_msgs/SetEntityStateRequest';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,22);
+info.MatPath{1} = 'state';
+info.MatPath{2} = 'state.name';
+info.MatPath{3} = 'state.pose';
+info.MatPath{4} = 'state.pose.position';
+info.MatPath{5} = 'state.pose.position.x';
+info.MatPath{6} = 'state.pose.position.y';
+info.MatPath{7} = 'state.pose.position.z';
+info.MatPath{8} = 'state.pose.orientation';
+info.MatPath{9} = 'state.pose.orientation.x';
+info.MatPath{10} = 'state.pose.orientation.y';
+info.MatPath{11} = 'state.pose.orientation.z';
+info.MatPath{12} = 'state.pose.orientation.w';
+info.MatPath{13} = 'state.twist';
+info.MatPath{14} = 'state.twist.linear';
+info.MatPath{15} = 'state.twist.linear.x';
+info.MatPath{16} = 'state.twist.linear.y';
+info.MatPath{17} = 'state.twist.linear.z';
+info.MatPath{18} = 'state.twist.angular';
+info.MatPath{19} = 'state.twist.angular.x';
+info.MatPath{20} = 'state.twist.angular.y';
+info.MatPath{21} = 'state.twist.angular.z';
+info.MatPath{22} = 'state.reference_frame';

@@ -1,0 +1,29 @@
+function [data, info] = getLightPropertiesResponse
+%GetLightProperties gives an empty data for gazebo_msgs/GetLightPropertiesResponse
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/GetLightPropertiesResponse';
+[data.diffuse, info.diffuse] = ros.internal.ros2.messages.std_msgs.colorRGBA;
+info.diffuse.MLdataType = 'struct';
+[data.attenuation_constant, info.attenuation_constant] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.attenuation_linear, info.attenuation_linear] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.attenuation_quadratic, info.attenuation_quadratic] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.success, info.success] = ros.internal.ros2.messages.ros2.default_type('logical',1,0);
+[data.status_message, info.status_message] = ros.internal.ros2.messages.ros2.char('string',1,NaN,0);
+info.MessageType = 'gazebo_msgs/GetLightPropertiesResponse';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,10);
+info.MatPath{1} = 'diffuse';
+info.MatPath{2} = 'diffuse.r';
+info.MatPath{3} = 'diffuse.g';
+info.MatPath{4} = 'diffuse.b';
+info.MatPath{5} = 'diffuse.a';
+info.MatPath{6} = 'attenuation_constant';
+info.MatPath{7} = 'attenuation_linear';
+info.MatPath{8} = 'attenuation_quadratic';
+info.MatPath{9} = 'success';
+info.MatPath{10} = 'status_message';

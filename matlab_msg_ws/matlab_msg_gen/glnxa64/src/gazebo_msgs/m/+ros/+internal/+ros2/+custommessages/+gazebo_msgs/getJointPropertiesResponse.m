@@ -1,0 +1,36 @@
+function [data, info] = getJointPropertiesResponse
+%GetJointProperties gives an empty data for gazebo_msgs/GetJointPropertiesResponse
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/GetJointPropertiesResponse';
+[data.type, info.type] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0);
+[data.REVOLUTE, info.REVOLUTE] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0, 0, [NaN]);
+[data.CONTINUOUS, info.CONTINUOUS] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0, 1, [NaN]);
+[data.PRISMATIC, info.PRISMATIC] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0, 2, [NaN]);
+[data.FIXED, info.FIXED] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0, 3, [NaN]);
+[data.BALL, info.BALL] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0, 4, [NaN]);
+[data.UNIVERSAL, info.UNIVERSAL] = ros.internal.ros2.messages.ros2.default_type('uint8',1,0, 5, [NaN]);
+[data.damping, info.damping] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.position, info.position] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.rate, info.rate] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.success, info.success] = ros.internal.ros2.messages.ros2.default_type('logical',1,0);
+[data.status_message, info.status_message] = ros.internal.ros2.messages.ros2.char('string',1,NaN,0);
+info.MessageType = 'gazebo_msgs/GetJointPropertiesResponse';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,12);
+info.MatPath{1} = 'type';
+info.MatPath{2} = 'REVOLUTE';
+info.MatPath{3} = 'CONTINUOUS';
+info.MatPath{4} = 'PRISMATIC';
+info.MatPath{5} = 'FIXED';
+info.MatPath{6} = 'BALL';
+info.MatPath{7} = 'UNIVERSAL';
+info.MatPath{8} = 'damping';
+info.MatPath{9} = 'position';
+info.MatPath{10} = 'rate';
+info.MatPath{11} = 'success';
+info.MatPath{12} = 'status_message';

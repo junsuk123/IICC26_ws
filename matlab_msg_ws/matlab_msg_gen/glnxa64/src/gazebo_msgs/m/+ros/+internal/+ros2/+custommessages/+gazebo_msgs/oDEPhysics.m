@@ -1,0 +1,32 @@
+function [data, info] = oDEPhysics
+%ODEPhysics gives an empty data for gazebo_msgs/ODEPhysics
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/ODEPhysics';
+[data.auto_disable_bodies, info.auto_disable_bodies] = ros.internal.ros2.messages.ros2.default_type('logical',1,0);
+[data.sor_pgs_precon_iters, info.sor_pgs_precon_iters] = ros.internal.ros2.messages.ros2.default_type('uint32',1,0);
+[data.sor_pgs_iters, info.sor_pgs_iters] = ros.internal.ros2.messages.ros2.default_type('uint32',1,0);
+[data.sor_pgs_w, info.sor_pgs_w] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.sor_pgs_rms_error_tol, info.sor_pgs_rms_error_tol] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.contact_surface_layer, info.contact_surface_layer] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.contact_max_correcting_vel, info.contact_max_correcting_vel] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.cfm, info.cfm] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.erp, info.erp] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.max_contacts, info.max_contacts] = ros.internal.ros2.messages.ros2.default_type('uint32',1,0);
+info.MessageType = 'gazebo_msgs/ODEPhysics';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,10);
+info.MatPath{1} = 'auto_disable_bodies';
+info.MatPath{2} = 'sor_pgs_precon_iters';
+info.MatPath{3} = 'sor_pgs_iters';
+info.MatPath{4} = 'sor_pgs_w';
+info.MatPath{5} = 'sor_pgs_rms_error_tol';
+info.MatPath{6} = 'contact_surface_layer';
+info.MatPath{7} = 'contact_max_correcting_vel';
+info.MatPath{8} = 'cfm';
+info.MatPath{9} = 'erp';
+info.MatPath{10} = 'max_contacts';

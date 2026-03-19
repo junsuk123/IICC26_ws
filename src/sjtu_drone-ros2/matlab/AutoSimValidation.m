@@ -207,9 +207,9 @@ function summaryTbl = autosimValidationBuildAggregateSummary(T, runDirs)
 
     if ismember('pred_decision', T.Properties.VariableNames)
         pd = string(T.pred_decision);
-        predLand = (pd == "land");
+        predLand = (pd == "AttemptLanding");
         predHover = (pd == "hover");
-        predValid = (pd == "land") | (pd == "abort");
+        predValid = (pd == "AttemptLanding") | (pd == "HoldLanding");
     elseif ismember('landing_cmd_time', T.Properties.VariableNames)
         predLand = isfinite(T.landing_cmd_time);
         predValid = true(n, 1);
@@ -222,7 +222,7 @@ function summaryTbl = autosimValidationBuildAggregateSummary(T, runDirs)
     end
     if ismember('action_source', T.Properties.VariableNames)
         as = string(T.action_source);
-        interventionCase = interventionCase | (as == "timeout_hover_abort") | (as == "timeout_forced_land");
+        interventionCase = interventionCase | (as == "timeout_hover_hold") | (as == "timeout_forced_land");
     end
 
     valid = gtValid & predValid & ~predHover & ~interventionCase;
@@ -273,11 +273,11 @@ function autosimValidationSaveDistributionReports(T, runDir)
     end
     if ismember('pred_decision', T.Properties.VariableNames)
         pd = string(T.pred_decision);
-        predLand = (pd == "land");
+        predLand = (pd == "AttemptLanding");
     end
 
     labelTbl = table( ...
-        string(["positive_or_land"; "negative_or_abort"]), ...
+        string(["positive_or_attempt"; "negative_or_hold"]), ...
         [sum(gtSafe); sum(~gtSafe)], ...
         [sum(predLand); sum(~predLand)], ...
         'VariableNames', {'class_group','gt_count','prediction_count'});

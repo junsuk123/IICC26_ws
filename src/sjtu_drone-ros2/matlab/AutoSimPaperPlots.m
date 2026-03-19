@@ -246,7 +246,7 @@ ax6 = axes(fig6);
 sidv = sid(:);
 hold(ax6, 'on');
 
-% Background shading: Land=light blue, Abort=light red, per scenario band.
+% Background shading: AttemptLanding=light blue, HoldLanding=light red, per scenario band.
 landMask = decisionScoreP > 0.5;
 riskYMax = max(1.05, 1.05 * max(windRiskTotal, [], 'omitnan'));
 
@@ -274,7 +274,7 @@ ylim(ax6, [0 riskYMax]);
 xlim(ax6, [sidv(1) - 0.5, sidv(end) + 0.5]);
 xlabel(ax6, 'Scenario', 'FontSize', FONT_LABEL);
 ylabel(ax6, 'Wind risk (normalized)', 'FontSize', FONT_LABEL);
-title(ax6, 'Ontology+AI Decision  |  {\color[rgb]{0.27,0.52,0.79}■ Land}  {\color[rgb]{0.85,0.28,0.22}■ Abort}  —  Wind risk', ...
+title(ax6, 'Ontology+AI Decision  |  {\color[rgb]{0.27,0.52,0.79}■ AttemptLanding}  {\color[rgb]{0.85,0.28,0.22}■ HoldLanding}  —  Wind risk', ...
     'FontSize', FONT_TITLE);
 set(ax6, 'FontSize', FONT_AX, 'Box', 'on');
 grid(ax6, 'on');
@@ -455,7 +455,7 @@ function predLand = buildDecision(tbl, decisionField, fallbackNumericField)
 
     if ismember(decisionField, tbl.Properties.VariableNames)
         p = string(tbl.(decisionField));
-        predLand = (p == "land");
+        predLand = (p == "AttemptLanding");
         return;
     end
 

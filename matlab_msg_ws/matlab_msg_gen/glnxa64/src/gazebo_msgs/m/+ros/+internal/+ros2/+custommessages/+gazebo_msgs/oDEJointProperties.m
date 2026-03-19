@@ -1,0 +1,32 @@
+function [data, info] = oDEJointProperties
+%ODEJointProperties gives an empty data for gazebo_msgs/ODEJointProperties
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/ODEJointProperties';
+[data.damping, info.damping] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.hi_stop, info.hi_stop] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.lo_stop, info.lo_stop] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.erp, info.erp] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.cfm, info.cfm] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.stop_erp, info.stop_erp] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.stop_cfm, info.stop_cfm] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.fudge_factor, info.fudge_factor] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.fmax, info.fmax] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+[data.vel, info.vel] = ros.internal.ros2.messages.ros2.default_type('double',NaN,0);
+info.MessageType = 'gazebo_msgs/ODEJointProperties';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,10);
+info.MatPath{1} = 'damping';
+info.MatPath{2} = 'hi_stop';
+info.MatPath{3} = 'lo_stop';
+info.MatPath{4} = 'erp';
+info.MatPath{5} = 'cfm';
+info.MatPath{6} = 'stop_erp';
+info.MatPath{7} = 'stop_cfm';
+info.MatPath{8} = 'fudge_factor';
+info.MatPath{9} = 'fmax';
+info.MatPath{10} = 'vel';

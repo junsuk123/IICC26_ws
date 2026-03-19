@@ -1,0 +1,30 @@
+function [data, info] = performanceMetrics
+%PerformanceMetrics gives an empty data for gazebo_msgs/PerformanceMetrics
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/PerformanceMetrics';
+[data.header, info.header] = ros.internal.ros2.messages.std_msgs.header;
+info.header.MLdataType = 'struct';
+[data.real_time_factor, info.real_time_factor] = ros.internal.ros2.messages.ros2.default_type('double',1,0);
+[data.sensors, info.sensors] = ros.internal.ros2.custommessages.gazebo_msgs.sensorPerformanceMetric;
+info.sensors.MLdataType = 'struct';
+info.sensors.MaxLen = NaN;
+info.sensors.MinLen = 0;
+info.MessageType = 'gazebo_msgs/PerformanceMetrics';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,11);
+info.MatPath{1} = 'header';
+info.MatPath{2} = 'header.stamp';
+info.MatPath{3} = 'header.stamp.sec';
+info.MatPath{4} = 'header.stamp.nanosec';
+info.MatPath{5} = 'header.frame_id';
+info.MatPath{6} = 'real_time_factor';
+info.MatPath{7} = 'sensors';
+info.MatPath{8} = 'sensors.name';
+info.MatPath{9} = 'sensors.sim_update_rate';
+info.MatPath{10} = 'sensors.real_update_rate';
+info.MatPath{11} = 'sensors.fps';

@@ -27,6 +27,12 @@ source /home/j/INCSL/IICC26_ws/install/setup.bash
 ```
 
 ```matlab
+AutoSimMain
+```
+
+기존 레거시 진입점도 계속 사용 가능하다.
+
+```matlab
 run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/AutoSim.m')
 ```
 
@@ -35,7 +41,7 @@ run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/AutoSim.m')
 유효 분석 구간은 다음으로 제한된다.
 
 - 시작: 목표 지점 도달 후 xy_hold 진입 시점
-- 종료: 착륙 명령이 발행되는 시점
+- 종료: landing_track 시작 후 착륙 hold 조건이 충족되는 시점
 
 다음 구간은 분석, 저장, 모델 입력, plot에서 제외된다.
 
@@ -63,11 +69,30 @@ run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/AutoSim.m')
 AutoSim은 내부에서 아래 방향으로 launch를 단순화해서 사용한다.
 
 - use_gui:=false
-- use_rviz:=false
+- use_rviz:=true
 - use_teleop:=false
 - use_apriltag:=true
 
 즉 현재 AutoSim 경로에서는 RViz와 teleop가 기본 실행 경로가 아니다.
+
+## 모듈 엔진 스위치
+
+`AutoSim.m`의 기본 설정에 아래 스위치가 추가되었다.
+
+- `cfg.modules.use_wind_engine` (기본 `true`)
+- `cfg.modules.use_ai_engine` (기본 `true`)
+- `cfg.modules.use_learning_engine` (기본 `true`)
+- `cfg.modules.use_ontology_engine` (기본 `false`)
+
+각 엔진은 모듈 호출 실패 시 기존 legacy 로직으로 자동 fallback 한다.
+
+## 학습/검증 분리 모드
+
+`AutoSim.m` 기본 설정의 `cfg.pipeline.mode`로 학습과 검증 스케줄을 분리할 수 있다.
+
+- `"joint"`: 학습 + 검증 스케줄 동시 사용 (기본)
+- `"train_only"`: 검증 스케줄 비활성화, 학습만 수행
+- `"validate_only"`: 학습 업데이트 비활성화, 검증 시나리오만 수행
 
 ## 판단 파이프라인
 

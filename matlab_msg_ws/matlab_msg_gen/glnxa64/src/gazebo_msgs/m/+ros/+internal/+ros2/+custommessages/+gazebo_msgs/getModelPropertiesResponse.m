@@ -1,0 +1,30 @@
+function [data, info] = getModelPropertiesResponse
+%GetModelProperties gives an empty data for gazebo_msgs/GetModelPropertiesResponse
+% Copyright 2019-2021 The MathWorks, Inc.
+data = struct();
+data.MessageType = 'gazebo_msgs/GetModelPropertiesResponse';
+[data.parent_model_name, info.parent_model_name] = ros.internal.ros2.messages.ros2.char('string',1,NaN,0);
+[data.canonical_body_name, info.canonical_body_name] = ros.internal.ros2.messages.ros2.char('string',1,NaN,0);
+[data.body_names, info.body_names] = ros.internal.ros2.messages.ros2.char('string',NaN,NaN,0);
+[data.geom_names, info.geom_names] = ros.internal.ros2.messages.ros2.char('string',NaN,NaN,0);
+[data.joint_names, info.joint_names] = ros.internal.ros2.messages.ros2.char('string',NaN,NaN,0);
+[data.child_model_names, info.child_model_names] = ros.internal.ros2.messages.ros2.char('string',NaN,NaN,0);
+[data.is_static, info.is_static] = ros.internal.ros2.messages.ros2.default_type('logical',1,0);
+[data.success, info.success] = ros.internal.ros2.messages.ros2.default_type('logical',1,0);
+[data.status_message, info.status_message] = ros.internal.ros2.messages.ros2.char('string',1,NaN,0);
+info.MessageType = 'gazebo_msgs/GetModelPropertiesResponse';
+info.constant = 0;
+info.default = 0;
+info.maxstrlen = NaN;
+info.MaxLen = 1;
+info.MinLen = 1;
+info.MatPath = cell(1,9);
+info.MatPath{1} = 'parent_model_name';
+info.MatPath{2} = 'canonical_body_name';
+info.MatPath{3} = 'body_names';
+info.MatPath{4} = 'geom_names';
+info.MatPath{5} = 'joint_names';
+info.MatPath{6} = 'child_model_names';
+info.MatPath{7} = 'is_static';
+info.MatPath{8} = 'success';
+info.MatPath{9} = 'status_message';

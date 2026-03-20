@@ -29,7 +29,7 @@ $$
 착륙 구간은 호버보다 보수적으로 제한한다.
 
 $$
-v_{landing\_limit} = \alpha \cdot v_{hover\_limit}, \quad \alpha \approx 0.5
+v_{landing\_{limit}} = \alpha \cdot v_{hover\_limit}, \quad \alpha \approx 0.5
 $$
 
 ### 2) 온톨로지+AI 결합 판단

@@ -13,6 +13,19 @@ AutoSim은 다음 과정을 자동화한다.
 - 데이터셋 누적 및 모델 재학습
 - 검증, 요약 테이블/플롯 생성
 
+## 코드 구조 (모듈 분리)
+
+현재 AutoSim은 메인 실행 스크립트와 기능 모듈을 분리한 구조로 정리되어 있다.
+
+- `AutoSimMain.m`: 진입점
+- `AutoSim.m`: 오케스트레이션(루프/예외/저장/종료)
+- `modules/core/*.m`: 핵심 기능 함수(시뮬레이션 실행, 특징 추출, 온톨로지 추론, 학습/평가)
+- `modules/autosim_ai_engine.m`: AI 관련 엔진 함수
+- `modules/autosim_learning_engine.m`: 학습 제어 엔진 함수
+- `modules/autosim_ontology_engine.m`: 온톨로지 엔진 함수
+
+즉, 메인에는 흐름만 남기고 기능 구현은 모듈 파일에서 관리한다.
+
 ## 실행 방법
 
 ```bash
@@ -70,6 +83,49 @@ run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/AutoSim.m')
 6. 의미론 점수와 모델 확률 융합
 7. 정책 판단(`pred_decision`) 산출
 8. 결과 라벨링 및 학습/검증 데이터 반영
+
+## 최종 AI 입력 데이터 형태 (24 features)
+
+입력 텐서: 1 x 24 실수 벡터 (double)
+
+생성 위치:
+
+- 스키마 정의: AutoSim.m:561
+- 실제 X 생성: AutoSim.m:4022
+
+참고(현재 모듈화 구조 기준):
+
+- 스키마 정의: modules/core/autosimDefaultConfig.m
+- 실제 X 생성: modules/core/autosimPredictModel.m, modules/core/autosimTrainGaussianNB.m
+
+현재 모델 스키마(`decision_v2`)는 아래 24개 입력으로 고정되어 있다.
+
+1. `mean_wind_speed`
+2. `max_wind_speed`
+3. `mean_abs_roll_deg`
+4. `mean_abs_pitch_deg`
+5. `wind_velocity_x`
+6. `wind_velocity_y`
+7. `wind_velocity`
+8. `wind_acceleration_x`
+9. `wind_acceleration_y`
+10. `wind_acceleration`
+11. `mean_abs_vz`
+12. `max_abs_vz`
+13. `mean_tag_error`
+14. `max_tag_error`
+15. `stability_std_z`
+16. `stability_std_vz`
+17. `mean_imu_ang_vel`
+18. `max_imu_ang_vel`
+19. `mean_imu_lin_acc`
+20. `max_imu_lin_acc`
+21. `wind_risk_enc`
+22. `alignment_enc`
+23. `visual_enc`
+24. `context_enc`
+
+중요: 풍속/가속도는 입력 직전까지 벡터 성분(`x`, `y`)으로 유지하고, 크기 특성(`wind_velocity`, `wind_acceleration`)은 별도 feature로 함께 사용한다.
 
 ## 온톨로지 객체 설계와 관계 정의
 

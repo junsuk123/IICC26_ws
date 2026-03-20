@@ -26,8 +26,8 @@ end
 if nargin < 19 || isempty(windAcceleration)
     windAcceleration = 0.0;
 end
-feat.wind_velocity = nanmean_safe(windVelocity);  % Current wind speed (m/s)
-feat.wind_acceleration = nanmean_safe(windAcceleration);  % Wind speed change rate (m/s^2)
+[feat.wind_velocity_x, feat.wind_velocity_y, feat.wind_velocity] = resolve_wind_vector_features(windVelocity, windSpeed);
+[feat.wind_acceleration_x, feat.wind_acceleration_y, feat.wind_acceleration] = resolve_wind_vector_features(windAcceleration, 0.0);
 feat.mean_abs_roll_deg = nanmean_safe(abs(rollDeg));
 feat.mean_abs_pitch_deg = nanmean_safe(abs(pitchDeg));
 feat.mean_abs_vz = nanmean_safe(abs(vz));
@@ -192,5 +192,48 @@ v = fallback;
 idx = find(string(semNames) == string(key), 1, 'first');
 if ~isempty(idx) && numel(semVec) >= idx && isfinite(semVec(idx))
     v = double(semVec(idx));
+end
+
+function [vx, vy, vmag] = resolve_wind_vector_features(v, fallbackMag)
+vv = double(v);
+if isempty(vv)
+    vv = fallbackMag;
+end
+
+if isvector(vv)
+    vv = vv(:);
+    if numel(vv) >= 2
+        vx = clamp_nan(vv(1), 0.0);
+        vy = clamp_nan(vv(2), 0.0);
+        vmag = hypot(vx, vy);
+        return;
+    end
+    vmag = clamp_nan(vv(1), clamp_nan(fallbackMag, 0.0));
+    vx = vmag;
+    vy = 0.0;
+    return;
+end
+
+if size(vv, 2) >= 2
+    vx = nanmean_safe(vv(:,1));
+    vy = nanmean_safe(vv(:,2));
+    vmag = hypot(vx, vy);
+    return;
+end
+
+vmag = nanmean_safe(vv(:,1));
+if ~isfinite(vmag)
+    vmag = clamp_nan(fallbackMag, 0.0);
+end
+vx = vmag;
+vy = 0.0;
+end
+
+function y = clamp_nan(x, fallback)
+if isfinite(x)
+    y = x;
+else
+    y = fallback;
+end
 end
 end

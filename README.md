@@ -49,8 +49,8 @@ $$
 $$
 \hat{y} =
 \begin{cases}
-	ext{AttemptLanding}, & s_{fusion} \ge \tau \\
-	ext{HoldLanding}, & s_{fusion} < \tau
+\mathrm{AttemptLanding}, & s_{fusion} \ge \tau \\
+\mathrm{HoldLanding}, & s_{fusion} < \tau
 \end{cases}
 $$
 
@@ -59,24 +59,24 @@ $$
 혼동행렬 원소를 $TP, FP, FN, TN$으로 둘 때,
 
 $$
-	ext{Accuracy} = \frac{TP+TN}{TP+FP+FN+TN}
+\mathrm{Accuracy} = \frac{TP+TN}{TP+FP+FN+TN}
 $$
 
 $$
-	ext{Precision} = \frac{TP}{TP+FP}, \quad
-	ext{Recall} = \frac{TP}{TP+FN}
+\mathrm{Precision} = \frac{TP}{TP+FP}, \quad
+\mathrm{Recall} = \frac{TP}{TP+FN}
 $$
 
 $$
-	ext{Specificity} = \frac{TN}{TN+FP}
+\mathrm{Specificity} = \frac{TN}{TN+FP}
 $$
 
 $$
-	ext{Balanced Accuracy} = \frac{\text{Recall}+\text{Specificity}}{2}
+\mathrm{Balanced\ Accuracy} = \frac{\mathrm{Recall}+\mathrm{Specificity}}{2}
 $$
 
 $$
-	ext{Unsafe Landing Rate} = \frac{FP}{FP+TN}
+\mathrm{Unsafe\ Landing\ Rate} = \frac{FP}{FP+TN}
 $$
 
 본 연구에서는 단순 정확도보다 `Unsafe Landing Rate`, `Specificity`, `Balanced Accuracy`를 핵심 안전 지표로 본다.
@@ -95,6 +95,16 @@ $$
 - `sjtu_drone_control`: 기본 제어 노드
 - `sjtu_drone_interfaces`: `SetWind` 인터페이스
 - `matlab/AutoSimMain.m`, `matlab/AutoSim.m`: 자동 실험 파이프라인
+
+## AutoSim 모듈 구조
+
+최근 리팩터링으로 AutoSim은 메인 오케스트레이션과 기능 모듈을 분리한 구조를 사용한다.
+
+- `matlab/AutoSim.m`: 시나리오 루프, 예외 처리, 저장/종료 같은 실행 흐름만 담당
+- `matlab/modules/core/`: 기능별 함수 모듈(ROS I/O, 제어, 온톨로지, 학습/평가, 시각화)
+- `matlab/modules/`: 엔진 단위 모듈(`autosim_ai_engine`, `autosim_learning_engine`, `autosim_ontology_engine`)
+
+운영 원칙은 기능 로직은 모듈 파일에서 관리하고, 메인 코드는 모듈 호출 중심으로 짧게 유지하는 것이다.
 
 ## 빠른 시작
 

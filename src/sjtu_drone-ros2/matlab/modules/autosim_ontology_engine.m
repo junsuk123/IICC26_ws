@@ -45,8 +45,10 @@ onto.wind_dir_hist = asv(windObs, 'wind_dir_hist', nan);
 onto.dt = max(asv(windObs, 'dt', 0.1), 1e-3);
 
 % MathematicalObject layer
-onto.wind_velocity = onto.wind_speed;
-onto.wind_acceleration = compute_wind_acceleration(onto.wind_speed_hist, onto.dt);
+onto.wind_velocity_vec = asv(windObs, 'wind_velocity', [onto.wind_speed; 0.0]);
+onto.wind_velocity = vector_mag(onto.wind_velocity_vec);
+onto.wind_acceleration_vec = asv(windObs, 'wind_acceleration', [0.0; 0.0]);
+onto.wind_acceleration = vector_mag(onto.wind_acceleration_vec);
 onto.wind_risk = compute_wind_risk(onto.wind_velocity, onto.wind_acceleration, cfg.ontology.wind_caution_speed, cfg.ontology.wind_unsafe_speed);
 
 onto.gust_intensity = nanstd_safe(diff_with_zero(onto.wind_speed_hist));
@@ -176,9 +178,9 @@ for i = 1:numel(names)
         case "wind_speed"
             vec(i) = asv(windObs, 'wind_speed', 0.0);
         case "wind_velocity"
-            vec(i) = asv(windObs, 'wind_velocity', asv(windObs, 'wind_speed', 0.0));
+            vec(i) = asv(windObs, 'wind_velocity_mag', vector_mag(asv(windObs, 'wind_velocity', asv(windObs, 'wind_speed', 0.0))));
         case "wind_acceleration"
-            vec(i) = asv(windObs, 'wind_acceleration', 0.0);
+            vec(i) = asv(windObs, 'wind_acceleration_mag', vector_mag(asv(windObs, 'wind_acceleration', 0.0)));
         case "wind_dir_norm"
             vec(i) = abs(asv(windObs, 'wind_direction', 0.0)) / 180.0;
         case "roll_abs"
@@ -336,4 +338,30 @@ function windRisk = compute_wind_risk(windVelocity, windAcceleration, windCautio
     
     % Combine: risk is the maximum of velocity and accelerated estimate
     windRisk = max(velocityRisk, velocityRisk + accelAdjustment);
+end
+
+function m = vector_mag(v)
+vv = double(v);
+if isempty(vv)
+    m = 0.0;
+    return;
+end
+if isvector(vv)
+    vv = vv(:);
+    if numel(vv) >= 2
+        m = hypot(vv(1), vv(2));
+    else
+        m = abs(vv(1));
+    end
+else
+    if size(vv, 2) >= 2
+        m = hypot(vv(:,1), vv(:,2));
+    else
+        m = abs(vv(:,1));
+    end
+end
+m(~isfinite(m)) = 0.0;
+if numel(m) > 1
+    m = mean(m);
+end
 end

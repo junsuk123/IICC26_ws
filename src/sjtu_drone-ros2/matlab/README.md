@@ -80,6 +80,77 @@ run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/AutoSim.m')
 - `/drone/takeoff`
 - `/drone/cmd_vel`
 
+## 데이터 흐름도: 센서 → 온톨로지 → AI
+
+다음 다이어그램은 센서 입력부터 최종 의사결정까지의 전체 데이터 처리 파이프라인을 보여줍니다.
+
+```mermaid
+graph TD
+    subgraph Sensors["🔴 센서 데이터 입력"]
+        Wind["🌪️ 풍속 센서<br/>(Wind Speed, Direction)"]
+        IMU["📡 IMU 센서<br/>(Roll, Pitch, Vz, AngVel, LinAcc)"]
+        Vision["📷 AprilTag 카메라<br/>(Tag Position, Error)"]
+    end
+
+    subgraph Processing["⚙️ 온톨로지 처리"]
+        Wind2Sem["Wind Risk Encoder<br/>input: wind_speed, velocity, accel<br/>output: wind_risk_enc"]
+        IMU2Sem["Alignment Encoder<br/>input: roll, pitch, vz<br/>output: alignment_enc"]
+        Vision2Sem["Visual Encoder<br/>input: tag_u, tag_v, jitter, stability<br/>output: visual_enc"]
+        Context["Context Encoder<br/>input: temporal patterns<br/>output: context_enc"]
+    end
+
+    subgraph Fusion["🧠 의미론적 특성 벡터<br/>(14-dim Semantic)"]
+        SemVec["wind_speed<br/>wind_velocity<br/>wind_acceleration<br/>wind_dir_norm<br/>roll_abs | pitch_abs<br/>tag_u | tag_v<br/>jitter | stability_score<br/>+ 4x encoders"]
+    end
+
+    subgraph AIInput["🎯 AI 입력 특성<br/>(24-dim AI Schema)"]
+        AIFeatures["mean_wind_speed | max_wind_speed<br/>mean_abs_roll_deg | mean_abs_pitch_deg<br/>wind_velocity_x | wind_velocity_y | wind_velocity<br/>wind_acceleration_x | wind_acceleration_y | wind_acceleration<br/>mean_abs_vz | max_abs_vz<br/>mean_tag_error | max_tag_error<br/>stability_std_z | stability_std_vz<br/>mean_imu_ang_vel | max_imu_ang_vel<br/>mean_imu_lin_acc | max_imu_lin_acc<br/>wind_risk_enc | alignment_enc | visual_enc | context_enc"]
+    end
+
+    subgraph Model["🤖 Gaussian Naive Bayes 분류기"]
+        Train["Training with:<br/>μ = class mean<br/>σ² = class variance<br/>P(class) = prior"]
+        Infer["Inference:<br/>log P(x|class) + log P(class)<br/>⬇<br/>softmax → posteriors"]
+        Output["Output:<br/>P(AttemptLanding)"]
+    end
+
+    subgraph Decision["✅ 최종 의사결정"]
+        Rule["Ontology Rules<br/>+<br/>AI Probability<br/>=>"]
+        Final["AttemptLanding<br/>or<br/>HoldLanding"]
+    end
+
+    Wind --> Wind2Sem
+    IMU --> IMU2Sem
+    Vision --> Vision2Sem
+    Vision2Sem --> Context
+
+    Wind2Sem --> SemVec
+    IMU2Sem --> SemVec
+    Context --> SemVec
+
+    SemVec --> AIFeatures
+    Vision --> AIFeatures
+
+    AIFeatures --> Train
+    AIFeatures --> Infer
+
+    Train -.model storage.-> Infer
+    Infer --> Output
+
+    Output --> Rule
+    SemVec --> Rule
+
+    Rule --> Final
+```
+
+**주요 특징:**
+
+- **센서 입력**: 풍속, IMU, AprilTag 카메라로부터 실시간 데이터 수집
+- **온톨로지 처리**: 4개 인코더(wind_risk, alignment, visual, context)를 통해 의미론적 특성 추출
+- **의미론적 벡터**: 14차원 벡터로 의미론 규칙 평가에 사용
+- **AI 입력**: 24차원 벡터로 통계량(평균, 최대값, 표준편차) + 4개 인코더 조합
+- **분류기**: Gaussian Naive Bayes로 AttemptLanding 확률 계산
+- **최종 결정**: 온톨로지 규칙과 AI 확률을 가중 결합하여 최종 의사결정
+
 ## 판단 파이프라인
 
 1. ROS 센서 수집

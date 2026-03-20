@@ -1,19 +1,19 @@
 # Wind Tuner
 
-`wind_tuner.py` runs parameter sweeps for wind plugin settings and records `/wind_condition`.
+`wind_tuner.py`는 wind plugin 파라미터 스윕을 수행하고 `/wind_condition`을 기록한다.
 
-## Prerequisites
+## 사전 준비
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/j/INCSL/IICC26_ws/install/setup.bash
 ```
 
-Ensure `sjtu_drone_description` is built and `libwind_plugin.so` is installed.
+`sjtu_drone_description`가 빌드되어 있고 `libwind_plugin.so`가 설치되어 있어야 한다.
 
-Run from workspace root (`/home/j/INCSL/IICC26_ws`) or use absolute paths.
+워크스페이스 루트(`/home/j/INCSL/IICC26_ws`) 기준 실행을 권장한다.
 
-## Example
+## 실행 예시
 
 ```bash
 python3 src/sjtu_drone-ros2/sjtu_drone_description/scripts/wind_tuner.py \
@@ -27,18 +27,18 @@ python3 src/sjtu_drone-ros2/sjtu_drone_description/scripts/wind_tuner.py \
   --out /tmp/wind_tuning
 ```
 
-Notes:
+## 동작 메모
 
 - The script injects a `<plugin name="wind_plugin" ...>` block into a copied world file.
 - Prefer a world template without an existing `wind_plugin` block to avoid duplicate plugin entries.
 
-## What it records
+## 기록 결과
 
 - `/wind_condition` time series
 - one output folder per parameter combination
 - gzserver logs for each run
 
-## Relation to landing pipeline
+## 착륙 파이프라인과의 관계
 
 - MATLAB landing node reads `/wind_condition`.
 - Startup takeoff target can be tuned via bringup launch args `takeoff_hover_height` and `takeoff_vertical_speed`.
@@ -46,9 +46,9 @@ Notes:
 - Bridge topic `/landing_tag_state` supports MATLAB fallback when custom tag messages are unavailable.
 - MATLAB landing node may hold last valid tag state for a short timeout during tag dropouts, so evaluate both raw detector stability and hold-time behavior when tuning.
 
-## Extensions
+## 확장 아이디어
 
-For full landing-performance tuning, extend the script to include:
+착륙 성능 중심 튜닝으로 확장하려면 다음 지표를 추가한다.
 
 - pose drift metrics
 - touchdown success criteria

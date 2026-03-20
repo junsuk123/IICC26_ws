@@ -1,14 +1,20 @@
 # sjtu_drone for IICC26
 
-이 저장소의 현재 기준 실행 경로는 ROS2 + Gazebo 시뮬레이션과 MATLAB `AutoSim.m` 자동 실험 파이프라인이다. 예전 MATLAB 단일 노드/수동 파이프라인 스크립트는 제거했고, 문서도 AutoSim 중심으로 정리했다.
+이 저장소는 드론 착륙 안전성 연구를 위한 ROS2/Gazebo 실행 계층과 MATLAB AutoSim 분석 계층을 함께 제공한다.
 
-## 현재 사용 구성
+## 아키텍처 개요
 
-- `sjtu_drone_bringup`: Gazebo/AprilTag/bridge/teleop launch
-- `sjtu_drone_description`: 드론 모델, world, Gazebo 플러그인, wind plugin
-- `sjtu_drone_control`: teleop 노드
-- `sjtu_drone_interfaces`: `SetWind` 서비스 정의
-- `matlab/AutoSim.m`: 현재 실험 자동화 진입점
+- 실행 계층(ROS2/Gazebo): 물리 시뮬레이션, 센서/토픽, 풍속 외란 플러그인
+- 판단 계층(MATLAB): 온톨로지+AI 융합 판단, 정책 평가, 학습/검증 루프
+- 데이터 계층(CSV/MAT): 시나리오 결과, trace, 모델 스냅샷, 논문용 요약 산출물
+
+## 패키지 구성
+
+- `sjtu_drone_bringup`: Gazebo, AprilTag, bridge, 런치 인자 관리
+- `sjtu_drone_description`: URDF/SDF, world, wind plugin
+- `sjtu_drone_control`: 제어 노드
+- `sjtu_drone_interfaces`: `SetWind` 서비스
+- `matlab/`: `AutoSimMain.m`, `AutoSim.m`, 검증/플롯 스크립트
 
 ## 요구 환경
 
@@ -28,12 +34,10 @@ source /home/j/INCSL/IICC26_ws/install/setup.bash
 
 주의:
 
-- launch는 `install/setup.bash` 기준 install-space 리소스를 사용한다.
-- `src/` 아래 launch, xacro, Python 패키지 코드를 수정했으면 해당 패키지를 다시 빌드해야 반영된다.
+- `install/setup.bash` 기준으로 실행 경로를 통일한다.
+- `src/` 하위 launch/xacro/python/cpp를 수정하면 관련 패키지를 재빌드해야 반영된다.
 
-## ROS 실행
-
-헤드리스 기본 실행 예시는 다음과 같다.
+## ROS 실행 예시
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -51,35 +55,40 @@ ros2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py \
   apriltag_bridge_topic:=/landing_tag_state
 ```
 
-## 핵심 토픽
+## 핵심 인터페이스
 
-- `/wind_command`: 입력 풍속/풍향 명령
-- `/wind_condition`: 풍속/풍향 관측 출력
-- `/set_wind`: 풍속/풍향 서비스 인터페이스
-- `/landing_tag_state`: MATLAB 호환 AprilTag bridge 출력
+- `/wind_command`: 풍속/풍향 명령 입력
+- `/wind_condition`: 풍속/풍향 상태 출력
+- `/set_wind`: 풍속 설정 서비스
+- `/landing_tag_state`: MATLAB 호환 AprilTag bridge
 - `/drone/gt_pose`, `/drone/gt_vel`, `/drone/state`: AutoSim 주요 입력
 
 ## MATLAB 실행
 
-현재 지원하는 MATLAB 진입점은 하나다.
+```matlab
+AutoSimMain
+```
+
+또는
 
 ```matlab
 run('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/AutoSim.m')
 ```
 
-AutoSim은 다음을 수행한다.
+AutoSim 주요 기능:
 
-- 시나리오별 launch/cleanup
-- ROS 센서 수집
-- 온톨로지 추론과 안정성 판단
-- 모델 학습 및 스냅샷 저장
-- 결과/추적 데이터 저장
+- 시나리오 생성/실행/정리 자동화
+- 온톨로지+AI 융합 판단
+- 누적 데이터셋 기반 모델 학습/검증
+- 결과 CSV, 추적 로그, 논문용 figure/table 생성
 
-상세 내용은 [matlab/README.md](matlab/README.md)를 본다.
-연동 설계와 연구실 공유용 운영 기준은 [matlab/ROS2_Gazebo_MATLAB_Validation_Guideline.md](matlab/ROS2_Gazebo_MATLAB_Validation_Guideline.md)를 본다.
+상세 문서:
 
-## 정리 원칙
+- [matlab/README.md](matlab/README.md)
+- [matlab/ROS2_Gazebo_MATLAB_Validation_Guideline.md](matlab/ROS2_Gazebo_MATLAB_Validation_Guideline.md)
 
-- `build/`, `install/`, `log/`는 워크스페이스 산출물이다.
-- `matlab/data`, `matlab/logs`, 학습 모델 스냅샷, 결과 plot은 생성 산출물로 취급한다.
-- 현재 저장소는 AutoSim 기반 워크플로만 문서화한다.
+## 산출물 취급 원칙
+
+- `build/`, `install/`, `log/`는 빌드/실행 산출물
+- `matlab/data`, `matlab/logs`, `matlab/models`, `matlab/plots`는 실험 산출물
+- 버전 관리 대상과 산출물 경로를 분리해 재현성을 유지한다

@@ -382,13 +382,12 @@ function autosimValidationFillPaperDraft(summaryCsvPath, comparisonCsvPath, thre
     lines = splitlines(string(txt));
 
     policyRow = autosimValidationGetMethodRow(cmp, "Ontology+AI (policy)");
-    executedRow = autosimValidationGetMethodRow(cmp, "Ontology+AI (executed)");
     baselineRow = autosimValidationGetMethodRow(cmp, "Threshold baseline");
 
     safeRatio = autosimValidationSafeDiv(S.n_safe(1), max(1, S.n_valid(1)));
 
     policySentence = autosimValidationBuildPolicySentence(policyRow, baselineRow);
-    executedSentence = autosimValidationBuildExecutedSentence(executedRow);
+    interpretationSentence = autosimValidationBuildInterpretationSentence();
     imbalanceSentence = autosimValidationBuildImbalanceSentence(S, safeRatio);
     conclusionSentence = autosimValidationBuildConclusionSentence(policyRow, baselineRow);
 
@@ -396,8 +395,6 @@ function autosimValidationFillPaperDraft(summaryCsvPath, comparisonCsvPath, thre
         line = strtrim(lines(i));
         if startsWith(line, '| Ontology+AI (policy) |')
             lines(i) = autosimValidationFormatMethodRow("Ontology+AI (policy)", policyRow);
-        elseif startsWith(line, '| Ontology+AI (executed) |')
-            lines(i) = autosimValidationFormatMethodRow("Ontology+AI (executed)", executedRow);
         elseif startsWith(line, '| Threshold baseline |')
             lines(i) = autosimValidationFormatMethodRow("Threshold baseline", baselineRow);
         elseif startsWith(line, '| wind_threshold |')
@@ -411,7 +408,7 @@ function autosimValidationFillPaperDraft(summaryCsvPath, comparisonCsvPath, thre
         elseif startsWith(line, '반면 제안 방법은 시간적 외란 특성과 시각적 안정성을 함께 평가하므로,')
             lines(i) = policySentence;
         elseif startsWith(line, '정량 해석 시에는 단일 정확도 지표만으로 결론을 내리지 않고,')
-            lines(i) = executedSentence;
+            lines(i) = interpretationSentence;
         elseif startsWith(line, '이 결과는 두 가지 가능성을 시사한다.')
             lines(i) = imbalanceSentence;
         elseif startsWith(line, '실험 결과, 제안 방법은 단순 임계값 기반 방법 대비 위험한 착륙 시도를 감소시키고 전체 착륙 안정성을 향상시키는 것으로 나타났다.')
@@ -475,12 +472,8 @@ function s = autosimValidationBuildPolicySentence(policyRow, baselineRow)
 end
 
 
-function s = autosimValidationBuildExecutedSentence(executedRow)
-    if isempty(executedRow)
-        s = "정량 해석 시에는 단일 정확도 지표만으로 결론을 내리지 않고, unsafe 클래스에 대한 거부 성능(Unsafe Reject/Specificity)과 위험 착륙률(Unsafe Landing Rate)을 함께 해석해야 한다.";
-        return;
-    end
-    s = "실제 실행 액션 기준의 Ontology+AI (executed)는 Accuracy " + autosimValidationFmtPct(executedRow.accuracy(1)) + ", Unsafe Reject " + autosimValidationFmtPct(executedRow.unsafe_reject(1)) + ", Unsafe Landing Rate " + autosimValidationFmtPct(executedRow.unsafe_landing_rate(1)) + "로 집계되었으며, 이는 정책 출력과 실제 실행 결과를 분리하여 해석할 필요가 있음을 보여준다.";
+function s = autosimValidationBuildInterpretationSentence()
+    s = "정량 해석 시에는 단일 정확도 지표만으로 결론을 내리지 않고, unsafe 클래스에 대한 거부 성능(Unsafe Reject/Specificity)과 위험 착륙률(Unsafe Landing Rate)을 함께 해석해야 한다.";
 end
 
 

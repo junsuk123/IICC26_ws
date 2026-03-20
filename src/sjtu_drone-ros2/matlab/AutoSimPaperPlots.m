@@ -84,29 +84,27 @@ end
 
 gtSafe = buildGtSafe(datasetTbl);
 predProposed = buildDecision(datasetTbl, 'pred_decision', 'landing_cmd_time');
-predExecuted = buildDecision(datasetTbl, 'executed_action', 'landing_cmd_time');
 
 baseline = buildThresholdBaseline(datasetTbl);
 predBaseline = baseline.predLand;
 
 mProposed = evalDecision(gtSafe, predProposed);
-mExecuted = evalDecision(gtSafe, predExecuted);
 mBaseline = evalDecision(gtSafe, predBaseline);
 
 cmpTbl = table( ...
-    string({'Ontology+AI (policy)'; 'Ontology+AI (executed)'; 'Threshold baseline'}), ...
-    [mProposed.nValid; mExecuted.nValid; mBaseline.nValid], ...
-    [mProposed.accuracy; mExecuted.accuracy; mBaseline.accuracy], ...
-    [mProposed.precision; mExecuted.precision; mBaseline.precision], ...
-    [mProposed.recall; mExecuted.recall; mBaseline.recall], ...
-    [mProposed.specificity; mExecuted.specificity; mBaseline.specificity], ...
-    [mProposed.balancedAccuracy; mExecuted.balancedAccuracy; mBaseline.balancedAccuracy], ...
-    [mProposed.f1; mExecuted.f1; mBaseline.f1], ...
-    [mProposed.unsafeLandingRate; mExecuted.unsafeLandingRate; mBaseline.unsafeLandingRate], ...
-    [mProposed.tp; mExecuted.tp; mBaseline.tp], ...
-    [mProposed.fp; mExecuted.fp; mBaseline.fp], ...
-    [mProposed.fn; mExecuted.fn; mBaseline.fn], ...
-    [mProposed.tn; mExecuted.tn; mBaseline.tn], ...
+    string({'Ontology+AI (policy)'; 'Threshold baseline'}), ...
+    [mProposed.nValid; mBaseline.nValid], ...
+    [mProposed.accuracy; mBaseline.accuracy], ...
+    [mProposed.precision; mBaseline.precision], ...
+    [mProposed.recall; mBaseline.recall], ...
+    [mProposed.specificity; mBaseline.specificity], ...
+    [mProposed.balancedAccuracy; mBaseline.balancedAccuracy], ...
+    [mProposed.f1; mBaseline.f1], ...
+    [mProposed.unsafeLandingRate; mBaseline.unsafeLandingRate], ...
+    [mProposed.tp; mBaseline.tp], ...
+    [mProposed.fp; mBaseline.fp], ...
+    [mProposed.fn; mBaseline.fn], ...
+    [mProposed.tn; mBaseline.tn], ...
     'VariableNames', {'method','n_valid','accuracy','precision','safe_recall','unsafe_reject','balanced_accuracy','f1','unsafe_landing_rate','TP','FP','FN','TN'});
 
 writetable(cmpTbl, fullfile(outputDir, 'paper_table_method_comparison.csv'));
@@ -117,14 +115,13 @@ tl = tiledlayout(fig1, 1, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 ax1 = nexttile(tl, 1);
 barVals = [mProposed.accuracy, mProposed.f1, mProposed.unsafeLandingRate; ...
-           mBaseline.accuracy, mBaseline.f1, mBaseline.unsafeLandingRate; ...
-           mExecuted.accuracy, mExecuted.f1, mExecuted.unsafeLandingRate];
+           mBaseline.accuracy, mBaseline.f1, mBaseline.unsafeLandingRate];
 bh = bar(ax1, barVals, 0.88);
 bh(1).FaceColor = [0.10 0.45 0.78];
 bh(2).FaceColor = [0.13 0.60 0.33];
 bh(3).FaceColor = [0.78 0.22 0.22];
-xticks(ax1, 1:3);
-xticklabels(ax1, {'Ontology+AI (policy)', 'Threshold', 'Ontology+AI (executed)'});
+xticks(ax1, 1:2);
+xticklabels(ax1, {'Ontology+AI (policy)', 'Threshold'});
 ylim(ax1, [0 1]);
 ylabel(ax1, 'score');
 title(ax1, 'Overall Metrics Comparison', 'FontSize', FONT_TITLE);
@@ -135,15 +132,14 @@ grid(ax1, 'on');
 
 ax2 = nexttile(tl, 2);
 confVals = [mProposed.tp mProposed.fp mProposed.fn mProposed.tn; ...
-            mBaseline.tp mBaseline.fp mBaseline.fn mBaseline.tn; ...
-            mExecuted.tp mExecuted.fp mExecuted.fn mExecuted.tn];
+            mBaseline.tp mBaseline.fp mBaseline.fn mBaseline.tn];
 b2 = bar(ax2, confVals, 'stacked', 'BarWidth', 0.8);
 b2(1).FaceColor = [0.20 0.65 0.25];
 b2(2).FaceColor = [0.85 0.30 0.20];
 b2(3).FaceColor = [0.95 0.65 0.15];
 b2(4).FaceColor = [0.25 0.50 0.90];
-xticks(ax2, 1:3);
-xticklabels(ax2, {'Ontology+AI (policy)', 'Threshold', 'Ontology+AI (executed)'});
+xticks(ax2, 1:2);
+xticklabels(ax2, {'Ontology+AI (policy)', 'Threshold'});
 ylabel(ax2, 'scenario count');
 title(ax2, 'Decision Outcome Composition', 'FontSize', FONT_TITLE);
 legend(ax2, {'TP','FP','FN','TN'}, ...
@@ -160,7 +156,6 @@ if isempty(sid)
 end
 trendP = cumulativeTrend(gtSafe, predProposed);
 trendB = cumulativeTrend(gtSafe, predBaseline);
-trendE = cumulativeTrend(gtSafe, predExecuted);
 
 fig2 = figure('Name', 'CumulativeTrends', 'Color', 'w', 'Position', [120 120 1180 520]);
 tl2 = tiledlayout(fig2, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
@@ -169,11 +164,10 @@ ax21 = nexttile(tl2, 1);
 plot(ax21, sid, smoothAdaptive(trendP.accuracy), '-', 'LineWidth', 2.0, 'Color', [0.10 0.45 0.78]);
 hold(ax21, 'on');
 plot(ax21, sid, smoothAdaptive(trendB.accuracy), '-', 'LineWidth', 1.8, 'Color', [0.30 0.30 0.30]);
-plot(ax21, sid, smoothAdaptive(trendE.accuracy), '--', 'LineWidth', 1.8, 'Color', [0.13 0.60 0.33]);
 ylim(ax21, [0 1]);
 ylabel(ax21, 'accuracy');
 title(ax21, 'Cumulative Accuracy Trend', 'FontSize', FONT_TITLE);
-legend(ax21, {'Ontology+AI (policy)','Threshold','Ontology+AI (executed)'}, ...
+legend(ax21, {'Ontology+AI (policy)','Threshold'}, ...
     'Location', 'southoutside', 'Orientation', 'horizontal', 'FontSize', FONT_LEGEND);
 set(ax21, 'FontSize', FONT_AX);
 grid(ax21, 'on');
@@ -182,12 +176,11 @@ ax22 = nexttile(tl2, 2);
 plot(ax22, sid, smoothAdaptive(trendP.unsafeLandingRate), '-', 'LineWidth', 2.0, 'Color', [0.78 0.22 0.22]);
 hold(ax22, 'on');
 plot(ax22, sid, smoothAdaptive(trendB.unsafeLandingRate), '-', 'LineWidth', 1.8, 'Color', [0.35 0.35 0.35]);
-plot(ax22, sid, smoothAdaptive(trendE.unsafeLandingRate), '--', 'LineWidth', 1.8, 'Color', [0.55 0.10 0.65]);
 ylim(ax22, [0 1]);
 xlabel(ax22, 'scenario');
 ylabel(ax22, 'unsafe landing rate');
 title(ax22, 'Cumulative Unsafe Landing Rate', 'FontSize', FONT_TITLE);
-legend(ax22, {'Ontology+AI (policy)','Threshold','Ontology+AI (executed)'}, ...
+legend(ax22, {'Ontology+AI (policy)','Threshold'}, ...
     'Location', 'southoutside', 'Orientation', 'horizontal', 'FontSize', FONT_LEGEND);
 set(ax22, 'FontSize', FONT_AX);
 grid(ax22, 'on');
@@ -353,7 +346,7 @@ legend(ax7L, [bh7(1) bh7(2) bh7(3) bh7(4) bh7(5) pgts], ...
 exportgraphics(fig7, fullfile(outputDir, 'paper_fig7_wind_band_breakdown.png'), 'Resolution', 220);
 
 save(fullfile(outputDir, 'paper_metrics_struct.mat'), ...
-    'mProposed', 'mExecuted', 'mBaseline', 'baseline', 'datasetPath', 'tracePath', 'perfPath', 'dmetPath');
+    'mProposed', 'mBaseline', 'baseline', 'datasetPath', 'tracePath', 'perfPath', 'dmetPath');
 
 infoTxt = fullfile(outputDir, 'paper_summary.txt');
 fid = fopen(infoTxt, 'w');
@@ -365,8 +358,6 @@ if fid > 0
     fprintf(fid, 'decision_metrics: %s\n', dmetPath);
     fprintf(fid, '\n[Ontology+AI policy]\n');
     dumpMetric(fid, mProposed);
-    fprintf(fid, '\n[Ontology+AI executed]\n');
-    dumpMetric(fid, mExecuted);
     fprintf(fid, '\n[Threshold baseline]\n');
     dumpMetric(fid, mBaseline);
     fclose(fid);

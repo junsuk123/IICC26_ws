@@ -32,6 +32,19 @@ $$
 s_{sem}=w_w(1-r_w)+w_v c_v+w_a s_a+w_m m_{ctx}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| r_w | 풍 위험도 인코딩 | 0~1 | 높을수록 위험 |
+| c_v | 시각 정렬 신뢰도 | 0~1 | 높을수록 안정 |
+| s_a | 자세 안정도 | 0~1 | roll/pitch 기반 |
+| m_ctx | 문맥 안전 점수 | 0~1 | 임무 단계/관계 일관성 |
+| wind_risk_enc | 풍 위험 feature | 0~1 | decision 입력 |
+| alignment_enc | 정렬 feature | 0~1 | decision 입력 |
+| visual_enc | 시각 안정 feature | 0~1 | decision 입력 |
+| context_enc | 문맥 안전 feature | 0~1 | decision 입력 |
+
 ## 대표 파일
 
 - `autosimBuildOntologyState.m`

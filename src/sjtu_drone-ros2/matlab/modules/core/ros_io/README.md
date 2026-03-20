@@ -36,6 +36,19 @@ x_{fallback}, & \text{otherwise}
 \end{cases}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| subPose/subVel/subState | 핵심 subscriber | ROS 핸들 | 위치/속도/상태 |
+| subTag | 태그 상태 subscriber | ROS 핸들 | AprilTag bridge 입력 |
+| subWind | 풍 상태 subscriber | ROS 핸들 | wind_condition 입력 |
+| pubCmd/pubTakeoff/pubLand | 제어 publisher | ROS 핸들 | cmd_vel/takeoff/land |
+| recvTimeoutSec | receive 타임아웃 | sec | polling 안전성 |
+| tagErr | 태그 중심 오차 | 정규화 값 | sqrt(u^2+v^2) |
+| rx_count | 콜백 수신 카운트 | 정수 | callback 우선 모드 진단 |
+| msg_unsupported | 메시지 지원 부족 플래그 | bool | MATLAB message generation 필요 |
+
 ## 대표 파일
 
 - `autosimCreateRosContext.m`

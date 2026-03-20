@@ -32,6 +32,18 @@ $$
 \mathrm{UnsafeLandingRate}=\frac{FP}{FP+TN}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| s_fusion | 최종 의사결정 점수 | 0~1 | 모델+의미 점수 결합 |
+| tau | 착륙 임계값 | 0~1 | s_fusion >= tau 이면 AttemptLanding |
+| TP | 안전 착륙을 착륙으로 판단 | count | 정답 착륙 |
+| FP | 위험 착륙을 착륙으로 판단 | count | 가장 위험한 오판 |
+| FN | 안전 착륙을 중단으로 판단 | count | 기회 손실 |
+| TN | 위험 착륙을 중단으로 판단 | count | 정답 거절 |
+| scenario_policy | 시나리오 정책 모드 | exploit/boundary/hard_negative | curriculum/probe와 연동 |
+
 ## 대표 파일
 
 - `autosimChooseScenarioPolicy.m`

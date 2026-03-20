@@ -33,6 +33,19 @@ $$
 - $M_k$: model
 - $H_k$: learning history
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| cfg | 전역 설정 struct | struct | 모든 모듈 입력의 기준 |
+| runStatus | 실행 상태 | completed/interrupted/failed | 최종 산출물 태그 |
+| results | 시나리오 결과 배열 | struct array | summary 원천 데이터 |
+| traceStore | 시계열 로그 테이블 | table | 후분석/플롯 입력 |
+| learningHistory | 학습 이력 | table | 업데이트 추적 |
+| checkpoint | 중간 저장 스냅샷 | mat/csv | 복구용 |
+| lock file | 단일 인스턴스 락 | file | 동시 실행 방지 |
+| overrideInfo | 외부 설정 반영 정보 | struct | 실험 재현성 관리 |
+
 ## 대표 파일
 
 - `autosimDefaultConfig.m`

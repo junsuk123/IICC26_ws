@@ -32,6 +32,19 @@ $$
 P(\mathrm{safe}\mid b)=\frac{N_{safe,b}}{N_b}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| dEval | 정책 기준 지표 struct | struct | TP/FP/FN/TN 포함 |
+| dExec | 실행 기준 지표 struct | struct | executed_action 기준 |
+| cum_accuracy | 누적 정확도 | 0~1 | 시나리오 축 추세 |
+| cum_precision | 누적 정밀도 | 0~1 | FP 민감 |
+| cum_recall | 누적 재현율 | 0~1 | FN 민감 |
+| unsafe_landing_rate | 위험 착륙 비율 | 0~1 | 안전 핵심 지표 |
+| wind band b | 풍속 구간 | categorical | 예: 0-1.5, 1.5-2.0 |
+| feasibility curve | 의미론 가능도 추세 | 0~1 | 실시간 판단 보조 |
+
 ## 대표 파일
 
 - `autosimInitPlots.m`

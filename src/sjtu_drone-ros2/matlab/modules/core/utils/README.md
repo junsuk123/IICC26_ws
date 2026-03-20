@@ -31,6 +31,19 @@ $$
 |\mathbf{v}|=\sqrt{v_x^2+v_y^2}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| clamp(x,l,u) | 범위 제한 함수 | 실수 -> 실수 | 수치 폭주 방지 |
+| nanmean/nanstd | 결측 무시 통계 | 벡터 -> 실수 | 센서 결측 내성 |
+| safe divide | 0분모 보호 나눗셈 | 실수 -> 실수/NaN | 지표 계산 안전화 |
+| lockPath | 실행 락 경로 | path | 중복 인스턴스 방지 |
+| pid/start_ticks | 프로세스 식별자 | 정수 | stale lock 판별 |
+| q=(w,x,y,z) | quaternion | 무차원 | 자세 계산 입력 |
+| roll,pitch,yaw | 오일러 각 | rad 또는 deg | 제어/판정 사용 |
+| wind vector | 풍속 벡터 | (v_x,v_y) | 방향성 유지 핵심 |
+
 ## 대표 파일
 
 - `autosimClamp.m`, `autosimNanMean.m`, `autosimSafeDivide.m`

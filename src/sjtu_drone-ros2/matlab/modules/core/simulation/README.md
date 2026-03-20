@@ -34,6 +34,18 @@ $$
 \mathrm{unstable}=\neg\mathrm{stable}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| v, theta | 풍속, 풍향 | m/s, deg | 입력 풍장 모델 |
+| v_x, v_y | 풍속 벡터 성분 | m/s | AI 입력까지 유지 |
+| a_w | 풍속 가속도 | m/s^2 | dv/dt 근사 |
+| controlPhase | 제어 단계 | pre_takeoff/takeoff/xy_hold/landing_track | 상태 머신 핵심 |
+| landingSent | 착륙 시작 여부 | bool | true 시 착륙 추적 단계 |
+| softResetOK | 서비스 리셋 성공 여부 | bool | /reset_world, /reset_simulation |
+| final_state | 종료 시 드론 상태 | int | landed/flying 판정과 결합 |
+
 ## 대표 파일
 
 - `autosimRunScenario.m`

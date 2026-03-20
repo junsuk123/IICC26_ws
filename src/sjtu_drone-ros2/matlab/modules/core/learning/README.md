@@ -32,6 +32,19 @@ $$
 \pi'_c=(1-\lambda)\pi_c+\lambda\frac{1}{K}
 $$
 
+## 핵심 변수/용어 표
+
+| 항목 | 의미 | 단위/범위 | 비고 |
+|---|---|---|---|
+| X | 입력 feature 행렬 | N x d | d=feature 수 |
+| y | 클래스 라벨 | AttemptLanding/HoldLanding | 학습 타깃 |
+| mu_c,j | 클래스별 평균 | 실수 | GaussianNB 파라미터 |
+| sigma2_c,j | 클래스별 분산 | 양수 실수 | 너무 작으면 floor 적용 |
+| pi_c | 클래스 prior | 0~1 | 합=1 |
+| lambda | prior uniform blend | 0~1 | 불균형 완화 |
+| schema_version | feature 스키마 버전 | 문자열 | 불일치 시 폴백 |
+| placeholder model | 임시 모델 | struct | cold start/불일치 안전 처리 |
+
 ## 대표 파일
 
 - `autosimLoadOrInitModel.m`

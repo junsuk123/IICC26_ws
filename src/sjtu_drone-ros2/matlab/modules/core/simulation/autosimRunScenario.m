@@ -116,6 +116,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
     pidX = autosimPidInit();
     pidY = autosimPidInit();
+    pidPoseX = autosimPidInit();
+    pidPoseY = autosimPidInit();
 
     lastTakeoffT = -inf;
     lastWindT = -inf;
@@ -295,6 +297,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         end
 
         [hasFreshTag, tagDetected, uTag, vTag, te, tagRxCountNow] = autosimReadTagInput(subTag, recvTimeoutSec, tagCallbackEnabled, tagCacheKey, tagRxCount);
+        tagVisibleNow = hasFreshTag && tagDetected && isfinite(uTag) && isfinite(vTag);
         if hasFreshTag
             lastTagRxT = tk;
             tagRxCount = tagRxCountNow;
@@ -418,31 +421,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             padGlobalMinSamples = max(1, round(cfg.control.pad_global_tracking_min_samples));
         end
 
-        uObs = nan;
-        vObs = nan;
-        if predOk && isfinite(uPred) && isfinite(vPred)
-            uObs = uPred;
-            vObs = vPred;
-        elseif tagDetected && isfinite(uTag) && isfinite(vTag)
-            uObs = uTag;
-            vObs = vTag;
-        end
-        if padGlobalEnable && isfinite(xNow) && isfinite(yNow) && isfinite(uObs) && isfinite(vObs)
-            tagErrObs = sqrt((uObs - cfg.control.target_u)^2 + (vObs - cfg.control.target_v)^2);
-            if tagErrObs <= padGlobalErrMax
-                errUObs = cfg.control.target_u - uObs;
-                errVObs = cfg.control.target_v - vObs;
-                padObsX = xNow + cfg.control.xy_map_sign_x_from_v * padGlobalScaleX * errVObs;
-                padObsY = yNow + cfg.control.xy_map_sign_y_from_u * padGlobalScaleY * errUObs;
-                if isfinite(padObsX) && isfinite(padObsY)
-                    padGlobalObsCount = padGlobalObsCount + 1;
-                    if padGlobalObsCount == 1 || ~isfinite(padGlobalMeanX) || ~isfinite(padGlobalMeanY)
-                        padGlobalMeanX = padObsX;
-                        padGlobalMeanY = padObsY;
-                    else
-                        padGlobalMeanX = padGlobalMeanX + (padObsX - padGlobalMeanX) / padGlobalObsCount;
-                        padGlobalMeanY = padGlobalMeanY + (padObsY - padGlobalMeanY) / padGlobalObsCount;
-                    end
+        if padGlobalEnable && isfinite(xNow) && isfinite(yNow) && tagVisibleNow
+            errUObs = cfg.control.target_u - uTag;
+            errVObs = cfg.control.target_v - vTag;
+            padObsX = xNow + cfg.control.xy_map_sign_x_from_v * padGlobalScaleX * errVObs;
+            padObsY = yNow + cfg.control.xy_map_sign_y_from_u * padGlobalScaleY * errUObs;
+            tagErrObs = sqrt((uTag - cfg.control.target_u)^2 + (vTag - cfg.control.target_v)^2);
+            useObs = (padGlobalObsCount == 0) || (tagErrObs <= padGlobalErrMax);
+            if useObs && isfinite(padObsX) && isfinite(padObsY)
+                padGlobalObsCount = padGlobalObsCount + 1;
+                if padGlobalObsCount == 1 || ~isfinite(padGlobalMeanX) || ~isfinite(padGlobalMeanY)
+                    padGlobalMeanX = padObsX;
+                    padGlobalMeanY = padObsY;
+                else
+                    padGlobalMeanX = padGlobalMeanX + (padObsX - padGlobalMeanX) / padGlobalObsCount;
+                    padGlobalMeanY = padGlobalMeanY + (padObsY - padGlobalMeanY) / padGlobalObsCount;
                 end
             end
             if ~padGlobalValid && padGlobalObsCount >= padGlobalMinSamples && isfinite(padGlobalMeanX) && isfinite(padGlobalMeanY)
@@ -562,6 +555,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         hoverCenterHoldStartT = nan;
                         pidX = autosimPidInit();
                         pidY = autosimPidInit();
+                        pidPoseX = autosimPidInit();
+                        pidPoseY = autosimPidInit();
                     end
 
                 case 'hover_settle'
@@ -607,6 +602,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         hoverCenterHoldStartT = nan;
                         pidX = autosimPidInit();
                         pidY = autosimPidInit();
+                        pidPoseX = autosimPidInit();
+                        pidPoseY = autosimPidInit();
                         tagLostSearchStartT = nan;
                     else
                         hasVisualObs = (predOk && isfinite(uPred) && isfinite(vPred)) || (tagDetected && isfinite(uTag) && isfinite(vTag));
@@ -614,8 +611,10 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                             pidX = autosimPidInit();
                             pidY = autosimPidInit();
                             tagLostSearchStartT = nan;
-                            [cmdX, cmdY] = autosimComputePoseHoldToTarget(cfg, xNow, yNow, padGlobalMeanX, padGlobalMeanY);
+                            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, dtCtrl, xNow, yNow, padGlobalMeanX, padGlobalMeanY, pidPoseX, pidPoseY);
                         else
+                            pidPoseX = autosimPidInit();
+                            pidPoseY = autosimPidInit();
                             [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
                                 cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
                         end
@@ -637,13 +636,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                             pidX = autosimPidInit();
                             pidY = autosimPidInit();
                             tagLostSearchStartT = nan;
-                            [cmdX, cmdY] = autosimComputePoseHoldToTarget(cfg, xNow, yNow, landingPadLockX, landingPadLockY);
+                            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, dtCtrl, xNow, yNow, landingPadLockX, landingPadLockY, pidPoseX, pidPoseY);
                         elseif usePadGlobalXY
                             pidX = autosimPidInit();
                             pidY = autosimPidInit();
                             tagLostSearchStartT = nan;
-                            [cmdX, cmdY] = autosimComputePoseHoldToTarget(cfg, xNow, yNow, padGlobalMeanX, padGlobalMeanY);
+                            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, dtCtrl, xNow, yNow, padGlobalMeanX, padGlobalMeanY, pidPoseX, pidPoseY);
                         else
+                            pidPoseX = autosimPidInit();
+                            pidPoseY = autosimPidInit();
                             [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
                                 cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
                         end
@@ -1014,8 +1015,13 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 canLandByProbe = false;
             end
 
-            if isfield(scenarioCfg, 'force_hover_abort_timeout') && logical(scenarioCfg.force_hover_abort_timeout)
-                hoverTimeoutSec = autosimClampNaN(scenarioCfg.hover_timeout_sec, cfg.control.land_forced_timeout_sec);
+            hoverTimeoutSec = autosimClampNaN(cfg.control.hover_hold_abort_timeout_sec, 60.0);
+            if isfield(scenarioCfg, 'hover_abort_timeout_sec') && isfinite(scenarioCfg.hover_abort_timeout_sec)
+                hoverTimeoutSec = max(0.0, scenarioCfg.hover_abort_timeout_sec);
+            elseif isfield(scenarioCfg, 'force_hover_abort_timeout') && logical(scenarioCfg.force_hover_abort_timeout)
+                hoverTimeoutSec = autosimClampNaN(scenarioCfg.hover_timeout_sec, hoverTimeoutSec);
+            end
+            if isfinite(hoverTimeoutSec) && (hoverTimeoutSec > 0)
                 hoverTimeoutHit = isFlying && (controlPhase == "xy_hold") && ~landingSent && isfinite(decisionEvalStartT) && ...
                     isfinite(hoverTimeoutSec) && (hoverTimeoutSec > 0) && ...
                     ((tk - decisionEvalStartT) >= hoverTimeoutSec) && ...
@@ -1233,9 +1239,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         if (~landingSent) && isFlying && (controlPhase == "xy_hold")
             fastLoopUsePadGlobal = padGlobalEnable && isfield(cfg.control, 'pad_global_tracking_use_in_fast_loop') && cfg.control.pad_global_tracking_use_in_fast_loop;
-            [pidX, pidY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount] = ...
+            [pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount] = ...
                 autosimRunFastTagControlBurst(cfg, rosCtx, pubCmd, msgCmd, t0, tk, max(0.0, cfg.scenario.sample_period_sec - (toc(t0) - iterStartT)), ...
-                xNow, yNow, pidX, pidY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount, ...
+                xNow, yNow, pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount, ...
                 randomLandingPlanned, randomLandingStartT, randomLandingEndT, randomBiasX, randomBiasY, ...
                 fastLoopUsePadGlobal, padGlobalValid, padGlobalMeanX, padGlobalMeanY);
         end

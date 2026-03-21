@@ -1,0 +1,2 @@
+tp,fp,fn,tn,n_valid,n_safe,n_unsafe,accuracy,precision,recall,specificity,balanced_accuracy,f1,unsafe_landing_rate,risk_score,n_excluded_intervention,n_excluded_hover
+0,0,0,180,180,0,180,1,NaN,NaN,1,1,NaN,0,1,120,0

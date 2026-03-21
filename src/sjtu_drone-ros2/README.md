@@ -192,8 +192,48 @@ python3 matlab/scripts/merge_autosim_results.py matlab/parallel_runs/<session_ro
 monitor_autosim_parallel('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/<session_root>', 2.0)
 ```
 
-- 상단: 워커별 진행 시나리오 수 + unsafe rate
-- 하단: 전체 워커 aggregate unsafe landing rate 추이
+- 패널1: 워커별 시나리오 진행 수 + unsafe rate
+- 패널2: 전체 워커 aggregate unsafe landing rate 추이
+- 패널3: 워커별 최근 정책 비율(exploit/boundary/hard_negative)
+- 패널4: 워커별 학습 진행(`n`, stable ratio)
+
+### 7) 단일 관측 도메인 브리지(optional)
+
+워커별로 분리된 `ROS_DOMAIN_ID`를 유지하면서, 관측용 도메인 하나로 주요 토픽을 모아 볼 수 있다.
+
+사전 조건:
+
+- `domain_bridge` 설치
+
+```bash
+sudo apt install ros-$ROS_DISTRO-domain-bridge
+```
+
+실행:
+
+```bash
+# session_root를 생략하면 최신 세션 사용
+OBSERVE_DOMAIN=90 matlab/scripts/run_autosim_domain_bridge.sh matlab/parallel_runs/<session_root>
+```
+
+중지:
+
+```bash
+matlab/scripts/stop_autosim_domain_bridge.sh matlab/parallel_runs/<session_root>
+```
+
+관측 예시:
+
+```bash
+ROS_DOMAIN_ID=90 ros2 topic list | grep '^/observe/'
+ROS_DOMAIN_ID=90 ros2 topic echo /observe/w01/gt_pose
+```
+
+브리지 후 토픽 구조:
+
+- `/observe/w01/state`, `/observe/w01/gt_pose`, `/observe/w01/gt_vel`
+- `/observe/w01/imu`, `/observe/w01/landing_tag_state`, `/observe/w01/cmd_vel`
+- `/observe/w01/wind_condition` (워커별 remap)
 
 ## 핵심 인터페이스
 

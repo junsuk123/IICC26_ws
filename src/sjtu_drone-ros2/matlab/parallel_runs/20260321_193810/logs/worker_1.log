@@ -1,0 +1,186 @@
+[AUTOSIM] Worker 1/4 | cleanup_scope=instance | domain=60 | gazebo_port=13045
+[AUTOSIM] Wind physics src[mass=file:/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/urdf/sjtu_drone.urdf,thrust=file:/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_bringup/config/drone.yaml] m=1.477kg Tmax=30.00N margin=15.51N hover=17.52m/s landing=8.76m/s
+
+[AUTOSIM] Start at 2026-03-21 19:38:15
+[AUTOSIM] Scenario count: 300
+[AUTOSIM] Initial model source: cold_start_placeholder
+Server: (argc: 5) (argv[0]: /usr/local/MATLAB/R2024b/toolbox/ros/bin/glnxa64/libmwros2server) started (pid: 120540)
+Current directory: "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab"
+[AUTOSIM] AprilTag callback-priority subscriber enabled on /drone_w01/landing_tag_state
+
+[AUTOSIM] Scenario 1/300
+[AUTOSIM] Adaptive policy=exploit | stable=0.50 unstable=0.50 boundary=0.00 unsafeRate=0.00
+[AUTOSIM] Curriculum target_case=safe_land | wind=2.07@-127.4
+[AUTOSIM] Launch started (pid=122165), hover=2.31, wind=2.07@-127.4
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=780 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=928 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 global pad estimate ready (n=5, x=0.12, y=0.00)
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.207 det=1 rx=1063 | wind=stale age=Infs sp=2.07 dir=-127.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 wind polling disabled after 2.5s startup stale window (no /wind_condition rx). Using command/profile fallback.
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.216 det=1 rx=1198 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.216 det=1 rx=1331 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.216 det=1 rx=1465 | wind=stale age=Infs sp=2.07 dir=-127.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 wind armed by timeout at t=5.1s (center-hold unmet)
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.311 det=1 rx=1603 | wind=stale age=Infs sp=2.41 dir=-137.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.090 det=1 rx=1738 | wind=stale age=Infs sp=2.30 dir=-137.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.230 det=1 rx=1873 | wind=stale age=Infs sp=2.22 dir=-131.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 landing lock fallback captured at (x=0.19, y=0.01)
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=2008 | wind=stale age=Infs sp=1.63 dir=-129.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.173 det=1 rx=2143 | wind=stale age=Infs sp=1.77 dir=-125.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.098 det=1 rx=2278 | wind=stale age=Infs sp=2.24 dir=-119.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.086 det=1 rx=2413 | wind=stale age=Infs sp=2.66 dir=-118.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.082 det=1 rx=2548 | wind=stale age=Infs sp=2.07 dir=-127.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.080 det=1 rx=2683 | wind=stale age=Infs sp=1.82 dir=-120.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=2818 | wind=stale age=Infs sp=2.07 dir=-127.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=2953 | wind=stale age=Infs sp=1.78 dir=-130.8 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=3088 | wind=stale age=Infs sp=2.18 dir=-132.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=3223 | wind=stale age=Infs sp=2.72 dir=-138.5 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=3358 | wind=stale age=Infs sp=2.07 dir=-127.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=3493 | wind=stale age=Infs sp=1.59 dir=-130.1 rx=0 | pose_age=0.00s
+[Warning: [AUTOSIM] Scenario 1 exception: Arrays have incompatible sizes for
+this operation.] 
+[> In AutoSim (line 162)
+In run (line 112)] 
+[Warning: [AUTOSIM] Checkpoint save failed: Cannot create
+'autosim_checkpoint_latest.mat' because
+'/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260321_193815' does
+not exist.] 
+[> In autosimSaveCheckpoint (line 16)
+In AutoSim (line 177)
+In run (line 112)] 
+[AUTOSIM] Stats 1/300: stable=0 (0.0%), unstable=1 (100.0%)
+[AUTOSIM] Model update skipped (learning_disabled): n=1, stable=0, unstable=0
+
+[AUTOSIM] Scenario 2/300
+[AUTOSIM] Adaptive policy=exploit | stable=0.00 unstable=1.00 boundary=0.00 unsafeRate=0.00
+[AUTOSIM] Curriculum target_case=unsafe_hover_timeout | wind=2.43@-126.1
+[AUTOSIM] Scenario 2 pre-reset landing confirmed.
+[AUTOSIM] s002 soft reset: calling /reset_world ...
+[AUTOSIM] s002 soft reset succeeded via /reset_world
+[AUTOSIM] Scenario 2 reset complete (state=landed).
+Server: (argc: 5) (argv[0]: /usr/local/MATLAB/R2024b/toolbox/ros/bin/glnxa64/libmwros2server) started (pid: 127659)
+Current directory: "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab"
+[AUTOSIM] Gazebo set_model_state MATLAB message type is unavailable; skipping pose-origin reset.
+[AUTOSIM] Scenario 2 reset + takeoff complete.
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.482 det=1 rx=4425 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 global pad estimate ready (n=5, x=0.01, y=-0.16)
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.451 det=1 rx=4560 | wind=stale age=Infs sp=2.43 dir=-126.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.446 det=1 rx=4695 | wind=stale age=Infs sp=2.43 dir=-126.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 wind polling disabled after 2.5s startup stale window (no /wind_condition rx). Using command/profile fallback.
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.446 det=1 rx=4830 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 wind armed by timeout at t=3.2s (center-hold unmet)
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.573 det=1 rx=4974 | wind=stale age=Infs sp=1.79 dir=-126.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.180 det=1 rx=5107 | wind=stale age=Infs sp=2.43 dir=-126.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.042 det=1 rx=5242 | wind=stale age=Infs sp=2.91 dir=-140.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.04s err=0.181 det=1 rx=5370 | wind=stale age=Infs sp=2.43 dir=-126.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.170 det=1 rx=5525 | wind=stale age=Infs sp=2.88 dir=-132.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.191 det=1 rx=5658 | wind=stale age=Infs sp=1.71 dir=-129.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.158 det=1 rx=5793 | wind=stale age=Infs sp=1.55 dir=-129.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.02s err=0.085 det=1 rx=5928 | wind=stale age=Infs sp=2.04 dir=-122.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.162 det=1 rx=6063 | wind=stale age=Infs sp=3.00 dir=-114.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.02s err=0.155 det=1 rx=6198 | wind=stale age=Infs sp=3.00 dir=-113.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.02s err=0.054 det=1 rx=6333 | wind=stale age=Infs sp=2.39 dir=-119.5 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.059 det=1 rx=6468 | wind=stale age=Infs sp=1.71 dir=-122.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.02s err=0.227 det=1 rx=6603 | wind=stale age=Infs sp=2.01 dir=-133.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.185 det=1 rx=6738 | wind=stale age=Infs sp=2.75 dir=-139.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.055 det=1 rx=6873 | wind=stale age=Infs sp=3.00 dir=-139.5 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 landing lock acquired at (x=0.32, y=-0.00), stable_frames=8
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.02s err=0.068 det=1 rx=7008 | wind=stale age=Infs sp=2.95 dir=-138.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.097 det=1 rx=7143 | wind=stale age=Infs sp=1.83 dir=-132.2 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.036 det=1 rx=7278 | wind=stale age=Infs sp=2.43 dir=-126.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.023 det=1 rx=7413 | wind=stale age=Infs sp=2.12 dir=-118.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.103 det=1 rx=7548 | wind=stale age=Infs sp=3.00 dir=-112.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.252 det=1 rx=7683 | wind=stale age=Infs sp=3.00 dir=-114.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.184 det=1 rx=7827 | wind=stale age=Infs sp=2.13 dir=-117.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.077 det=1 rx=7962 | wind=stale age=Infs sp=1.79 dir=-125.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.189 det=1 rx=8097 | wind=stale age=Infs sp=1.87 dir=-129.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.181 det=1 rx=8232 | wind=stale age=Infs sp=2.43 dir=-126.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.191 det=1 rx=8376 | wind=stale age=Infs sp=3.00 dir=-138.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.050 det=1 rx=8510 | wind=stale age=Infs sp=2.68 dir=-138.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.018 det=1 rx=8646 | wind=stale age=Infs sp=2.14 dir=-133.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.047 det=1 rx=8781 | wind=stale age=Infs sp=1.50 dir=-126.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.089 det=1 rx=8916 | wind=stale age=Infs sp=1.86 dir=-117.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s002 ended without LAND inference, so landing trajectory was not started.
+[Warning: [AUTOSIM] Scenario 2 exception: Arrays have incompatible sizes for
+this operation.] 
+[> In AutoSim (line 162)
+In run (line 112)] 
+[Warning: [AUTOSIM] Checkpoint save failed: Cannot create
+'autosim_checkpoint_latest.mat' because
+'/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260321_193815' does
+not exist.] 
+[> In autosimSaveCheckpoint (line 16)
+In AutoSim (line 177)
+In run (line 112)] 
+[AUTOSIM] Stats 2/300: stable=0 (0.0%), unstable=2 (100.0%)
+[AUTOSIM] Model update skipped (learning_disabled): n=2, stable=0, unstable=0
+
+[AUTOSIM] Scenario 3/300
+[AUTOSIM] Adaptive policy=boundary_validation | stable=0.00 unstable=1.00 boundary=0.00 unsafeRate=0.00
+[AUTOSIM] Curriculum target_case=safe_land | wind=1.87@-127.3
+[AUTOSIM] Scenario 3 pre-reset landing confirmed.
+[AUTOSIM] s003 soft reset: calling /reset_world ...
+[AUTOSIM] s003 soft reset succeeded via /reset_world
+[AUTOSIM] Scenario 3 reset complete (state=landed).
+[AUTOSIM] Scenario 3 reset + takeoff complete.
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.480 det=1 rx=9939 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 global pad estimate ready (n=5, x=0.04, y=-0.26)
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.454 det=1 rx=10074 | wind=stale age=Infs sp=1.87 dir=-127.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.447 det=1 rx=10209 | wind=stale age=Infs sp=1.87 dir=-127.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 wind polling disabled after 2.5s startup stale window (no /wind_condition rx). Using command/profile fallback.
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.447 det=1 rx=10344 | wind=stale age=Infs sp=1.87 dir=-127.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 wind armed by timeout at t=3.2s (center-hold unmet)
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.560 det=1 rx=10479 | wind=stale age=Infs sp=1.87 dir=-127.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.154 det=1 rx=10614 | wind=stale age=Infs sp=1.40 dir=-136.5 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.045 det=1 rx=10749 | wind=stale age=Infs sp=2.34 dir=-137.2 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 landing lock fallback captured at (x=0.10, y=-0.20)
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.269 det=1 rx=10884 | wind=stale age=Infs sp=2.39 dir=-134.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.223 det=1 rx=11019 | wind=stale age=Infs sp=1.81 dir=-138.2 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.240 det=1 rx=11154 | wind=stale age=Infs sp=1.52 dir=-132.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.249 det=1 rx=11289 | wind=stale age=Infs sp=1.49 dir=-123.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.261 det=1 rx=11424 | wind=stale age=Infs sp=1.62 dir=-120.1 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.288 det=1 rx=11559 | wind=stale age=Infs sp=2.36 dir=-117.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.329 det=1 rx=11692 | wind=stale age=Infs sp=2.14 dir=-122.5 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=11829 | wind=stale age=Infs sp=2.16 dir=-116.9 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=11964 | wind=stale age=Infs sp=1.58 dir=-126.4 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=12093 | wind=stale age=Infs sp=1.87 dir=-127.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=12234 | wind=stale age=Infs sp=1.87 dir=-127.3 rx=0 | pose_age=0.00s
+[AUTOSIM] s003 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=12369 | wind=stale age=Infs sp=2.42 dir=-131.9 rx=0 | pose_age=0.00s
+[Warning: [AUTOSIM] Scenario 3 exception: Arrays have incompatible sizes for
+this operation.] 
+[> In AutoSim (line 162)
+In run (line 112)] 
+[Warning: [AUTOSIM] Checkpoint save failed: Cannot create
+'autosim_checkpoint_latest.mat' because
+'/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260321_193815' does
+not exist.] 
+[> In autosimSaveCheckpoint (line 16)
+In AutoSim (line 177)
+In run (line 112)] 
+[AUTOSIM] Stats 3/300: stable=0 (0.0%), unstable=3 (100.0%)
+[AUTOSIM] Model update skipped (learning_disabled): n=3, stable=0, unstable=0
+
+[AUTOSIM] Scenario 4/300
+[AUTOSIM] Adaptive policy=boundary_validation | stable=0.00 unstable=1.00 boundary=0.00 unsafeRate=0.00
+[AUTOSIM] Curriculum target_case=unsafe_forced_land | wind=2.47@-105.6
+[AUTOSIM] Scenario 4 pre-reset landing confirmed.
+[AUTOSIM] s004 soft reset: calling /reset_world ...
+[AUTOSIM] s004 soft reset succeeded via /reset_world
+[AUTOSIM] Scenario 4 reset complete (state=landed).
+[AUTOSIM] Scenario 4 reset + takeoff complete.
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.577 det=1 rx=13255 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 global pad estimate ready (n=5, x=-0.03, y=-0.20)
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.540 det=1 rx=13389 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.534 det=1 rx=13525 | wind=stale age=Infs sp=2.47 dir=-105.6 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 wind polling disabled after 2.5s startup stale window (no /wind_condition rx). Using command/profile fallback.
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.534 det=1 rx=13660 | wind=stale age=Infs sp=0.00 dir=0.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 wind armed by timeout at t=3.2s (center-hold unmet)
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.553 det=1 rx=13795 | wind=stale age=Infs sp=1.81 dir=-103.2 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.049 det=1 rx=13930 | wind=stale age=Infs sp=2.34 dir=-106.0 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.055 det=1 rx=14065 | wind=stale age=Infs sp=3.00 dir=-114.8 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 landing lock acquired at (x=0.30, y=-0.02), stable_frames=8
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.011 det=1 rx=14200 | wind=stale age=Infs sp=3.00 dir=-116.7 rx=0 | pose_age=0.00s
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.047 det=1 rx=14332 | wind=stale age=Infs sp=2.60 dir=-109.4 rx=0 | pose_age=0.00s
+[INFO] [1774089625.033701612] [rclcpp]: signal_handler(signum=15)
+[AUTOSIM] s004 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.36s err=0.086 det=1 rx=14416 | wind=stale age=Infs sp=1.61 dir=-111.3 rx=0 | pose_age=0.40s
+[INFO] [1774089625.450130039] [rclcpp]: signal_handler(signum=15)

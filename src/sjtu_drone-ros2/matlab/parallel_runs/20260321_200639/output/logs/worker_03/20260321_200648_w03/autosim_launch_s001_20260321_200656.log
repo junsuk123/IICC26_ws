@@ -1,0 +1,4 @@
+[INFO] [launch]: All log files can be found below /home/j/.ros/log/2026-03-21-20-06-57-849515-j-183543
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [launch.user]: [bringup] Apriltag config: camera=/drone_w03/bottom, image=/drone_w03/bottom/image_raw, tags=/drone_w03/bottom/tags, bridge=/drone_w03/landing_tag_state, standalone=true, use_target_id=true, target_id=0
+[ERROR] [launch]: Caught exception in launch (see debug for traceback): executable 'apriltag_state_bridge' not found on the libexec directory '/home/j/INCSL/IICC26_ws/install/sjtu_drone_bringup/lib/sjtu_drone_bringup' 

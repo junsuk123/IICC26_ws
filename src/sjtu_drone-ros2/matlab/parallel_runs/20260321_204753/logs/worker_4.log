@@ -1,0 +1,137 @@
+[AUTOSIM] Worker 4/4 | cleanup_scope=instance | domain=63 | gazebo_port=13048
+[AUTOSIM] Wind physics src[mass=file:/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_description/urdf/sjtu_drone.urdf,thrust=file:/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/sjtu_drone_bringup/config/drone.yaml] m=1.477kg Tmax=30.00N margin=15.51N hover=17.52m/s landing=8.76m/s
+
+[AUTOSIM] Start at 2026-03-21 20:48:03
+[AUTOSIM] Scenario count: 300
+[AUTOSIM] Initial model source: cold_start_placeholder
+Server: (argc: 5) (argv[0]: /usr/local/MATLAB/R2024b/toolbox/ros/bin/glnxa64/libmwros2server) started (pid: 276417)
+Current directory: "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab"
+[AUTOSIM] AprilTag callback-priority subscriber enabled on /drone_w04/landing_tag_state
+
+[AUTOSIM] Scenario 1/300
+[AUTOSIM] Adaptive policy=exploit | stable=0.50 unstable=0.50 boundary=0.00 unsafeRate=0.00
+[AUTOSIM] Curriculum target_case=safe_land | wind=2.07@-127.4
+[AUTOSIM] Launch started (pid=279513), hover=2.31, wind=2.07@-127.4
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=71 | wind=ok age=0.00s sp=0.00 dir=0.0 rx=1 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=75 | wind=ok age=0.57s sp=0.00 dir=0.0 rx=2 | pose_age=1.26s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.13s err=NaN det=0 rx=81 | wind=ok age=0.62s sp=0.00 dir=0.0 rx=4 | pose_age=0.13s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.25s err=NaN det=0 rx=89 | wind=ok age=1.64s sp=0.00 dir=0.0 rx=4 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=97 | wind=ok age=0.00s sp=0.00 dir=0.0 rx=8 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=115 | wind=ok age=0.00s sp=0.00 dir=0.0 rx=9 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=NaN det=0 rx=159 | wind=ok age=1.06s sp=0.00 dir=0.0 rx=10 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.40s err=0.184 det=1 rx=179 | wind=ok age=0.75s sp=0.00 dir=0.0 rx=11 | pose_age=0.00s
+[AUTOSIM] s001 global pad estimate ready (n=5, x=0.12, y=0.02)
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.35s err=0.209 det=1 rx=216 | wind=ok age=1.81s sp=0.00 dir=0.0 rx=11 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=1.38s err=NaN det=0 rx=216 | wind=ok age=0.88s sp=0.00 dir=0.0 rx=12 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=2.55s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=0.00 dir=0.0 rx=14 | pose_age=0.00s
+[AUTOSIM] s001 wind armed by timeout at t=11.7s (center-hold unmet)
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=4.32s err=NaN det=0 rx=216 | wind=ok age=1.78s sp=2.50 dir=-118.5 rx=14 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=5.53s err=NaN det=0 rx=216 | wind=ok age=2.99s sp=2.26 dir=-118.1 rx=14 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=7.05s err=NaN det=0 rx=216 | wind=ok age=4.50s sp=1.84 dir=-127.8 rx=14 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=8.17s err=NaN det=0 rx=216 | wind=ok age=0.85s sp=2.05 dir=-125.5 rx=15 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=9.40s err=NaN det=0 rx=216 | wind=ok age=2.08s sp=2.66 dir=-141.1 rx=15 | pose_age=0.61s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=10.49s err=NaN det=0 rx=216 | wind=ok age=3.17s sp=2.57 dir=-134.6 rx=15 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=11.70s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=1.67 dir=-126.6 rx=17 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=12.88s err=NaN det=0 rx=216 | wind=ok age=0.46s sp=1.99 dir=-126.4 rx=18 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=14.05s err=NaN det=0 rx=216 | wind=ok age=1.63s sp=2.05 dir=-118.8 rx=18 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=15.99s err=NaN det=0 rx=216 | wind=ok age=1.08s sp=2.07 dir=-122.3 rx=20 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=17.13s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=1.82 dir=-125.1 rx=21 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=18.74s err=NaN det=0 rx=216 | wind=ok age=1.28s sp=2.00 dir=-129.4 rx=22 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=19.86s err=NaN det=0 rx=216 | wind=ok age=0.45s sp=2.48 dir=-132.3 rx=24 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=21.16s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.40 dir=-134.1 rx=25 | pose_age=1.30s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=22.24s err=NaN det=0 rx=216 | wind=ok age=1.07s sp=2.09 dir=-132.8 rx=25 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=23.30s err=NaN det=0 rx=216 | wind=ok age=2.14s sp=1.69 dir=-126.0 rx=25 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=24.39s err=NaN det=0 rx=216 | wind=ok age=0.65s sp=1.91 dir=-121.9 rx=26 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=25.45s err=NaN det=0 rx=216 | wind=ok age=1.71s sp=2.30 dir=-119.7 rx=26 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=26.63s err=NaN det=0 rx=216 | wind=ok age=0.67s sp=2.41 dir=-118.9 rx=27 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=27.85s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.00 dir=-125.6 rx=29 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=28.92s err=NaN det=0 rx=216 | wind=ok age=0.40s sp=1.62 dir=-127.3 rx=30 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=30.00s err=NaN det=0 rx=216 | wind=ok age=0.53s sp=2.13 dir=-128.1 rx=31 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=31.10s err=NaN det=0 rx=216 | wind=ok age=1.62s sp=2.34 dir=-132.8 rx=31 | pose_age=0.13s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=32.17s err=NaN det=0 rx=216 | wind=ok age=2.70s sp=2.41 dir=-134.8 rx=31 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=33.23s err=NaN det=0 rx=216 | wind=ok age=3.75s sp=2.02 dir=-130.4 rx=31 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=34.29s err=NaN det=0 rx=216 | wind=ok age=0.38s sp=1.62 dir=-128.2 rx=32 | pose_age=0.27s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=35.33s err=NaN det=0 rx=216 | wind=ok age=0.71s sp=2.02 dir=-127.3 rx=34 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=36.41s err=NaN det=0 rx=216 | wind=ok age=0.96s sp=2.50 dir=-120.6 rx=35 | pose_age=0.10s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=37.49s err=NaN det=0 rx=216 | wind=ok age=0.98s sp=2.76 dir=-116.2 rx=36 | pose_age=0.40s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=38.50s err=NaN det=0 rx=216 | wind=ok age=1.99s sp=2.02 dir=-120.3 rx=36 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=39.55s err=NaN det=0 rx=216 | wind=ok age=3.04s sp=1.46 dir=-124.9 rx=36 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=40.59s err=NaN det=0 rx=216 | wind=ok age=4.07s sp=1.79 dir=-133.4 rx=36 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=42.30s err=NaN det=0 rx=216 | wind=ok age=1.04s sp=2.35 dir=-137.1 rx=37 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=43.35s err=NaN det=0 rx=216 | wind=ok age=2.09s sp=2.37 dir=-135.6 rx=37 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=44.48s err=NaN det=0 rx=216 | wind=ok age=3.22s sp=1.94 dir=-129.8 rx=37 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=45.70s err=NaN det=0 rx=216 | wind=ok age=4.44s sp=1.42 dir=-128.9 rx=37 | pose_age=0.23s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=46.83s err=NaN det=0 rx=216 | wind=ok age=5.57s sp=1.71 dir=-124.4 rx=37 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=48.53s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.44 dir=-128.7 rx=40 | pose_age=0.74s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=49.72s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.14 dir=-124.0 rx=42 | pose_age=0.38s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=51.03s err=NaN det=0 rx=216 | wind=ok age=1.31s sp=1.63 dir=-127.9 rx=42 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=52.10s err=NaN det=0 rx=216 | wind=ok age=0.86s sp=1.92 dir=-132.9 rx=43 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=53.13s err=NaN det=0 rx=216 | wind=ok age=0.79s sp=2.50 dir=-135.7 rx=44 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=54.20s err=NaN det=0 rx=216 | wind=ok age=0.73s sp=2.32 dir=-139.6 rx=45 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=55.27s err=NaN det=0 rx=216 | wind=ok age=1.80s sp=2.12 dir=-132.2 rx=45 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=56.48s err=NaN det=0 rx=216 | wind=ok age=3.00s sp=1.57 dir=-131.7 rx=45 | pose_age=0.25s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=57.73s err=NaN det=0 rx=216 | wind=ok age=4.26s sp=1.62 dir=-124.1 rx=45 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=59.26s err=NaN det=0 rx=216 | wind=ok age=1.42s sp=2.42 dir=-123.4 rx=46 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=60.40s err=NaN det=0 rx=216 | wind=ok age=2.56s sp=2.44 dir=-120.0 rx=46 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=61.48s err=NaN det=0 rx=216 | wind=ok age=3.64s sp=1.83 dir=-125.2 rx=46 | pose_age=0.58s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=62.51s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=1.43 dir=-130.8 rx=47 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=63.56s err=NaN det=0 rx=216 | wind=ok age=1.04s sp=2.19 dir=-135.5 rx=47 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=64.66s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.62 dir=-134.7 rx=48 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=66.40s err=NaN det=0 rx=216 | wind=ok age=0.91s sp=2.07 dir=-129.7 rx=50 | pose_age=0.91s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=67.62s err=NaN det=0 rx=216 | wind=ok age=2.12s sp=1.65 dir=-127.8 rx=50 | pose_age=2.12s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=68.80s err=NaN det=0 rx=216 | wind=ok age=0.78s sp=1.70 dir=-119.8 rx=52 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=70.18s err=NaN det=0 rx=216 | wind=ok age=1.20s sp=2.41 dir=-122.1 rx=53 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=71.25s err=NaN det=0 rx=216 | wind=ok age=2.27s sp=2.36 dir=-118.8 rx=53 | pose_age=0.10s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=72.32s err=NaN det=0 rx=216 | wind=ok age=0.58s sp=1.86 dir=-125.5 rx=54 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=73.59s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=1.53 dir=-130.4 rx=56 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=74.60s err=NaN det=0 rx=216 | wind=ok age=0.50s sp=1.68 dir=-132.5 rx=57 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=76.96s err=NaN det=0 rx=216 | wind=ok age=1.44s sp=2.22 dir=-130.6 rx=58 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=78.04s err=NaN det=0 rx=216 | wind=ok age=2.52s sp=2.02 dir=-129.9 rx=58 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=79.40s err=NaN det=0 rx=216 | wind=ok age=0.75s sp=1.49 dir=-122.3 rx=60 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=80.83s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.44 dir=-121.1 rx=61 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=82.13s err=NaN det=0 rx=216 | wind=ok age=0.00s sp=2.58 dir=-121.0 rx=63 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=83.33s err=NaN det=0 rx=216 | wind=ok age=0.72s sp=2.21 dir=-124.3 rx=64 | pose_age=0.00s
+[AUTOSIM] s001 landing lock fallback captured at (x=0.14, y=0.01)
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.218 det=1 rx=242 | wind=ok age=0.00s sp=1.52 dir=-123.5 rx=65 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.203 det=1 rx=271 | wind=ok age=0.26s sp=1.74 dir=-134.1 rx=66 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=1.12s err=NaN det=0 rx=271 | wind=ok age=1.37s sp=2.28 dir=-135.5 rx=66 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=2.35s err=NaN det=0 rx=271 | wind=ok age=2.61s sp=2.37 dir=-135.2 rx=66 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=3.56s err=NaN det=0 rx=271 | wind=ok age=0.89s sp=1.78 dir=-131.0 rx=68 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=4.85s err=NaN det=0 rx=271 | wind=ok age=0.31s sp=1.55 dir=-124.3 rx=69 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=5.85s err=NaN det=0 rx=271 | wind=ok age=1.32s sp=2.16 dir=-120.3 rx=69 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=6.86s err=NaN det=0 rx=271 | wind=ok age=0.27s sp=2.29 dir=-121.1 rx=70 | pose_age=0.27s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=7.94s err=NaN det=0 rx=271 | wind=ok age=0.68s sp=2.19 dir=-122.2 rx=71 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=9.07s err=NaN det=0 rx=271 | wind=ok age=0.63s sp=1.70 dir=-124.8 rx=72 | pose_age=0.18s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=10.74s err=NaN det=0 rx=271 | wind=ok age=0.00s sp=1.99 dir=-126.2 rx=75 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=11.81s err=NaN det=0 rx=271 | wind=ok age=1.07s sp=2.46 dir=-135.4 rx=75 | pose_age=0.16s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=12.95s err=NaN det=0 rx=271 | wind=ok age=2.21s sp=2.48 dir=-134.2 rx=75 | pose_age=0.24s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.133 det=1 rx=272 | wind=ok age=0.96s sp=2.06 dir=-131.8 rx=76 | pose_age=0.53s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=1.31s err=NaN det=0 rx=272 | wind=ok age=0.80s sp=1.70 dir=-125.4 rx=77 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.112 det=1 rx=290 | wind=ok age=0.15s sp=1.49 dir=-121.7 rx=79 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=1.04s err=NaN det=0 rx=290 | wind=ok age=0.65s sp=2.59 dir=-120.5 rx=80 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.73s err=NaN det=0 rx=291 | wind=ok age=1.68s sp=2.55 dir=-115.1 rx=80 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=1.78s err=NaN det=0 rx=291 | wind=ok age=0.26s sp=1.96 dir=-122.0 rx=81 | pose_age=0.26s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=2.81s err=NaN det=0 rx=291 | wind=ok age=0.59s sp=1.81 dir=-124.5 rx=82 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=3.96s err=NaN det=0 rx=291 | wind=ok age=1.74s sp=1.74 dir=-131.8 rx=82 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=5.07s err=NaN det=0 rx=291 | wind=ok age=0.68s sp=2.06 dir=-139.2 rx=83 | pose_age=0.00s
+[AUTOSIM] s001 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=6.12s err=NaN det=0 rx=291 | wind=ok age=1.72s sp=2.60 dir=-138.5 rx=83 | pose_age=0.00s
+[Warning: [AUTOSIM] Scenario 1 exception: Arrays have incompatible sizes for
+this operation.] 
+[> In AutoSim (line 163)
+In run (line 112)] 
+[Warning: [AUTOSIM] Checkpoint save failed: Cannot create
+'autosim_checkpoint_latest.mat' because
+'/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260321_204803' does
+not exist.] 
+[> In autosimSaveCheckpoint (line 26)
+In AutoSim (line 180)
+In run (line 112)] 
+[AUTOSIM] Stats 1/300: stable=0 (0.0%), unstable=1 (100.0%)
+[AUTOSIM] Model update skipped (learning_disabled): n=1, stable=0, unstable=0
+
+[AUTOSIM] Scenario 2/300
+[AUTOSIM] Adaptive policy=exploit | stable=0.00 unstable=1.00 boundary=0.00 unsafeRate=0.00
+[AUTOSIM] Curriculum target_case=unsafe_hover_timeout | wind=2.43@-126.1
+[AUTOSIM] Scenario 2 pre-reset landing confirmed.
+[AUTOSIM] s002 soft reset: calling /reset_world ...
+[AUTOSIM] s002 soft reset succeeded via /reset_world

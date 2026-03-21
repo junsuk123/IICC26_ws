@@ -1,4 +1,4 @@
-function [pidX, pidY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount] = autosimRunFastTagControlBurst(cfg, rosCtx, pubCmd, msgCmd, t0, burstStartT, burstDurationSec, xNow, yNow, pidX, pidY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount, randomLandingPlanned, randomLandingStartT, randomLandingEndT, randomBiasX, randomBiasY, usePadGlobalFallback, padGlobalValid, padGlobalX, padGlobalY)
+function [pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount] = autosimRunFastTagControlBurst(cfg, rosCtx, pubCmd, msgCmd, t0, burstStartT, burstDurationSec, xNow, yNow, pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount, randomLandingPlanned, randomLandingStartT, randomLandingEndT, randomBiasX, randomBiasY, usePadGlobalFallback, padGlobalValid, padGlobalX, padGlobalY)
     if ~(isfield(cfg.control, 'tag_fast_loop_enable') && cfg.control.tag_fast_loop_enable)
         return;
     end
@@ -57,8 +57,10 @@ function [pidX, pidY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, h
             pidX = autosimPidInit();
             pidY = autosimPidInit();
             tagLostSearchStartT = nan;
-            [cmdX, cmdY] = autosimComputePoseHoldToTarget(cfg, xNow, yNow, padGlobalX, padGlobalY);
+            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, fastDt, xNow, yNow, padGlobalX, padGlobalY, pidPoseX, pidPoseY);
         else
+            pidPoseX = autosimPidInit();
+            pidPoseY = autosimPidInit();
             [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
                 cfg, tkFast, fastDt, xNow, yNow, false, nan, nan, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
         end

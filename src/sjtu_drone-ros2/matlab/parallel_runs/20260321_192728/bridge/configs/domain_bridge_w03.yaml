@@ -1,0 +1,19 @@
+name: autosim_bridge_w03
+from_domain: 62
+to_domain: 90
+topics:
+  /drone_w03/state:
+    type: std_msgs/msg/Int8
+    remap: /observe/w03/state
+  /drone_w03/gt_pose:
+    type: geometry_msgs/msg/Pose
+    remap: /observe/w03/gt_pose
+  /drone_w03/imu:
+    type: sensor_msgs/msg/Imu
+    remap: /observe/w03/imu
+  /drone_w03/landing_tag_state:
+    type: std_msgs/msg/Float32MultiArray
+    remap: /observe/w03/landing_tag_state
+  /wind_condition:
+    type: std_msgs/msg/Float32MultiArray
+    remap: /observe/w03/wind_condition

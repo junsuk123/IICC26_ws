@@ -89,3 +89,21 @@ for tbl in "${PID_TABLES[@]}"; do
     fi
   done
 done
+
+# Phase 2: Kill stray ROS visualization and simulation processes
+echo "[AUTOSIM] Cleaning up RViz, Gazebo, and domain_bridge processes..."
+pkill -f "rviz2" 2>/dev/null || true
+pkill -f "gzserver" 2>/dev/null || true
+pkill -f "gzclient" 2>/dev/null || true
+pkill -f "domain_bridge" 2>/dev/null || true
+pkill -f "robot_state_publisher.*drone" 2>/dev/null || true
+
+# Phase 3: Kill processes by domain ID environment variable
+echo "[AUTOSIM] Cleaning up processes by ROS_DOMAIN_ID..."
+for domain_id in 60 61 62 63 90; do
+  pkill -f "ROS_DOMAIN_ID=$domain_id" 2>/dev/null || true
+done
+
+# Phase 4: Clean up zombies with a short delay
+sleep 1
+echo "[AUTOSIM] Cleanup complete."

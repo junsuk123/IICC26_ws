@@ -1,0 +1,5 @@
+pid	worker_id	from_domain	to_domain	config_file	log_file
+145052	1	60	90	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/configs/domain_bridge_w01.yaml	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/logs/domain_bridge_w01.log
+145056	2	61	90	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/configs/domain_bridge_w02.yaml	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/logs/domain_bridge_w02.log
+145059	3	62	90	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/configs/domain_bridge_w03.yaml	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/logs/domain_bridge_w03.log
+145063	4	63	90	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/configs/domain_bridge_w04.yaml	/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/20260321_192728/bridge/logs/domain_bridge_w04.log

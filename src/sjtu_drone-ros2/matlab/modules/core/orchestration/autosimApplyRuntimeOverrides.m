@@ -33,6 +33,11 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
         cfg.scenario.count = max(1, round(autosimEnvNumber('AUTOSIM_SCENARIO_COUNT', cfg.scenario.count)));
     end
 
+    disableIncrementalTrain = autosimEnvBool('AUTOSIM_DISABLE_INCREMENTAL_TRAIN', false);
+    if disableIncrementalTrain && isfield(cfg, 'learning') && isstruct(cfg.learning)
+        cfg.learning.enable = false;
+    end
+
     outputRootEnv = strtrim(string(getenv('AUTOSIM_OUTPUT_ROOT')));
     if strlength(outputRootEnv) > 0
         outputRoot = char(outputRootEnv);
@@ -116,6 +121,7 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     info.worker_count = workerCount;
     info.domain_id = domainId;
     info.gazebo_port = gazeboPort;
+    info.disable_incremental_train = disableIncrementalTrain;
 end
 
 function n = autosimEnvNumber(name, defaultVal)

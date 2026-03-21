@@ -16,9 +16,9 @@
 import os
 import yaml
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -50,6 +50,9 @@ def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
     robot_desc = robot_description_config.toxml()
 
     model_ns = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
+    
+    # Get absolute path to spawn_drone executable
+    spawn_drone_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'spawn_drone')
 
     return [
         Node(
@@ -68,10 +71,8 @@ def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
             namespace=model_ns,
             output='screen',
         ),
-        Node(
-            package="sjtu_drone_bringup",
-            executable="spawn_drone",
-            arguments=[robot_desc, model_ns],
+        ExecuteProcess(
+            cmd=[spawn_drone_exe, robot_desc, model_ns],
             output="screen"
         ),
         Node(

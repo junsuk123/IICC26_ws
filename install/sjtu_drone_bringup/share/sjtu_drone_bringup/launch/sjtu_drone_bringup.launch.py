@@ -58,13 +58,39 @@ def get_teleop_controller(context, *_, **__) -> Node:
     return [node]
 
 def rviz_node_generator(context, rviz_path):
-    """Return a Node action for RViz, omitting --fixed-frame if empty."""
+    """Return a Node action for RViz with namespace-aware AprilTag image topic."""
     if LaunchConfiguration('use_rviz').perform(context) != 'true':
         return []
 
+    drone_ns = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
     fixed_frame_value = LaunchConfiguration('fixed_frame').perform(context)
 
-    rviz_arguments = ['-d', rviz_path]
+    # Create a temporary RViz config with namespace-specific AprilTag image topic
+    import tempfile
+    import shutil
+    
+    try:
+        # Read the base RViz config
+        with open(rviz_path, 'r') as f:
+            rviz_config = f.read()
+        
+        # Replace the AprilTag topic with namespace-specific one
+        apriltag_image_topic = f'{drone_ns}/landing_tag_state_image'
+        rviz_config = rviz_config.replace(
+            'Value: /drone/landing_tag_state_image',
+            f'Value: {apriltag_image_topic}'
+        )
+        
+        # Write to a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.rviz', delete=False) as tmp:
+            tmp.write(rviz_config)
+            temp_rviz_path = tmp.name
+    except Exception as e:
+        print(f"[bringup] Failed to create namespace-aware RViz config: {e}")
+        print(f"[bringup] Using default RViz config at {rviz_path}")
+        temp_rviz_path = rviz_path
+
+    rviz_arguments = ['-d', temp_rviz_path]
 
     if fixed_frame_value:
         rviz_arguments.extend(['--fixed-frame', fixed_frame_value])
@@ -121,8 +147,11 @@ def get_apriltag_nodes(context, *_, **__):
                 '--ros-args',
                 '-p', f'input_topic:={tags_full_topic}',
                 '-p', f'output_topic:={bridge_topic}',
+                '-p', f'output_image_topic:={bridge_topic}_image',
+                '-p', f'image_topic:={image_full_topic}',
                 '-p', f'target_id:={bridge_target_id}',
                 '-p', f'use_target_id:={bridge_use_target_id}',
+                '-p', 'publish_annotated_image:=true',
             ],
             output='screen',
             condition=IfCondition(LaunchConfiguration("use_apriltag")),

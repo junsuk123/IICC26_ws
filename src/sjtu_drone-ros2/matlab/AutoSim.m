@@ -72,7 +72,7 @@ end
 fprintf('\n[AUTOSIM] Start at %s\n', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
 fprintf('[AUTOSIM] Scenario count: %d\n', cfg.scenario.count);
 
-results = repmat(autosimEmptyScenarioResult(), 0, 1);
+results = {};  % Use cell array to avoid struct array concatenation issues
 runStatus = "completed";
 runError = [];
 rosCtx = [];
@@ -99,7 +99,8 @@ try
 
         fprintf('\n[AUTOSIM] Scenario %d/%d\n', scenarioId, cfg.scenario.count);
 
-        datasetState = autosimAnalyzeDatasetState(cfg, results, traceStore, learningHistory);
+        resultsStruct = autosimCellToStructArray(results);
+        datasetState = autosimAnalyzeDatasetState(cfg, resultsStruct, traceStore, learningHistory);
         scenarioPolicy = autosimChooseScenarioPolicy(cfg, datasetState, scenarioId);
         scenarioCfg = autosimBuildAdaptiveScenarioConfig(cfg, scenarioId, scenarioPolicy, datasetState);
 
@@ -162,20 +163,22 @@ try
             warning('[AUTOSIM] Scenario %d exception: %s', scenarioId, ME.message);
         end
 
-        results(end+1,1) = scenarioResult; %#ok<SAGROW>
+        results{end+1, 1} = scenarioResult;  % Use cell array for compatibility
         traceStore = [traceStore; scenarioTrace]; %#ok<AGROW>
 
         if autosimPipelineTrainEnabled(cfg)
-            [model, learnInfo] = autosimIncrementalTrainAndSave(cfg, results, model, scenarioId);
+            resultsStruct = autosimCellToStructArray(results);
+            [model, learnInfo] = autosimIncrementalTrainAndSave(cfg, resultsStruct, model, scenarioId);
         else
             learnInfo = autosimLearningDisabledInfo(scenarioId);
         end
         learningHistory = [learningHistory; struct2table(learnInfo)]; %#ok<AGROW>
 
-        plotState = autosimUpdatePlots(plotState, results, learningHistory);
+        resultsStruct = autosimCellToStructArray(results);
+        plotState = autosimUpdatePlots(plotState, resultsStruct, learningHistory);
 
-        autosimSaveCheckpoint(cfg, results, traceStore, learningHistory, model, runStatus, "scenario_end");
-        autosimPrintStats(results, scenarioId, cfg.scenario.count, learnInfo);
+        autosimSaveCheckpoint(cfg, resultsStruct, traceStore, learningHistory, model, runStatus, "scenario_end");
+        autosimPrintStats(resultsStruct, scenarioId, cfg.scenario.count, learnInfo);
 
         if cfg.process.stop_after_each_scenario && (~isfield(cfg.process, 'reuse_simulation_with_reset') || ~cfg.process.reuse_simulation_with_reset)
             autosimCleanupProcesses(cfg, launchInfo.pid);
@@ -208,7 +211,8 @@ autosimCleanupProcesses(cfg);
 pause(cfg.process.kill_settle_sec);
 autosimReleaseRosContext(rosCtx);
 
-finalInfo = autosimFinalize(cfg, results, traceStore, learningHistory, model, plotState, runStatus);
+resultsStruct = autosimCellToStructArray(results);
+finalInfo = autosimFinalize(cfg, resultsStruct, traceStore, learningHistory, model, plotState, runStatus);
 
 if finalInfo.hasValidLabel
     fprintf('[AUTOSIM] Final stable ratio: %.1f%% (%d/%d)\n', ...

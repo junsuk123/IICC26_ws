@@ -274,3 +274,15 @@ Current directory: "/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab"
 [AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=137.81s err=NaN det=0 rx=885 | wind=ok age=1.84s sp=1.55 dir=-129.4 rx=91 | pose_age=0.20s
 [AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=139.50s err=NaN det=0 rx=885 | wind=ok age=0.00s sp=2.28 dir=-134.5 rx=96 | pose_age=0.00s
 [AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=140.55s err=NaN det=0 rx=885 | wind=ok age=0.00s sp=3.00 dir=-137.4 rx=97 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=141.69s err=NaN det=0 rx=885 | wind=ok age=1.14s sp=2.51 dir=-140.2 rx=97 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=142.98s err=NaN det=0 rx=885 | wind=ok age=2.44s sp=1.73 dir=-126.4 rx=97 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=144.06s err=NaN det=0 rx=885 | wind=ok age=3.51s sp=1.76 dir=-122.8 rx=97 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=145.22s err=NaN det=0 rx=885 | wind=ok age=0.72s sp=3.00 dir=-112.7 rx=100 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=146.32s err=NaN det=0 rx=885 | wind=ok age=0.13s sp=3.00 dir=-108.8 rx=101 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=147.32s err=NaN det=0 rx=885 | wind=ok age=0.41s sp=2.37 dir=-112.9 rx=103 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=148.44s err=NaN det=0 rx=885 | wind=ok age=0.89s sp=1.52 dir=-122.4 rx=104 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=0.00s err=0.273 det=1 rx=898 | wind=ok age=2.85s sp=2.71 dir=-138.3 rx=104 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=1.30s err=NaN det=0 rx=898 | wind=ok age=0.00s sp=3.00 dir=-137.1 rx=105 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=2.31s err=NaN det=0 rx=898 | wind=ok age=1.00s sp=2.52 dir=-135.8 rx=105 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=3.41s err=NaN det=0 rx=898 | wind=ok age=2.10s sp=2.01 dir=-127.0 rx=105 | pose_age=0.00s
+[AUTOSIM] s002 sensor_rx | loop=10.0Hz target=10.0Hz | pad=ok age=5.15s err=NaN det=0 rx=898 | wind=ok age=3.85s sp=2.50 dir=-117.5 rx=105 | pose_age=0.00s

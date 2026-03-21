@@ -7,6 +7,7 @@ from rclpy.node import Node
 
 from apriltag_msgs.msg import AprilTagDetectionArray
 from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Int8
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -24,30 +25,83 @@ class AprilTagStateBridge(Node):
         self.declare_parameter('target_id', 0)
         self.declare_parameter('use_target_id', True)
         self.declare_parameter('publish_annotated_image', True)
+        self.declare_parameter('state_topic', '/drone/state')
+        self.declare_parameter('monitor_log_period_sec', 2.0)
 
         input_topic = self.get_parameter('input_topic').get_parameter_value().string_value
         output_topic = self.get_parameter('output_topic').get_parameter_value().string_value
         output_image_topic = self.get_parameter('output_image_topic').get_parameter_value().string_value
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
+        state_topic = self.get_parameter('state_topic').get_parameter_value().string_value
         self.target_id = int(self.get_parameter('target_id').value)
         self.use_target_id = bool(self.get_parameter('use_target_id').value)
         self.publish_annotated_image = bool(self.get_parameter('publish_annotated_image').value)
+        monitor_log_period_sec = float(self.get_parameter('monitor_log_period_sec').value)
+        monitor_log_period_sec = max(0.5, monitor_log_period_sec)
+
+        self.ns_hint = self._infer_namespace(output_topic)
+        self.last_state = -1
+        self.tag_msg_count = 0
+        self.tag_detect_count = 0
+        self.state_msg_count = 0
+        self.state_msg_count_since_log = 0
+        self.tag_msg_count_since_log = 0
+        self.tag_detect_count_since_log = 0
+        self.last_log_time_ns = self.get_clock().now().nanoseconds
 
         self.pub = self.create_publisher(Float32MultiArray, output_topic, 10)
         if self.publish_annotated_image:
             self.image_pub = self.create_publisher(Image, output_image_topic, 10)
         
         self.sub = self.create_subscription(AprilTagDetectionArray, input_topic, self.cb, 10)
+        self.state_sub = self.create_subscription(Int8, state_topic, self.state_cb, 10)
         if self.publish_annotated_image:
             self.image_sub = self.create_subscription(Image, image_topic, self.image_cb, 10)
             self.latest_image = None
             self.bridge = CvBridge()
+
+        self.monitor_timer = self.create_timer(monitor_log_period_sec, self.monitor_cb)
 
         self.get_logger().info(
             f'AprilTag bridge started: {input_topic} -> {output_topic}, '
             f'use_target_id={self.use_target_id}, target_id={self.target_id}, '
             f'annotated_image={self.publish_annotated_image}'
         )
+
+    @staticmethod
+    def _infer_namespace(topic_name: str) -> str:
+        t = (topic_name or '').strip()
+        if not t.startswith('/'):
+            t = '/' + t
+        parts = [p for p in t.split('/') if p]
+        if len(parts) >= 1:
+            return '/' + parts[0]
+        return '/drone'
+
+    def state_cb(self, msg: Int8):
+        self.last_state = int(msg.data)
+        self.state_msg_count += 1
+        self.state_msg_count_since_log += 1
+
+    def monitor_cb(self):
+        now_ns = self.get_clock().now().nanoseconds
+        dt = max(1e-6, (now_ns - self.last_log_time_ns) / 1e9)
+        tag_hz = self.tag_msg_count_since_log / dt
+        state_hz = self.state_msg_count_since_log / dt
+        if self.tag_msg_count_since_log > 0:
+            detect_rate = self.tag_detect_count_since_log / self.tag_msg_count_since_log
+        else:
+            detect_rate = 0.0
+
+        self.get_logger().info(
+            f'[MULTI_MON] ns={self.ns_hint} state={self.last_state} '
+            f'state_hz={state_hz:.2f} tag_detect_rate={detect_rate:.3f} tag_hz={tag_hz:.2f}'
+        )
+
+        self.tag_msg_count_since_log = 0
+        self.tag_detect_count_since_log = 0
+        self.state_msg_count_since_log = 0
+        self.last_log_time_ns = now_ns
 
     def image_cb(self, msg: Image):
         """Store latest camera image"""
@@ -58,6 +112,8 @@ class AprilTagStateBridge(Node):
                 self.get_logger().warn(f'Failed to convert image: {str(e)}')
 
     def cb(self, msg: AprilTagDetectionArray):
+        self.tag_msg_count += 1
+        self.tag_msg_count_since_log += 1
         det = self._select_detection(msg)
 
         out = Float32MultiArray()
@@ -66,6 +122,8 @@ class AprilTagStateBridge(Node):
         data = [0.0, -1.0, math.nan, math.nan, math.nan, math.nan, float(len(msg.detections))]
 
         if det is not None:
+            self.tag_detect_count += 1
+            self.tag_detect_count_since_log += 1
             center_x, center_y = self._center(det)
             area = self._area(det)
             margin = float(getattr(det, 'decision_margin', math.nan))

@@ -15,8 +15,10 @@ MEM_RESERVE_GB="${MEM_RESERVE_GB:-4}"
 MEM_PER_WORKER_GB="${MEM_PER_WORKER_GB:-6}"
 AUTOSIM_ENABLE_GPU="${AUTOSIM_ENABLE_GPU:-auto}"
 WORKERS_PER_GPU="${WORKERS_PER_GPU:-1}"
+AUTOSIM_MAX_WORKERS="${AUTOSIM_MAX_WORKERS:-3}"
 AUTOSIM_ENABLE_PROGRESS_PLOT="${AUTOSIM_ENABLE_PROGRESS_PLOT:-false}"
 AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ="${AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ:-false}"
+AUTOSIM_ROS_LOCALHOST_ONLY="${AUTOSIM_ROS_LOCALHOST_ONLY:-0}"
 
 gpu_count=0
 if command -v nvidia-smi >/dev/null 2>&1; then
@@ -73,6 +75,12 @@ if [[ "$AUTOSIM_ENABLE_GPU" == "true" ]] && (( gpu_count > 0 )); then
 fi
 if (( auto_workers < 1 )); then auto_workers=1; fi
 
+if [[ "$AUTOSIM_MAX_WORKERS" =~ ^[0-9]+$ ]] && (( AUTOSIM_MAX_WORKERS >= 1 )); then
+  if (( auto_workers > AUTOSIM_MAX_WORKERS )); then
+    auto_workers="$AUTOSIM_MAX_WORKERS"
+  fi
+fi
+
 if [[ "$WORKERS_ARG" == "auto" ]]; then
   WORKERS="$auto_workers"
 else
@@ -82,6 +90,11 @@ fi
 if ! [[ "$WORKERS" =~ ^[0-9]+$ ]] || (( WORKERS < 1 )); then
   echo "[AUTOSIM] Invalid worker count: $WORKERS"
   exit 1
+fi
+
+if [[ "$AUTOSIM_MAX_WORKERS" =~ ^[0-9]+$ ]] && (( AUTOSIM_MAX_WORKERS >= 1 )) && (( WORKERS > AUTOSIM_MAX_WORKERS )); then
+  echo "[AUTOSIM] Requested workers=$WORKERS exceeds AUTOSIM_MAX_WORKERS=$AUTOSIM_MAX_WORKERS. Clamping."
+  WORKERS="$AUTOSIM_MAX_WORKERS"
 fi
 
 timestamp="$(date +%Y%m%d_%H%M%S)"
@@ -101,6 +114,7 @@ cpu_limit=$cpu_limit
 mem_avail_gb=$mem_avail_gb
 mem_limit=$mem_limit
 auto_workers=$auto_workers
+max_workers=$AUTOSIM_MAX_WORKERS
 domain_base=$DOMAIN_BASE
 gazebo_port_base=$GAZEBO_PORT_BASE
 EOF
@@ -138,6 +152,7 @@ for ((i=1; i<=WORKERS; i++)); do
     export AUTOSIM_GAZEBO_PORT="$gazebo_port"
     # Keep MATLAB ROS nodes and launched ROS/Gazebo nodes in the same worker domain.
     export ROS_DOMAIN_ID="$domain_id"
+    export ROS_LOCALHOST_ONLY="$AUTOSIM_ROS_LOCALHOST_ONLY"
     export GAZEBO_MASTER_URI="http://127.0.0.1:$gazebo_port"
     export GAZEBO_IP="127.0.0.1"
     export AUTOSIM_OUTPUT_ROOT="$OUTPUT_ROOT"

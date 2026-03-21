@@ -8,7 +8,7 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
 
     sessionRoot = char(sessionRoot);
     fig = figure('Name', 'AutoSim Parallel Monitor', 'NumberTitle', 'off');
-    tl = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+    tl = tiledlayout(fig, 3, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax1 = nexttile(tl, 1);
     title(ax1, 'Per-worker Scenario Progress And Unsafe Rate');
@@ -34,6 +34,21 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
     title(ax4, 'Per-worker Learning Progress');
     ylabel(ax4, 'sample count');
     grid(ax4, 'on');
+
+    ax5 = nexttile(tl, 5);
+    title(ax5, 'Multi-Drone State And Tag Detection Rate');
+    ylabel(ax5, 'tag detect rate');
+    ylim(ax5, [0 1]);
+    grid(ax5, 'on');
+
+    ax6 = nexttile(tl, 6);
+    axis(ax6, 'off');
+    text(ax6, 0.01, 0.90, 'Multi-drone monitor is active when [MULTI_MON] logs are available.', ...
+        'Units', 'normalized', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', 'FontSize', 9);
+    text(ax6, 0.01, 0.78, 'Legend:', ...
+        'Units', 'normalized', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', 'FontSize', 9, 'FontWeight', 'bold');
+    text(ax6, 0.01, 0.67, 'bar = tag detect rate, line = latest /state value', ...
+        'Units', 'normalized', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top', 'FontSize', 9);
 
     t0 = tic;
     pidTablePath = fullfile(sessionRoot, 'workers.tsv');
@@ -134,12 +149,16 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
 
         cla(ax3);
         if ~isempty(simStats.workerIds)
-            mixData = [simStats.policyExploit, simStats.policyBoundary, simStats.policyHardNeg];
-            bar(ax3, mixData, 'stacked');
+            mixData = [simStats.policyExploit(:), simStats.policyBoundary(:), simStats.policyHardNeg(:)];
+            hMix = bar(ax3, mixData, 'stacked');
             ylim(ax3, [0 1]);
             xticks(ax3, 1:numel(simStats.workerIds));
             xticklabels(ax3, arrayfun(@(x) sprintf('w%02d', x), simStats.workerIds, 'UniformOutput', false));
-            legend(ax3, {'exploit', 'boundary', 'hard_negative'}, 'Location', 'best');
+            mixLabels = {'exploit', 'boundary', 'hard_negative'};
+            nLegend = min(numel(hMix), numel(mixLabels));
+            if nLegend > 0
+                legend(ax3, hMix(1:nLegend), mixLabels(1:nLegend), 'Location', 'best');
+            end
         end
         grid(ax3, 'on');
 
@@ -159,6 +178,29 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             legend(ax4, {'learning n', 'stable ratio'}, 'Location', 'best');
         end
         grid(ax4, 'on');
+
+        multiStats = autosimMonitorReadMultiDroneStats(sessionRoot);
+        cla(ax5);
+        if ~isempty(multiStats.namespaces)
+            yyaxis(ax5, 'left');
+            bar(ax5, multiStats.tagDetectRate, 0.55, 'FaceColor', [0.20 0.58 0.86]);
+            ylabel(ax5, 'tag detect rate');
+            ylim(ax5, [0 1]);
+
+            yyaxis(ax5, 'right');
+            plot(ax5, 1:numel(multiStats.namespaces), multiStats.stateValue, 'o-', 'Color', [0.86 0.33 0.20], 'LineWidth', 1.4);
+            ylabel(ax5, 'latest state');
+
+            xticks(ax5, 1:numel(multiStats.namespaces));
+            xticklabels(ax5, multiStats.namespaces);
+            xtickangle(ax5, 20);
+            legend(ax5, {'tag detect rate', 'state'}, 'Location', 'best');
+        else
+            text(ax5, 0.5, 0.5, 'No multi-drone telemetry yet', ...
+                'Units', 'normalized', 'HorizontalAlignment', 'center');
+            ylim(ax5, [0 1]);
+        end
+        grid(ax5, 'on');
 
         drawnow limitrate nocallbacks;
 
@@ -388,4 +430,70 @@ function [allExited, nAlive, totalWorkers] = autosimMonitorCheckWorkerExitStatus
     end
 
     allExited = (nAlive == 0);
+end
+
+function stats = autosimMonitorReadMultiDroneStats(sessionRoot)
+    stats = struct();
+    stats.namespaces = strings(0, 1);
+    stats.stateValue = [];
+    stats.tagDetectRate = [];
+    stats.stateHz = [];
+    stats.tagHz = [];
+
+    launchLogs = dir(fullfile(sessionRoot, 'output', 'logs', '**', 'autosim_launch_s*.log'));
+    if isempty(launchLogs)
+        return;
+    end
+
+    latestByPath = strings(0, 1);
+    for i = 1:numel(launchLogs)
+        latestByPath(end+1, 1) = string(fullfile(launchLogs(i).folder, launchLogs(i).name)); %#ok<AGROW>
+    end
+
+    nsMap = containers.Map('KeyType', 'char', 'ValueType', 'any');
+    pat = '\\[MULTI_MON\\]\\s+ns=([^\\s]+)\\s+state=([-+]?\\d+)\\s+state_hz=([0-9.]+)\\s+tag_detect_rate=([0-9.]+)\\s+tag_hz=([0-9.]+)';
+
+    for i = 1:numel(latestByPath)
+        txt = autosimMonitorReadLogTail(latestByPath(i), 250000);
+        if strlength(txt) == 0
+            continue;
+        end
+
+        tok = regexp(char(txt), pat, 'tokens');
+        if isempty(tok)
+            continue;
+        end
+
+        for j = 1:numel(tok)
+            t = tok{j};
+            key = char(string(t{1}));
+            row = struct();
+            row.stateValue = str2double(t{2});
+            row.stateHz = str2double(t{3});
+            row.tagDetectRate = str2double(t{4});
+            row.tagHz = str2double(t{5});
+            nsMap(key) = row;
+        end
+    end
+
+    if nsMap.Count == 0
+        return;
+    end
+
+    keysList = string(nsMap.keys);
+    keysList = sort(keysList);
+    n = numel(keysList);
+    stats.namespaces = keysList(:);
+    stats.stateValue = nan(n, 1);
+    stats.tagDetectRate = nan(n, 1);
+    stats.stateHz = nan(n, 1);
+    stats.tagHz = nan(n, 1);
+
+    for i = 1:n
+        row = nsMap(char(keysList(i)));
+        stats.stateValue(i, 1) = row.stateValue;
+        stats.tagDetectRate(i, 1) = row.tagDetectRate;
+        stats.stateHz(i, 1) = row.stateHz;
+        stats.tagHz(i, 1) = row.tagHz;
+    end
 end

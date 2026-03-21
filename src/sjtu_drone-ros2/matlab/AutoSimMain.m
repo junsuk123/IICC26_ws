@@ -1,7 +1,7 @@
 function AutoSimMain()
 % AutoSimMain
 % One-click parallel AutoSim runner for MATLAB Run button.
-% Launches 4-worker parallel simulation with real-time monitoring.
+% Launches single-worker simulation with real-time monitoring.
 clear; clc; close all
 thisDir = fileparts(mfilename('fullpath'));
 if isempty(thisDir)

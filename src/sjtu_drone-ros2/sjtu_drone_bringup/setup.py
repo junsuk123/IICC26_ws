@@ -46,6 +46,7 @@ setup(
     entry_points={
         'console_scripts': [
             'spawn_drone = sjtu_drone_bringup.spawn_drone:main',
+            'spawn_apriltag = sjtu_drone_bringup.spawn_apriltag:main',
             'apriltag_state_bridge = sjtu_drone_bringup.apriltag_state_bridge:main',
         ],
     },

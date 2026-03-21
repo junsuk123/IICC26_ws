@@ -170,6 +170,14 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     probeLandingReason = "none";
     probePolicySelected = isfield(scenarioCfg, 'probe_landing_selected') && logical(scenarioCfg.probe_landing_selected);
     requireLandingOutcomeEvaluation = false;
+    scenarioTimeoutHit = false;
+    scenarioTimeoutSec = autosimClampNaN(cfg.scenario.pre_landing_timeout_sec, nan);
+    if isfield(scenarioCfg, 'pre_landing_timeout_sec') && isfinite(scenarioCfg.pre_landing_timeout_sec)
+        scenarioTimeoutSec = max(0.0, scenarioCfg.pre_landing_timeout_sec);
+    end
+    if (~isfinite(scenarioTimeoutSec) || scenarioTimeoutSec <= 0) && isfield(cfg.scenario, 'duration_sec') && isfinite(cfg.scenario.duration_sec)
+        scenarioTimeoutSec = max(0.0, cfg.scenario.duration_sec);
+    end
     landedHoldStartT = nan;
     kLast = 0;
 
@@ -259,6 +267,17 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         tk = toc(t0);
         kLast = k;
         t(k) = tk;
+
+        if ~landingSent && isfinite(scenarioTimeoutSec) && (scenarioTimeoutSec > 0) && (tk >= scenarioTimeoutSec)
+            scenarioTimeoutHit = true;
+            landingDecisionMode = "HoldLanding";
+            executedAction = "HoldLanding";
+            actionSource = "scenario_timeout";
+            decisionTxt(k) = "abort_by_scenario_timeout";
+            lastDecisionT = tk;
+            fprintf('[AUTOSIM] s%03d pre-landing scenario timeout hit at t=%.1fs (limit=%.1fs).\n', scenarioId, tk, scenarioTimeoutSec);
+            break;
+        end
 
         if cfg.wind.enable && (tk - lastWindT) >= cfg.wind.update_period_sec
             [wsCmd, wdCmd] = autosimComputeWindCommand(cfg, scenarioCfg, tk, windArmed);
@@ -1567,6 +1586,11 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     end
     if isfield(scenarioCfg, 'target_case')
         res.target_case = string(scenarioCfg.target_case);
+    end
+    if scenarioTimeoutHit
+        res.label = "unstable";
+        res.success = false;
+        res.failure_reason = "scenario_timeout";
     end
     if stopRequested
         res.exception_message = string(stopReason);

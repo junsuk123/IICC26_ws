@@ -2,6 +2,17 @@ function autosimMainOrchestrate(matlabDir)
 % autosimMainOrchestrate
 % Parallel worker launch + monitor + final merged training orchestration.
 
+if nargin < 1 || strlength(string(matlabDir)) == 0
+    matlabDir = autosimMainResolveMatlabDir('');
+else
+    matlabDir = autosimMainResolveMatlabDir(matlabDir);
+end
+
+if strlength(string(matlabDir)) == 0
+    error('Could not resolve matlab root directory. Call autosimMainOrchestrate(''/path/to/.../matlab'') or run AutoSimMain.');
+end
+matlabDir = char(string(matlabDir));
+
 % FIRST: Clean up any lingering Gazebo processes to prevent port conflicts
 autosimCleanupGazebo();
 
@@ -18,10 +29,16 @@ autosimMainStopParallel(stopScript, '');
 
 envPrefix = sprintf(['SCENARIO_COUNT=%d DOMAIN_BASE=%d GAZEBO_PORT_BASE=%d ' ...
     'AUTOSIM_ENABLE_PROGRESS_PLOT=%s AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ=%s ' ...
-    'AUTOSIM_DISABLE_INCREMENTAL_TRAIN=%s'], ...
+    'AUTOSIM_DISABLE_INCREMENTAL_TRAIN=%s AUTOSIM_MULTI_DRONE_COUNT=%d ' ...
+    'AUTOSIM_MULTI_DRONE_SPACING_M=%.2f AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX=%s ' ...
+    'AUTOSIM_MULTI_DRONE_SPAWN_TAGS=%s AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST=%s ' ...
+    'AUTOSIM_PRIMARY_DRONE_INDEX=%d AUTOSIM_ROS_LOCALHOST_ONLY=%s'], ...
     cfg.scenarioCount, cfg.domainBase, cfg.gazeboPortBase, ...
     autosimMainBoolText(cfg.enableProgressPlot), autosimMainBoolText(cfg.enableScenarioLiveViz), ...
-    autosimMainBoolText(cfg.disableWorkerIncrementalTrain));
+    autosimMainBoolText(cfg.disableWorkerIncrementalTrain), cfg.multiDroneCount, cfg.multiDroneSpacingM, ...
+    cfg.multiDroneNamespacePrefix, autosimMainBoolText(cfg.multiDroneSpawnTags), ...
+    autosimMainBoolText(cfg.multiDroneUseWorldTagAsFirst), cfg.primaryDroneIndex, ...
+    autosimMainBoolText(cfg.rosLocalhostOnly));
 
 launchCmd = sprintf('cd "%s" && %s "%s" "%s"', matlabDir, envPrefix, runScript, cfg.workersArg);
 fprintf('[AUTOSIM MAIN] Launch command: %s\n', launchCmd);
@@ -43,17 +60,19 @@ fprintf('[AUTOSIM MAIN] Session root: %s\n', char(sessionRoot));
 tailCmd = sprintf('%s %s', fullfile(matlabDir, 'scripts', 'tail_autosim_parallel_logs.sh'), char(sessionRoot));
 fprintf('[AUTOSIM MAIN] Unified worker logs command: %s\n', tailCmd);
 
-% Launch domain bridge to unify ROS domains (worker.60,61,62,63 -> observe.90)
-bridgeScript = fullfile(matlabDir, 'scripts', 'run_autosim_domain_bridge.sh');
-if isfile(bridgeScript)
-    bridgeCmd = sprintf('(source /opt/ros/humble/setup.bash 2>/dev/null && OBSERVE_DOMAIN=90 "%s" "%s") >/dev/null 2>&1 &', bridgeScript, char(sessionRoot));
-    fprintf('[AUTOSIM MAIN] Starting domain bridge: %s\n', char(sessionRoot));
-    try
-        system(bridgeCmd);
-        pause(2); % Wait for bridge to initialize
-        fprintf('[AUTOSIM MAIN] Domain bridge started (pid monitoring in background)\n');
-    catch ME
-        warning('[AUTOSIM MAIN] Domain bridge startup warning: %s', ME.message);
+% Domain bridge is optional. In single-worker local-domain mode it is disabled by default.
+if cfg.enableDomainBridge
+    bridgeScript = fullfile(matlabDir, 'scripts', 'run_autosim_domain_bridge.sh');
+    if isfile(bridgeScript)
+        bridgeCmd = sprintf('(source /opt/ros/humble/setup.bash 2>/dev/null && OBSERVE_DOMAIN=90 "%s" "%s") >/dev/null 2>&1 &', bridgeScript, char(sessionRoot));
+        fprintf('[AUTOSIM MAIN] Starting domain bridge: %s\n', char(sessionRoot));
+        try
+            system(bridgeCmd);
+            pause(2); % Wait for bridge to initialize
+            fprintf('[AUTOSIM MAIN] Domain bridge started (pid monitoring in background)\n');
+        catch ME
+            warning('[AUTOSIM MAIN] Domain bridge startup warning: %s', ME.message);
+        end
     end
 end
 
@@ -84,12 +103,64 @@ end
 fprintf('[AUTOSIM MAIN] Exiting. Parallel workers will be stopped now.\n');
 end
 
+function matlabDir = autosimMainResolveMatlabDir(seedDir)
+matlabDir = "";
+requiredRel = {fullfile('scripts', 'run_autosim_parallel.sh'), fullfile('scripts', 'stop_autosim_parallel.sh')};
+
+candidates = strings(0, 1);
+if nargin >= 1 && strlength(string(seedDir)) > 0
+    candidates(end+1, 1) = string(seedDir); %#ok<AGROW>
+end
+candidates(end+1, 1) = string(pwd); %#ok<AGROW>
+candidates(end+1, 1) = string(fileparts(mfilename('fullpath'))); %#ok<AGROW>
+
+for i = 1:numel(candidates)
+    c = autosimMainSanitizePathCandidate(candidates(i));
+    if strlength(c) == 0
+        continue;
+    end
+
+    if isfile(char(c))
+        c = string(fileparts(char(c)));
+    end
+
+    d = c;
+    for depth = 1:10
+        if strlength(d) == 0 || strcmp(char(d), filesep)
+            break;
+        end
+        ok = true;
+        for k = 1:numel(requiredRel)
+            if ~isfile(fullfile(char(d), requiredRel{k}))
+                ok = false;
+                break;
+            end
+        end
+        if ok
+            matlabDir = d;
+            return;
+        end
+        parent = string(fileparts(char(d)));
+        if parent == d
+            break;
+        end
+        d = parent;
+    end
+end
+end
+
 function cfg = autosimMainBuildConfig()
 cfg = struct();
-cfg.workersArg = '4';
+cfg.workersArg = '1';
 cfg.scenarioCount = 300;
-cfg.domainBase = 60;
+cfg.domainBase = 0;
 cfg.gazeboPortBase = 13045;
+cfg.multiDroneCount = 3;
+cfg.multiDroneSpacingM = 3.0;
+cfg.multiDroneNamespacePrefix = 'drone_w';
+cfg.multiDroneSpawnTags = true;
+cfg.multiDroneUseWorldTagAsFirst = false;
+cfg.primaryDroneIndex = 1;
 cfg.enableProgressPlot = false;
 cfg.enableScenarioLiveViz = false;
 cfg.monitorPollSec = 2.0;
@@ -99,6 +170,8 @@ cfg.enableParallelMonitor = true;
 cfg.disableWorkerIncrementalTrain = true;
 cfg.trainMergedAtEnd = true;
 cfg.mergedTrainMinSamples = 20;
+cfg.rosLocalhostOnly = false;
+cfg.enableDomainBridge = false;
 
 workersEnv = strtrim(getenv('AUTOSIM_MAIN_WORKERS'));
 if ~isempty(workersEnv)
@@ -111,6 +184,40 @@ if ~isempty(scenarioEnv)
     if isfinite(scenarioN) && scenarioN >= 1
         cfg.scenarioCount = round(scenarioN);
     end
+end
+
+multiCountEnv = strtrim(getenv('AUTOSIM_MAIN_MULTI_DRONE_COUNT'));
+if ~isempty(multiCountEnv)
+    n = str2double(multiCountEnv);
+    if isfinite(n) && n >= 1
+        cfg.multiDroneCount = round(n);
+    end
+end
+
+multiSpacingEnv = strtrim(getenv('AUTOSIM_MAIN_MULTI_DRONE_SPACING_M'));
+if ~isempty(multiSpacingEnv)
+    s = str2double(multiSpacingEnv);
+    if isfinite(s) && s > 0
+        cfg.multiDroneSpacingM = s;
+    end
+end
+
+primaryIdxEnv = strtrim(getenv('AUTOSIM_MAIN_PRIMARY_DRONE_INDEX'));
+if ~isempty(primaryIdxEnv)
+    p = str2double(primaryIdxEnv);
+    if isfinite(p) && p >= 1
+        cfg.primaryDroneIndex = round(p);
+    end
+end
+
+localhostEnv = strtrim(lower(getenv('AUTOSIM_MAIN_ROS_LOCALHOST_ONLY')));
+if ~isempty(localhostEnv)
+    cfg.rosLocalhostOnly = any(strcmp(localhostEnv, {'1', 'true', 'yes', 'y', 'on'}));
+end
+
+bridgeEnv = strtrim(lower(getenv('AUTOSIM_MAIN_ENABLE_DOMAIN_BRIDGE')));
+if ~isempty(bridgeEnv)
+    cfg.enableDomainBridge = any(strcmp(bridgeEnv, {'1', 'true', 'yes', 'y', 'on'}));
 end
 end
 

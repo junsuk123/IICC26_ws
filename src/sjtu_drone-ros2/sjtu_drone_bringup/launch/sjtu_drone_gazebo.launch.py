@@ -14,11 +14,12 @@
 # limitations under the License.
 
 import os
+import math
 import yaml
 
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -33,6 +34,41 @@ def _normalize_namespace(ns: str) -> str:
     if not ns.startswith('/'):
         ns = '/' + ns
     return ns
+
+
+def _as_bool(text: str, default: bool = False) -> bool:
+    if text is None:
+        return default
+    return str(text).strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+
+
+def _namespace_from_prefix(prefix: str, index: int) -> str:
+    p = (prefix or 'drone_w').strip().strip('/')
+    if not p:
+        p = 'drone_w'
+    return f'/{p}{index:02d}'
+
+
+def _frame_ns(ns: str) -> str:
+    return (ns or '').strip().lstrip('/')
+
+
+def _linear_spawn_pose(index_zero_based: int, count: int, spacing_m: float):
+    if count <= 3:
+        cols = count
+    else:
+        cols = int(math.ceil(math.sqrt(float(count))))
+    rows = int(math.ceil(float(count) / float(cols)))
+
+    row = int(index_zero_based // cols)
+    col = int(index_zero_based % cols)
+
+    x_center = 0.5 * float(cols - 1)
+    y_center = 0.5 * float(rows - 1)
+    x = (float(col) - x_center) * spacing_m
+    y = (y_center - float(row)) * spacing_m
+    z = 0.05
+    return x, y, z
 
 
 def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
@@ -50,38 +86,92 @@ def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
     robot_desc = robot_description_config.toxml()
 
     model_ns = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
-    
-    # Get absolute path to spawn_drone executable
-    spawn_drone_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'spawn_drone')
 
-    return [
-        Node(
-            package="robot_state_publisher",
-            executable="robot_state_publisher",
-            name="robot_state_publisher",
-            namespace=model_ns,
-            output="screen",
-            parameters=[{"use_sim_time": use_sim_time, "robot_description": robot_desc, "frame_prefix": model_ns + "/"}],
-            arguments=[robot_desc]
-        ),
-        Node(
-            package='joint_state_publisher',
-            executable='joint_state_publisher',
-            name='joint_state_publisher',
-            namespace=model_ns,
-            output='screen',
-        ),
-        ExecuteProcess(
-            cmd=[spawn_drone_exe, robot_desc, model_ns],
-            output="screen"
-        ),
-        Node(
-            package="tf2_ros",
-            executable="static_transform_publisher",
-            arguments=["0", "0", "0", "0", "0", "0", "world", f"{model_ns}/odom"],
-            output="screen"
-        ),
-    ]
+    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
+    multi_drone_spacing_m = float(LaunchConfiguration('multi_drone_spacing_m').perform(context))
+    multi_drone_namespace_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
+    multi_drone_spawn_tags = _as_bool(LaunchConfiguration('multi_drone_spawn_tags').perform(context), True)
+    use_world_tag_as_first = _as_bool(LaunchConfiguration('multi_drone_use_world_tag_as_first').perform(context), True)
+
+    # Get absolute path to spawn executables
+    spawn_drone_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'spawn_drone')
+    spawn_tag_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'spawn_apriltag')
+
+    if multi_drone_count < 1:
+        multi_drone_count = 1
+
+    actions = []
+    for i in range(multi_drone_count):
+        idx = i + 1
+        ns = model_ns if multi_drone_count == 1 else _namespace_from_prefix(multi_drone_namespace_prefix, idx)
+        ns_frame = _frame_ns(ns)
+        x, y, z = _linear_spawn_pose(i, multi_drone_count, multi_drone_spacing_m)
+        entity_name = f'drone_{idx:02d}'
+
+        spawn_delay_sec = 1.5 * float(i)
+
+        actions.extend([
+            Node(
+                package='robot_state_publisher',
+                executable='robot_state_publisher',
+                name=f'robot_state_publisher_{idx:02d}',
+                namespace=ns,
+                output='screen',
+                parameters=[{'use_sim_time': use_sim_time, 'robot_description': robot_desc, 'frame_prefix': ns_frame + '/'}],
+                arguments=[robot_desc]
+            ),
+            Node(
+                package='joint_state_publisher',
+                executable='joint_state_publisher',
+                name=f'joint_state_publisher_{idx:02d}',
+                namespace=ns,
+                output='screen',
+            ),
+            TimerAction(
+                period=spawn_delay_sec,
+                actions=[
+                    ExecuteProcess(
+                        cmd=[spawn_drone_exe, robot_desc, ns, f'{x:.3f}', f'{y:.3f}', f'{z:.3f}', '0.0', entity_name],
+                        output='screen'
+                    )
+                ]
+            ),
+            Node(
+                package='tf2_ros',
+                executable='static_transform_publisher',
+                name=f'static_tf_{idx:02d}',
+                arguments=['0', '0', '0', '0', '0', '0', 'world', f'{ns_frame}/odom'],
+                output='screen'
+            ),
+        ])
+
+        if multi_drone_spawn_tags:
+            tag_name = f'apriltag_{idx:02d}'
+            pad_frame = f'{ns_frame}/landing_pad'
+            actions.append(
+                Node(
+                    package='tf2_ros',
+                    executable='static_transform_publisher',
+                    name=f'static_tf_pad_{idx:02d}',
+                    arguments=[f'{x:.3f}', f'{y:.3f}', '0.0', '0', '0', '0', 'world', pad_frame],
+                    output='screen'
+                )
+            )
+            if use_world_tag_as_first and idx == 1:
+                continue
+            actions.append(
+                TimerAction(
+                    period=spawn_delay_sec + 1.0,
+                    actions=[
+                        ExecuteProcess(
+                            cmd=[spawn_tag_exe, tag_name, f'{x:.3f}', f'{y:.3f}', '0.0', '0.0'],
+                            output='screen'
+                        )
+                    ]
+                )
+            )
+
+    return actions
 
 
 def generate_launch_description():
@@ -100,6 +190,33 @@ def generate_launch_description():
         "drone_namespace",
         default_value=default_ns,
         description="Drone ROS namespace (e.g. /drone, /drone_w01)",
+    )
+    multi_drone_count = DeclareLaunchArgument(
+        'multi_drone_count',
+        default_value='1',
+        description='Number of drones to spawn in one Gazebo world',
+    )
+    multi_drone_spacing_m = DeclareLaunchArgument(
+        'multi_drone_spacing_m',
+        default_value='3.0',
+        description='Spacing between spawned drones on X axis (m)',
+    )
+    multi_drone_namespace_prefix = DeclareLaunchArgument(
+        'multi_drone_namespace_prefix',
+        default_value='drone_w',
+        description='Namespace prefix used when multi_drone_count > 1',
+    )
+    multi_drone_spawn_tags = DeclareLaunchArgument(
+        'multi_drone_spawn_tags',
+        default_value='true',
+        choices=['true', 'false'],
+        description='Spawn one landing tag per drone',
+    )
+    multi_drone_use_world_tag_as_first = DeclareLaunchArgument(
+        'multi_drone_use_world_tag_as_first',
+        default_value='false',
+        choices=['true', 'false'],
+        description='Reuse world built-in tag as first drone tag',
     )
     use_gui = DeclareLaunchArgument("use_gui", default_value="true", choices=["true", "false"],
                                     description="Whether to execute gzclient")
@@ -147,6 +264,11 @@ def generate_launch_description():
         world,
         use_gui,
         drone_namespace,
+        multi_drone_count,
+        multi_drone_spacing_m,
+        multi_drone_namespace_prefix,
+        multi_drone_spawn_tags,
+        multi_drone_use_world_tag_as_first,
         takeoff_hover_height,
         takeoff_vertical_speed,
 

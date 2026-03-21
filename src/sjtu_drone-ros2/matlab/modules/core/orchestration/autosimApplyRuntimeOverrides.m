@@ -12,6 +12,15 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     gazeboPort = autosimEnvNumber('AUTOSIM_GAZEBO_PORT', cfg.runtime.gazebo_port);
     gpuDevice = autosimEnvNumber('AUTOSIM_GPU_DEVICE', cfg.runtime.gpu_device);
     useGpu = autosimEnvBool('AUTOSIM_ENABLE_GPU', cfg.runtime.use_gpu);
+    multiDroneCount = autosimEnvNumber('AUTOSIM_MULTI_DRONE_COUNT', cfg.runtime.multi_drone_count);
+    multiDroneSpacing = autosimEnvNumber('AUTOSIM_MULTI_DRONE_SPACING_M', cfg.runtime.multi_drone_spacing_m);
+    primaryDroneIndex = autosimEnvNumber('AUTOSIM_PRIMARY_DRONE_INDEX', cfg.runtime.primary_drone_index);
+    multiDronePrefix = strtrim(string(getenv('AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX')));
+    if strlength(multiDronePrefix) == 0
+        multiDronePrefix = string(cfg.runtime.multi_drone_namespace_prefix);
+    end
+    spawnTags = autosimEnvBool('AUTOSIM_MULTI_DRONE_SPAWN_TAGS', cfg.runtime.multi_drone_spawn_tags);
+    useWorldTagAsFirst = autosimEnvBool('AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST', cfg.runtime.multi_drone_use_world_tag_as_first);
 
     workerId = max(1, round(workerId));
     workerCount = max(1, round(workerCount));
@@ -22,9 +31,23 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     cfg.runtime.gazebo_port = gazeboPort;
     cfg.runtime.gpu_device = gpuDevice;
     cfg.runtime.use_gpu = useGpu;
+    cfg.runtime.multi_drone_count = max(1, round(multiDroneCount));
+    cfg.runtime.multi_drone_spacing_m = max(0.5, multiDroneSpacing);
+    cfg.runtime.primary_drone_index = max(1, round(primaryDroneIndex));
+    cfg.runtime.multi_drone_namespace_prefix = char(multiDronePrefix);
+    cfg.runtime.multi_drone_spawn_tags = spawnTags;
+    cfg.runtime.multi_drone_use_world_tag_as_first = useWorldTagAsFirst;
 
     if workerCount > 1
         cfg.runtime.drone_namespace = sprintf('/drone_w%02d', workerId);
+    elseif cfg.runtime.multi_drone_count > 1
+        prefix = regexprep(char(multiDronePrefix), '^/+', '');
+        if isempty(prefix)
+            prefix = 'drone_w';
+        end
+        idx = min(cfg.runtime.primary_drone_index, cfg.runtime.multi_drone_count);
+        cfg.runtime.primary_drone_index = idx;
+        cfg.runtime.drone_namespace = sprintf('/%s%02d', prefix, idx);
     else
         cfg.runtime.drone_namespace = '/drone';
     end
@@ -64,6 +87,12 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     envItems = strings(0, 1);
     if isfinite(domainId)
         envItems(end+1, 1) = sprintf('export ROS_DOMAIN_ID=%d', round(domainId)); %#ok<AGROW>
+    end
+    localhostOnly = autosimEnvBool('AUTOSIM_ROS_LOCALHOST_ONLY', false);
+    if localhostOnly
+        envItems(end+1, 1) = 'export ROS_LOCALHOST_ONLY=1'; %#ok<AGROW>
+    else
+        envItems(end+1, 1) = 'export ROS_LOCALHOST_ONLY=0'; %#ok<AGROW>
     end
     if isfinite(gazeboPort)
         envItems(end+1, 1) = sprintf('export GAZEBO_MASTER_URI=http://127.0.0.1:%d', round(gazeboPort)); %#ok<AGROW>

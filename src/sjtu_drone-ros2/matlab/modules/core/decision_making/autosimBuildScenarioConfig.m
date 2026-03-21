@@ -16,6 +16,7 @@ function scenarioCfg = autosimBuildScenarioConfig(cfg, scenarioId)
     scenarioCfg.force_hover_abort_timeout = false;
     scenarioCfg.force_land_at_timeout = false;
     scenarioCfg.hover_timeout_sec = nan;
+    scenarioCfg.pre_landing_timeout_sec = autosimClampNaN(cfg.scenario.pre_landing_timeout_sec, nan);
     scenarioCfg.hover_height_m = autosimRandRange(cfg.scenario.hover_height_min_m, cfg.scenario.hover_height_max_m);
     scenarioCfg.wind_profile_offset_sec = 0;
     if cfg.wind.enable

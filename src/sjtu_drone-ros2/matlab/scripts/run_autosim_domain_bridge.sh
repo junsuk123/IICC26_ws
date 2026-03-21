@@ -4,6 +4,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MATLAB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SESSION_ARG="${1:-}"
 OBSERVE_DOMAIN="${OBSERVE_DOMAIN:-90}"
+AUTOSIM_ROS_LOCALHOST_ONLY="${AUTOSIM_ROS_LOCALHOST_ONLY:-0}"
 
 # Setup ROS environment silently
 . /opt/ros/humble/setup.bash 2>/dev/null || true
@@ -64,7 +65,7 @@ topics:
 EOF
 
   log="$LOG_DIR/domain_bridge_w${wid2}.log"
-  (export ROS_DOMAIN_ID=$OBSERVE_DOMAIN; ros2 run domain_bridge domain_bridge "$cfg") >"$log" 2>&1 &
+  (export ROS_DOMAIN_ID=$OBSERVE_DOMAIN; export ROS_LOCALHOST_ONLY=$AUTOSIM_ROS_LOCALHOST_ONLY; ros2 run domain_bridge domain_bridge "$cfg") >"$log" 2>&1 &
   echo "[AUTOSIM-BRIDGE] Worker $wid bridge (domain $domain_id → $OBSERVE_DOMAIN)"
   count=$((count + 1))
 done

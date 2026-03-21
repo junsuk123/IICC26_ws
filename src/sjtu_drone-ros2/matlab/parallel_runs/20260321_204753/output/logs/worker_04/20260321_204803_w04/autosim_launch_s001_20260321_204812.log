@@ -6353,3 +6353,5 @@
 [gzserver-2] Exception sending a multicast message:Network is unreachable
 [gzserver-2] Exception sending a multicast message:Network is unreachable
 [gzserver-2] Exception sending a multicast message:Network is unreachable
+[ERROR] [gzserver-2]: process has died [pid 280007, exit code -9, cmd 'gzserver /home/j/INCSL/IICC26_ws/install/sjtu_drone_description/share/sjtu_drone_description/worlds/landingPad.world --verbose -slibgazebo_ros_init.so -slibgazebo_ros_factory.so -slibgazebo_ros_force_system.so verbose'].
+[gzserver-2] [0m

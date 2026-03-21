@@ -34,6 +34,26 @@ def _normalize_namespace(ns: str) -> str:
     return ns
 
 
+def _namespace_from_prefix(prefix: str, index: int) -> str:
+    p = (prefix or 'drone_w').strip().strip('/')
+    if not p:
+        p = 'drone_w'
+    return f'/{p}{index:02d}'
+
+
+def _resolve_multi_ns_topic(template: str, ns: str, fallback: str, multi_mode: bool) -> str:
+    raw = (template or '').strip()
+    if not raw:
+        return fallback
+    # In multi-drone mode, plain absolute topics can accidentally pin all drones
+    # to one namespace. Allow explicit templates via {ns}; otherwise use fallback.
+    if multi_mode:
+        if '{ns}' in raw:
+            return raw.replace('{ns}', ns)
+        return fallback
+    return raw
+
+
 def get_teleop_controller(context, *_, **__) -> Node:
     controller = context.launch_configurations["controller"]
     namespace = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
@@ -63,23 +83,72 @@ def rviz_node_generator(context, rviz_path):
         return []
 
     drone_ns = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
+    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
+    multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
+    drone_namespaces = [drone_ns]
+    if multi_drone_count > 1:
+        drone_namespaces = [_namespace_from_prefix(multi_drone_prefix, i + 1) for i in range(multi_drone_count)]
+
     fixed_frame_value = LaunchConfiguration('fixed_frame').perform(context)
 
-    # Create a temporary RViz config with namespace-specific AprilTag image topic
+    # Create a temporary RViz config with namespace-aware image/model displays
     import tempfile
-    import shutil
+    drone_urdf_file = os.path.join(get_package_share_directory('sjtu_drone_description'), 'urdf', 'sjtu_drone.urdf')
+
+    def _build_image_display(ns: str) -> str:
+        topic = f'{ns}/landing_tag_state_image'
+        clean = ns.strip('/').replace('/', '_')
+        return (
+            '    - Class: rviz_default_plugins/Image\n'
+            '      Enabled: true\n'
+            '      Max Value: 1\n'
+            '      Median window: 5\n'
+            '      Min Value: 0\n'
+            f'      Name: AprilTag Annotated {clean}\n'
+            '      Normalize Range: true\n'
+            '      Topic:\n'
+            '        Depth: 5\n'
+            '        Durability Policy: Volatile\n'
+            '        History Policy: Keep Last\n'
+            '        Reliability Policy: Reliable\n'
+            f'        Value: {topic}\n'
+            '      Value: true\n'
+        )
+
+    def _build_robot_model_display(ns: str) -> str:
+        clean = ns.strip('/').replace('/', '_')
+        tf_prefix = ns.strip('/')
+        return (
+            '    - Alpha: 1\n'
+            '      Class: rviz_default_plugins/RobotModel\n'
+            '      Collision Enabled: false\n'
+            f'      Description File: {drone_urdf_file}\n'
+            '      Description Source: File\n'
+            '      Enabled: true\n'
+            '      Links:\n'
+            '        All Links Enabled: true\n'
+            f'      Name: RobotModel {clean}\n'
+            f'      TF Prefix: {tf_prefix}\n'
+            '      Update Interval: 0\n'
+            '      Value: true\n'
+        )
     
     try:
         # Read the base RViz config
         with open(rviz_path, 'r') as f:
             rviz_config = f.read()
-        
-        # Replace the AprilTag topic with namespace-specific one
-        apriltag_image_topic = f'{drone_ns}/landing_tag_state_image'
-        rviz_config = rviz_config.replace(
-            'Value: /drone/landing_tag_state_image',
-            f'Value: {apriltag_image_topic}'
-        )
+
+        # Keep base image entry for the first namespace and append additional entries for others.
+        rviz_config = rviz_config.replace('Value: /drone/landing_tag_state_image', f'Value: {drone_namespaces[0]}/landing_tag_state_image')
+
+        extra_blocks = ''
+        for ns in drone_namespaces:
+            extra_blocks += _build_robot_model_display(ns)
+        for ns in drone_namespaces[1:]:
+            extra_blocks += _build_image_display(ns)
+
+        if extra_blocks:
+            rviz_config = rviz_config.replace('  Enabled: true\n  Global Options:', f'{extra_blocks}  Enabled: true\n  Global Options:', 1)
         
         # Write to a temporary file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.rviz', delete=False) as tmp:
@@ -118,84 +187,97 @@ def get_apriltag_nodes(context, *_, **__):
         return []
 
     drone_ns = _normalize_namespace(LaunchConfiguration("drone_namespace").perform(context))
-    camera_ns = LaunchConfiguration("apriltag_camera").perform(context)
-    if not camera_ns:
-        camera_ns = f'{drone_ns}/bottom'
+    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
+    multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
+    drone_namespaces = [drone_ns]
+    if multi_drone_count > 1:
+        drone_namespaces = [_namespace_from_prefix(multi_drone_prefix, i + 1) for i in range(multi_drone_count)]
+
+    camera_ns_arg = LaunchConfiguration("apriltag_camera").perform(context)
     image_topic = LaunchConfiguration("apriltag_image").perform(context)
     tags_topic = LaunchConfiguration("apriltag_tags").perform(context)
     detector_type = LaunchConfiguration("apriltag_type").perform(context)
     bridge_topic = LaunchConfiguration("apriltag_bridge_topic").perform(context)
-    if not bridge_topic:
-        bridge_topic = f'{drone_ns}/landing_tag_state'
+    use_standalone_detector = LaunchConfiguration("apriltag_use_standalone_detector").perform(context)
+    if use_standalone_detector != 'true' and len(drone_namespaces) > 1:
+        actions = [
+            LogInfo(msg='[bringup] multi_drone_count>1 with apriltag_use_standalone_detector=false is not supported. Enable standalone detector.')
+        ]
+        return actions
     bridge_use_target_id = LaunchConfiguration("apriltag_bridge_use_target_id").perform(context)
     bridge_target_id = LaunchConfiguration("apriltag_bridge_target_id").perform(context)
-    use_standalone_detector = LaunchConfiguration("apriltag_use_standalone_detector").perform(context)
     bridge_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'apriltag_state_bridge')
 
-    tags_full_topic = f'{camera_ns}/{tags_topic}'
-    image_full_topic = f'{camera_ns}/{image_topic}'
+    multi_mode = len(drone_namespaces) > 1
+    actions = []
+    for idx, ns in enumerate(drone_namespaces, start=1):
+        camera_ns = _resolve_multi_ns_topic(camera_ns_arg, ns, f'{ns}/bottom', multi_mode)
+        bridge_topic_ns = _resolve_multi_ns_topic(bridge_topic, ns, f'{ns}/landing_tag_state', multi_mode)
+        tags_full_topic = f'{camera_ns}/{tags_topic}'
+        image_full_topic = f'{camera_ns}/{image_topic}'
+        state_topic = f'{ns}/state'
 
-    actions = [
-        LogInfo(msg=f'[bringup] Apriltag config: camera={camera_ns}, image={image_full_topic}, tags={tags_full_topic}, bridge={bridge_topic}, standalone={use_standalone_detector}, use_target_id={bridge_use_target_id}, target_id={bridge_target_id}')
-    ]
-
-    bridge_action = None
-    if os.path.exists(bridge_exe):
-        bridge_action = ExecuteProcess(
-            cmd=[
-                bridge_exe,
-                '--ros-args',
-                '-p', f'input_topic:={tags_full_topic}',
-                '-p', f'output_topic:={bridge_topic}',
-                '-p', f'output_image_topic:={bridge_topic}_image',
-                '-p', f'image_topic:={image_full_topic}',
-                '-p', f'target_id:={bridge_target_id}',
-                '-p', f'use_target_id:={bridge_use_target_id}',
-                '-p', 'publish_annotated_image:=true',
-            ],
-            output='screen',
-            condition=IfCondition(LaunchConfiguration("use_apriltag")),
-        )
-    else:
-        print(f"[bringup] apriltag_state_bridge executable not found at {bridge_exe}. Skipping bridge node.")
-
-    if use_standalone_detector == 'true':
         actions.append(
-            Node(
-                package='apriltag_detector',
-                executable='apriltag_detector_node',
-                name='apriltag_detector_node',
-                output='screen',
-                parameters=[
-                    {
-                        'type': detector_type,
-                    }
-                ],
-                remappings=[
-                    ('image', image_full_topic),
-                    ('tags', tags_full_topic),
-                ],
-                condition=IfCondition(LaunchConfiguration("use_apriltag")),
-            )
-        )
-    else:
-        actions.append(
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    os.path.join(apriltag_share, "launch", "detect.launch.py")
-                ),
-                launch_arguments={
-                    "camera": camera_ns,
-                    "image": image_topic,
-                    "tags": tags_topic,
-                    "type": detector_type,
-                }.items(),
-                condition=IfCondition(LaunchConfiguration("use_apriltag")),
-            )
+            LogInfo(msg=f'[bringup] Apriltag[{idx}] ns={ns}, camera={camera_ns}, image={image_full_topic}, tags={tags_full_topic}, bridge={bridge_topic_ns}, standalone={use_standalone_detector}, use_target_id={bridge_use_target_id}, target_id={bridge_target_id}')
         )
 
-    if bridge_action is not None:
-        actions.append(bridge_action)
+        if use_standalone_detector == 'true':
+            actions.append(
+                Node(
+                    package='apriltag_detector',
+                    executable='apriltag_detector_node',
+                    name=f'apriltag_detector_node_{idx:02d}',
+                    output='screen',
+                    parameters=[
+                        {
+                            'type': detector_type,
+                        }
+                    ],
+                    remappings=[
+                        ('image', image_full_topic),
+                        ('tags', tags_full_topic),
+                    ],
+                    condition=IfCondition(LaunchConfiguration("use_apriltag")),
+                )
+            )
+        else:
+            actions.append(
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        os.path.join(apriltag_share, "launch", "detect.launch.py")
+                    ),
+                    launch_arguments={
+                        "camera": camera_ns,
+                        "image": image_topic,
+                        "tags": tags_topic,
+                        "type": detector_type,
+                    }.items(),
+                    condition=IfCondition(LaunchConfiguration("use_apriltag")),
+                )
+            )
+
+        if os.path.exists(bridge_exe):
+            actions.append(
+                ExecuteProcess(
+                    cmd=[
+                        bridge_exe,
+                        '--ros-args',
+                        '-p', f'input_topic:={tags_full_topic}',
+                        '-p', f'output_topic:={bridge_topic_ns}',
+                        '-p', f'output_image_topic:={bridge_topic_ns}_image',
+                        '-p', f'image_topic:={image_full_topic}',
+                        '-p', f'state_topic:={state_topic}',
+                        '-p', f'target_id:={bridge_target_id}',
+                        '-p', f'use_target_id:={bridge_use_target_id}',
+                        '-p', 'publish_annotated_image:=true',
+                        '-p', 'monitor_log_period_sec:=2.0',
+                    ],
+                    output='screen',
+                    condition=IfCondition(LaunchConfiguration("use_apriltag")),
+                )
+            )
+        else:
+            print(f"[bringup] apriltag_state_bridge executable not found at {bridge_exe}. Skipping bridge node.")
 
     return actions
 
@@ -229,6 +311,38 @@ def generate_launch_description():
             "drone_namespace",
             default_value=model_ns,
             description="Drone ROS namespace (e.g. /drone, /drone_w01)",
+        ),
+
+        DeclareLaunchArgument(
+            'multi_drone_count',
+            default_value='1',
+            description='Number of drones to spawn in a single Gazebo world',
+        ),
+
+        DeclareLaunchArgument(
+            'multi_drone_spacing_m',
+            default_value='3.0',
+            description='Spacing between spawned drones (m)',
+        ),
+
+        DeclareLaunchArgument(
+            'multi_drone_namespace_prefix',
+            default_value='drone_w',
+            description='Namespace prefix used when spawning multiple drones',
+        ),
+
+        DeclareLaunchArgument(
+            'multi_drone_spawn_tags',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Spawn one landing tag per drone in Gazebo',
+        ),
+
+        DeclareLaunchArgument(
+            'multi_drone_use_world_tag_as_first',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Treat world built-in tag as the first drone tag',
         ),
 
         DeclareLaunchArgument(
@@ -333,6 +447,11 @@ def generate_launch_description():
             ),
             launch_arguments={
                 'drone_namespace': LaunchConfiguration('drone_namespace'),
+                'multi_drone_count': LaunchConfiguration('multi_drone_count'),
+                'multi_drone_spacing_m': LaunchConfiguration('multi_drone_spacing_m'),
+                'multi_drone_namespace_prefix': LaunchConfiguration('multi_drone_namespace_prefix'),
+                'multi_drone_spawn_tags': LaunchConfiguration('multi_drone_spawn_tags'),
+                'multi_drone_use_world_tag_as_first': LaunchConfiguration('multi_drone_use_world_tag_as_first'),
                 'takeoff_hover_height': LaunchConfiguration('takeoff_hover_height'),
                 'takeoff_vertical_speed': LaunchConfiguration('takeoff_vertical_speed'),
             }.items(),

@@ -57,12 +57,20 @@ def _resolve_multi_ns_topic(template: str, ns: str, fallback: str, multi_mode: b
 def get_teleop_controller(context, *_, **__) -> Node:
     controller = context.launch_configurations["controller"]
     namespace = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
+    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
+    multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
+    teleop_params = [{
+        'multi_drone_count': multi_drone_count,
+        'multi_drone_namespace_prefix': multi_drone_prefix,
+        'primary_namespace': namespace,
+    }]
 
     if controller == "joystick":
         node = Node(
             package="sjtu_drone_control",
             executable="teleop_joystick",
             namespace=namespace,
+            parameters=teleop_params,
             output="screen",
         )
 
@@ -71,6 +79,7 @@ def get_teleop_controller(context, *_, **__) -> Node:
             package="sjtu_drone_control",
             executable="teleop",
             namespace=namespace,
+            parameters=teleop_params,
             output="screen",
             prefix="xterm -e",
         )
@@ -206,7 +215,11 @@ def get_apriltag_nodes(context, *_, **__):
         return actions
     bridge_use_target_id = LaunchConfiguration("apriltag_bridge_use_target_id").perform(context)
     bridge_target_id = LaunchConfiguration("apriltag_bridge_target_id").perform(context)
-    bridge_exe = os.path.join(get_package_prefix('sjtu_drone_bringup'), 'bin', 'apriltag_state_bridge')
+    pkg_prefix = get_package_prefix('sjtu_drone_bringup')
+    bridge_exe = os.path.join(pkg_prefix, 'lib', 'sjtu_drone_bringup', 'apriltag_state_bridge')
+    if not os.path.isfile(bridge_exe):
+        # Backward-compatible fallback for older installs that used bin/.
+        bridge_exe = os.path.join(pkg_prefix, 'bin', 'apriltag_state_bridge')
 
     multi_mode = len(drone_namespaces) > 1
     actions = []
@@ -405,13 +418,13 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             "takeoff_hover_height",
-            default_value="1.0",
+            default_value="0.8",
             description="Target altitude increase (m) after takeoff",
         ),
 
         DeclareLaunchArgument(
             "takeoff_vertical_speed",
-            default_value="1.0",
+            default_value="0.2",
             description="Vertical climb command used during takeoff",
         ),
 
@@ -430,9 +443,16 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'use_teleop',
-            default_value='true',
+            default_value='false',
             choices=['true', 'false'],
             description='Whether to launch joystick and teleop nodes',
+        ),
+
+        DeclareLaunchArgument(
+            'use_gui',
+            default_value='true',
+            choices=['true', 'false'],
+            description='Whether to launch Gazebo with GUI',
         ),
 
         OpaqueFunction(
@@ -454,6 +474,7 @@ def generate_launch_description():
                 'multi_drone_use_world_tag_as_first': LaunchConfiguration('multi_drone_use_world_tag_as_first'),
                 'takeoff_hover_height': LaunchConfiguration('takeoff_hover_height'),
                 'takeoff_vertical_speed': LaunchConfiguration('takeoff_vertical_speed'),
+                'use_gui': LaunchConfiguration('use_gui'),
             }.items(),
         ),
 
@@ -474,4 +495,5 @@ def generate_launch_description():
         OpaqueFunction(
             function=get_apriltag_nodes,
         ),
+
     ])

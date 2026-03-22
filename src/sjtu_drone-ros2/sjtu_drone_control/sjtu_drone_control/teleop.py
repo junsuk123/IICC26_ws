@@ -22,6 +22,22 @@ import termios
 import tty
 
 
+def _normalize_namespace(ns: str) -> str:
+    ns = (ns or '').strip()
+    if not ns:
+        return '/drone'
+    if not ns.startswith('/'):
+        ns = '/' + ns
+    return ns
+
+
+def _namespace_from_prefix(prefix: str, index: int) -> str:
+    p = (prefix or 'drone_w').strip().strip('/')
+    if not p:
+        p = 'drone_w'
+    return f'/{p}{index:02d}'
+
+
 MSG = """
 Control Your Drone!
 ---------------------------
@@ -46,10 +62,35 @@ class TeleopNode(Node):
     def __init__(self) -> None:
         super().__init__('teleop_node')
 
+        self.declare_parameter('multi_drone_count', 1)
+        self.declare_parameter('multi_drone_namespace_prefix', 'drone_w')
+        self.declare_parameter('primary_namespace', '')
+
         # Publishers
         self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
         self.takeoff_publisher = self.create_publisher(Empty, 'takeoff', 10)
         self.land_publisher = self.create_publisher(Empty, 'land', 10)
+
+        self.cmd_vel_followers = []
+        self.takeoff_followers = []
+        self.land_followers = []
+
+        multi_count = int(self.get_parameter('multi_drone_count').value)
+        ns_prefix = str(self.get_parameter('multi_drone_namespace_prefix').value)
+        primary_ns_param = str(self.get_parameter('primary_namespace').value)
+        primary_ns = _normalize_namespace(primary_ns_param if primary_ns_param else self.get_namespace())
+
+        if multi_count > 1:
+            all_ns = [_namespace_from_prefix(ns_prefix, i + 1) for i in range(multi_count)]
+            followers = [ns for ns in all_ns if ns != primary_ns]
+            for ns in followers:
+                self.cmd_vel_followers.append(self.create_publisher(Twist, f'{ns}/cmd_vel', 10))
+                self.takeoff_followers.append(self.create_publisher(Empty, f'{ns}/takeoff', 10))
+                self.land_followers.append(self.create_publisher(Empty, f'{ns}/land', 10))
+            self.get_logger().info(
+                'Multi-drone teleop enabled: primary=%s followers=%s'
+                % (primary_ns, ','.join(followers))
+            )
 
         # Velocity parameters
         self.linear_velocity = 0.0
@@ -132,11 +173,17 @@ class TeleopNode(Node):
             # Handle other keys for different movements
             elif key.lower() == 't':
                 # Takeoff
-                self.takeoff_publisher.publish(Empty())
+                msg = Empty()
+                self.takeoff_publisher.publish(msg)
+                for pub in self.takeoff_followers:
+                    pub.publish(msg)
             elif key.lower() == 'l':
                 # Land
                 self.publish_cmd_vel()
-                self.land_publisher.publish(Empty())
+                msg = Empty()
+                self.land_publisher.publish(msg)
+                for pub in self.land_followers:
+                    pub.publish(msg)
 
     def get_key(self) -> str:
         """
@@ -158,6 +205,8 @@ class TeleopNode(Node):
         """
         twist = Twist(linear=linear_vec, angular=angular_vec)
         self.cmd_vel_publisher.publish(twist)
+        for pub in self.cmd_vel_followers:
+            pub.publish(twist)
 
 
 def main(args=None):

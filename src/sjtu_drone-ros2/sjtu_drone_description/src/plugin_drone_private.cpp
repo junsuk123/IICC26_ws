@@ -35,6 +35,7 @@ DroneSimpleControllerPrivate::DroneSimpleControllerPrivate()
   , odom_hz(30)
   , last_odom_publish_time_(0.0)
 {
+  cmd_vel = geometry_msgs::msg::Twist();
 }
 
 DroneSimpleControllerPrivate::~DroneSimpleControllerPrivate() {}
@@ -54,6 +55,12 @@ void DroneSimpleControllerPrivate::Reset()
   link->SetTorque(ignition::math::v6::Vector3<double>(0.0, 0.0, 0.0));
 
   // Reset the state of the drone
+  cmd_vel = geometry_msgs::msg::Twist();
+  navi_state = LANDED_MODEL;
+  m_timeAfterCmd = 0.0;
+  takeoff_target_initialized_ = false;
+  takeoff_start_z_ = 0.0;
+  takeoff_target_z_ = takeoff_hover_height_;
   pose.Reset();
   velocity.Set();
   angular_velocity.Set();
@@ -294,6 +301,7 @@ void DroneSimpleControllerPrivate::ImuCallback(const sensor_msgs::msg::Imu::Shar
 void DroneSimpleControllerPrivate::TakeoffCallback(const std_msgs::msg::Empty::SharedPtr msg)
 {
   if (navi_state == LANDED_MODEL) {
+    controllers_.velocity_z.reset();
     navi_state = TAKINGOFF_MODEL;
     m_timeAfterCmd = 0;
     takeoff_start_z_ = link->WorldPose().Pos().Z();
@@ -410,6 +418,9 @@ void DroneSimpleControllerPrivate::UpdateState(double dt)
     if (reached_target || timeout) {
       navi_state = FLYING_MODEL;
       takeoff_target_initialized_ = false;
+      controllers_.velocity_z.reset();
+      controllers_.pos_z.reset();
+      cmd_vel.linear.z = 0.0;
       std::cout << "Entering flying model!" << std::endl;
     }
   } else if (navi_state == LANDING_MODEL) {

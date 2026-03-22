@@ -1,6 +1,13 @@
-function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand(cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT)
+function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand(cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT, poseHoldTargetX, poseHoldTargetY)
     cmdX = 0.0;
     cmdY = 0.0;
+
+    if nargin < 15 || ~isfinite(poseHoldTargetX)
+        poseHoldTargetX = 0.0;
+    end
+    if nargin < 16 || ~isfinite(poseHoldTargetY)
+        poseHoldTargetY = 0.0;
+    end
 
     usePred = predOk && isfinite(uPred) && isfinite(vPred);
     useNow = tagDetected && isfinite(uTag) && isfinite(vTag);
@@ -36,8 +43,8 @@ function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTracki
         pidY = autosimPidInit();
 
         if cfg.control.pose_hold_enable && isfinite(xNow) && isfinite(yNow)
-            errX = -xNow;
-            errY = -yNow;
+            errX = poseHoldTargetX - xNow;
+            errY = poseHoldTargetY - yNow;
             cmdX = autosimClamp(cfg.control.pose_hold_kp * errX, -abs(cfg.control.pose_hold_cmd_limit), abs(cfg.control.pose_hold_cmd_limit));
             cmdY = autosimClamp(cfg.control.pose_hold_kp * errY, -abs(cfg.control.pose_hold_cmd_limit), abs(cfg.control.pose_hold_cmd_limit));
         elseif cfg.control.search_enable_spiral

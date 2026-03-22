@@ -19,6 +19,14 @@ AUTOSIM_MAX_WORKERS="${AUTOSIM_MAX_WORKERS:-3}"
 AUTOSIM_ENABLE_PROGRESS_PLOT="${AUTOSIM_ENABLE_PROGRESS_PLOT:-false}"
 AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ="${AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ:-false}"
 AUTOSIM_ROS_LOCALHOST_ONLY="${AUTOSIM_ROS_LOCALHOST_ONLY:-0}"
+AUTOSIM_ENABLE_DOMAIN_BRIDGE="${AUTOSIM_ENABLE_DOMAIN_BRIDGE:-false}"
+OBSERVE_DOMAIN="${OBSERVE_DOMAIN:-90}"
+AUTOSIM_MULTI_DRONE_COUNT="${AUTOSIM_MULTI_DRONE_COUNT:-4}"
+AUTOSIM_MULTI_DRONE_SPACING_M="${AUTOSIM_MULTI_DRONE_SPACING_M:-3.0}"
+AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX="${AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX:-drone_w}"
+AUTOSIM_MULTI_DRONE_SPAWN_TAGS="${AUTOSIM_MULTI_DRONE_SPAWN_TAGS:-true}"
+AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST="${AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST:-false}"
+AUTOSIM_PRIMARY_DRONE_INDEX="${AUTOSIM_PRIMARY_DRONE_INDEX:-1}"
 
 gpu_count=0
 if command -v nvidia-smi >/dev/null 2>&1; then
@@ -97,6 +105,130 @@ if [[ "$AUTOSIM_MAX_WORKERS" =~ ^[0-9]+$ ]] && (( AUTOSIM_MAX_WORKERS >= 1 )) &&
   WORKERS="$AUTOSIM_MAX_WORKERS"
 fi
 
+collect_matches() {
+  local pattern="$1"
+  pgrep -af "$pattern" 2>/dev/null || true
+}
+
+kill_pattern_now() {
+  local pattern="$1"
+  local pids=""
+  pids="$(pgrep -f "$pattern" || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+
+  while read -r pid; do
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+  done <<< "$pids"
+
+  sleep 0.5
+  pids="$(pgrep -f "$pattern" || true)"
+  if [[ -n "$pids" ]]; then
+    while read -r pid; do
+      [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null || true
+    done <<< "$pids"
+  fi
+}
+
+is_port_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn "( sport = :$port )" 2>/dev/null | tail -n +2 | grep -q .
+    return $?
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
+preflight_cleanup_and_verify() {
+  local strict="${AUTOSIM_STRICT_PRESTART_CLEANUP:-1}"
+  local blockers=""
+  local port_conflicts=""
+
+  echo "[AUTOSIM] Preflight: stopping previous AutoSim sessions..."
+  bash "$SCRIPT_DIR/stop_autosim_parallel.sh" >/dev/null 2>&1 || true
+
+  for _ in {1..3}; do
+    kill_pattern_now "(^|/)gzserver([[:space:]]|$)"
+    kill_pattern_now "(^|/)gzclient([[:space:]]|$)"
+    kill_pattern_now "(^|/)gz([[:space:]]+sim|$)"
+    kill_pattern_now "ign[[:space:]]+gazebo"
+    kill_pattern_now "(^|/)rviz2([[:space:]]|$)"
+    kill_pattern_now "(^|/)domain_bridge([[:space:]]|$)"
+    kill_pattern_now "[a]priltag_detector_node"
+    kill_pattern_now "[a]priltag_state_bridge"
+    kill_pattern_now "[s]pawn_drone"
+    kill_pattern_now "[s]pawn_apriltag"
+    kill_pattern_now "[r]obot_state_publisher"
+    kill_pattern_now "[j]oint_state_publisher"
+    kill_pattern_now "[s]tatic_transform_publisher"
+    kill_pattern_now "[r]os2 launch sjtu_drone_bringup"
+
+    blockers=""
+    for pattern in \
+      "(^|/)gzserver([[:space:]]|$)" \
+      "(^|/)gzclient([[:space:]]|$)" \
+      "(^|/)gz([[:space:]]+sim|$)" \
+      "ign[[:space:]]+gazebo" \
+      "(^|/)rviz2([[:space:]]|$)" \
+      "(^|/)domain_bridge([[:space:]]|$)" \
+      "[a]priltag_detector_node" \
+      "[a]priltag_state_bridge" \
+      "[s]pawn_drone" \
+      "[s]pawn_apriltag" \
+      "[r]obot_state_publisher" \
+      "[j]oint_state_publisher" \
+      "[s]tatic_transform_publisher" \
+      "[r]os2 launch sjtu_drone_bringup"; do
+      matches="$(collect_matches "$pattern")"
+      if [[ -n "$matches" ]]; then
+        blockers+="$matches"$'\n'
+      fi
+    done
+
+    port_conflicts=""
+    if is_port_listening 11345; then
+      port_conflicts+="11345 "
+    fi
+    for ((p=GAZEBO_PORT_BASE; p<GAZEBO_PORT_BASE+WORKERS; p++)); do
+      if is_port_listening "$p"; then
+        port_conflicts+="$p "
+      fi
+    done
+
+    if [[ -z "$blockers" && -z "$port_conflicts" ]]; then
+      echo "[AUTOSIM] Preflight: clean startup state confirmed."
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  echo "[AUTOSIM] Preflight failed: lingering Gazebo/RViz/bridge state detected."
+  if [[ -n "$blockers" ]]; then
+    echo "[AUTOSIM] Residual processes:"
+    printf '%s' "$blockers"
+  fi
+  if [[ -n "$port_conflicts" ]]; then
+    echo "[AUTOSIM] Occupied Gazebo-related ports: $port_conflicts"
+  fi
+
+  if [[ "$strict" == "1" || "$strict" == "true" || "$strict" == "yes" ]]; then
+    echo "[AUTOSIM] Aborting launch. Run stop script manually and retry after cleanup."
+    exit 1
+  fi
+
+  echo "[AUTOSIM] AUTOSIM_STRICT_PRESTART_CLEANUP=$strict, continuing despite warnings."
+}
+
+preflight_cleanup_and_verify
+
 timestamp="$(date +%Y%m%d_%H%M%S)"
 SESSION_ROOT="$MATLAB_DIR/parallel_runs/$timestamp"
 OUTPUT_ROOT="$SESSION_ROOT/output"
@@ -124,6 +256,8 @@ printf "pid\tworker_id\tdomain_id\tgazebo_port\tlog_file\n" > "$PID_TABLE"
 echo "[AUTOSIM] Session root: $SESSION_ROOT"
 echo "[AUTOSIM] Worker auto-tune: cpu_limit=$cpu_limit mem_limit=$mem_limit -> auto=$auto_workers"
 echo "[AUTOSIM] GPU mode: enable=$AUTOSIM_ENABLE_GPU gpu_count=$gpu_count"
+echo "[AUTOSIM] Worker ROS domains: $DOMAIN_BASE..$((DOMAIN_BASE + WORKERS - 1))"
+echo "[AUTOSIM] CLI inspect tip: export ROS_DOMAIN_ID=$DOMAIN_BASE"
 echo "[AUTOSIM] Launching workers: $WORKERS"
 
 for ((i=1; i<=WORKERS; i++)); do
@@ -160,6 +294,12 @@ for ((i=1; i<=WORKERS; i++)); do
     export AUTOSIM_ENABLE_GPU="$AUTOSIM_ENABLE_GPU"
     export AUTOSIM_ENABLE_PROGRESS_PLOT="$AUTOSIM_ENABLE_PROGRESS_PLOT"
     export AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ="$AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ"
+    export AUTOSIM_MULTI_DRONE_COUNT="$AUTOSIM_MULTI_DRONE_COUNT"
+    export AUTOSIM_MULTI_DRONE_SPACING_M="$AUTOSIM_MULTI_DRONE_SPACING_M"
+    export AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX="$AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX"
+    export AUTOSIM_MULTI_DRONE_SPAWN_TAGS="$AUTOSIM_MULTI_DRONE_SPAWN_TAGS"
+    export AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST="$AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST"
+    export AUTOSIM_PRIMARY_DRONE_INDEX="$AUTOSIM_PRIMARY_DRONE_INDEX"
 
     exec "$MATLAB_CMD" -batch "$run_cmd"
   ) >"$log_file" 2>&1 &
@@ -175,3 +315,15 @@ echo "[AUTOSIM] PID table: $PID_TABLE"
 echo "[AUTOSIM] Stop command: $SCRIPT_DIR/stop_autosim_parallel.sh $SESSION_ROOT"
 echo "[AUTOSIM] Unified worker logs: $SCRIPT_DIR/tail_autosim_parallel_logs.sh $SESSION_ROOT"
 echo "[AUTOSIM] Domain bridge (optional): OBSERVE_DOMAIN=90 $SCRIPT_DIR/run_autosim_domain_bridge.sh $SESSION_ROOT"
+
+if [[ "$AUTOSIM_ENABLE_DOMAIN_BRIDGE" == "1" || "$AUTOSIM_ENABLE_DOMAIN_BRIDGE" == "true" || "$AUTOSIM_ENABLE_DOMAIN_BRIDGE" == "yes" ]]; then
+  mkdir -p "$SESSION_ROOT/bridge"
+  bridge_log="$SESSION_ROOT/bridge/autostart.log"
+  (
+    export OBSERVE_DOMAIN="$OBSERVE_DOMAIN"
+    export AUTOSIM_ROS_LOCALHOST_ONLY="$AUTOSIM_ROS_LOCALHOST_ONLY"
+    "$SCRIPT_DIR/run_autosim_domain_bridge.sh" "$SESSION_ROOT"
+  ) >"$bridge_log" 2>&1 &
+  echo "[AUTOSIM] Domain bridge autostart enabled: observe_domain=$OBSERVE_DOMAIN (log: $bridge_log)"
+  echo "[AUTOSIM] Observer CLI tip: export ROS_DOMAIN_ID=$OBSERVE_DOMAIN"
+fi

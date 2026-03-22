@@ -69,6 +69,40 @@ kill_tree() {
   fi
 }
 
+kill_pattern_graceful() {
+  local pattern="$1"
+  local label="$2"
+  local pids=""
+  local remain=""
+
+  pids="$(pgrep -f "$pattern" || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+
+  echo "[AUTOSIM] Stopping $label..."
+  while read -r pid; do
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+  done <<< "$pids"
+
+  for _ in {1..10}; do
+    sleep 0.2
+    remain="$(pgrep -f "$pattern" || true)"
+    if [[ -z "$remain" ]]; then
+      return 0
+    fi
+  done
+
+  while read -r pid; do
+    [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null || true
+  done <<< "$remain"
+}
+
+collect_pattern_matches() {
+  local pattern="$1"
+  pgrep -af "$pattern" 2>/dev/null || true
+}
+
 for tbl in "${PID_TABLES[@]}"; do
   if [[ ! -f "$tbl" ]]; then
     echo "[AUTOSIM] PID table not found: $tbl"
@@ -91,19 +125,48 @@ for tbl in "${PID_TABLES[@]}"; do
 done
 
 # Phase 2: Kill stray ROS visualization and simulation processes
-echo "[AUTOSIM] Cleaning up RViz, Gazebo, and domain_bridge processes..."
-pkill -f "rviz2" 2>/dev/null || true
-pkill -f "gzserver" 2>/dev/null || true
-pkill -f "gzclient" 2>/dev/null || true
-pkill -f "domain_bridge" 2>/dev/null || true
-pkill -f "robot_state_publisher.*drone" 2>/dev/null || true
+echo "[AUTOSIM] Cleaning up RViz, Gazebo, and bridge/control processes..."
+kill_pattern_graceful "(^|/)rviz2([[:space:]]|$)" "rviz2"
+kill_pattern_graceful "(^|/)gzserver([[:space:]]|$)" "gzserver"
+kill_pattern_graceful "(^|/)gzclient([[:space:]]|$)" "gzclient"
+kill_pattern_graceful "(^|/)gz([[:space:]]+sim|$)" "gz sim"
+kill_pattern_graceful "ign[[:space:]]+gazebo" "ign gazebo"
+kill_pattern_graceful "(^|/)domain_bridge([[:space:]]|$)" "domain_bridge"
+kill_pattern_graceful "[r]os2 launch sjtu_drone_bringup" "ros2 launch(sjtu_drone_bringup)"
+kill_pattern_graceful "MATLAB[[:space:]].*-batch.*AutoSimMain" "MATLAB AutoSim batch"
+kill_pattern_graceful "[a]priltag_detector_node" "apriltag_detector_node"
+kill_pattern_graceful "[a]priltag_state_bridge" "apriltag_state_bridge"
+kill_pattern_graceful "[s]pawn_drone" "spawn_drone"
+kill_pattern_graceful "[s]pawn_apriltag" "spawn_apriltag"
+kill_pattern_graceful "robot_state_publisher.*drone" "robot_state_publisher(drone)"
+kill_pattern_graceful "(^|/)joy_node([[:space:]]|$)" "joy_node"
+kill_pattern_graceful "teleop" "teleop"
 
-# Phase 3: Kill processes by domain ID environment variable
-echo "[AUTOSIM] Cleaning up processes by ROS_DOMAIN_ID..."
-for domain_id in 60 61 62 63 90; do
-  pkill -f "ROS_DOMAIN_ID=$domain_id" 2>/dev/null || true
+# Phase 3: Final verification
+sleep 1
+remaining=""
+for pattern in \
+  "(^|/)rviz2([[:space:]]|$)" \
+  "(^|/)gzserver([[:space:]]|$)" \
+  "(^|/)gzclient([[:space:]]|$)" \
+  "(^|/)gz([[:space:]]+sim|$)" \
+  "ign[[:space:]]+gazebo" \
+  "(^|/)domain_bridge([[:space:]]|$)" \
+  "[r]os2 launch sjtu_drone_bringup" \
+  "MATLAB[[:space:]].*-batch.*AutoSimMain" \
+  "[a]priltag_detector_node" \
+  "[a]priltag_state_bridge" \
+  "[s]pawn_drone" \
+  "[s]pawn_apriltag"; do
+  matches="$(collect_pattern_matches "$pattern")"
+  if [[ -n "$matches" ]]; then
+    remaining+="$matches"$'\n'
+  fi
 done
 
-# Phase 4: Clean up zombies with a short delay
-sleep 1
-echo "[AUTOSIM] Cleanup complete."
+if [[ -n "$remaining" ]]; then
+  echo "[AUTOSIM] Warning: residual simulation/visualization processes detected:"
+  printf '%s' "$remaining"
+else
+  echo "[AUTOSIM] Cleanup complete: no residual Gazebo/RViz/bridge processes detected."
+fi

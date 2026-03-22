@@ -49,6 +49,12 @@ end
 
 autosimClearStopRequest();
 
+% Ensure latest gate logic is loaded even when MATLAB keeps function cache.
+try
+    clear('autosimSendToFleet');
+catch
+end
+
 cfg = autosimDefaultConfig();
 [cfg, overrideInfo] = autosimApplyExternalOverride(cfg, thisDir);
 [cfg, runtimeInfo] = autosimApplyRuntimeOverrides(cfg);
@@ -161,6 +167,7 @@ try
                 scenarioTrace.target_case = string(scenarioCfg.target_case);
             end
             warning('[AUTOSIM] Scenario %d exception: %s', scenarioId, ME.message);
+            fprintf(2, '[AUTOSIM] Scenario %d stack:\n%s\n', scenarioId, getReport(ME, 'extended', 'hyperlinks', 'off'));
         end
 
         results{end+1, 1} = scenarioResult;  % Use cell array for compatibility

@@ -20,6 +20,7 @@ import yaml
 from ament_index_python.packages import get_package_share_directory, get_package_prefix
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, ExecuteProcess, TimerAction
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -101,6 +102,11 @@ def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
         multi_drone_count = 1
 
     actions = []
+    # Avoid spawn queue contention: spawn all drones first, then tags.
+    base_spawn_delay_sec = 3.0
+    drone_spawn_step_sec = 2.0
+    tag_phase_offset_sec = base_spawn_delay_sec + (drone_spawn_step_sec * float(multi_drone_count)) + 1.0
+    tag_spawn_step_sec = 1.5
     for i in range(multi_drone_count):
         idx = i + 1
         ns = model_ns if multi_drone_count == 1 else _namespace_from_prefix(multi_drone_namespace_prefix, idx)
@@ -108,7 +114,7 @@ def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
         x, y, z = _linear_spawn_pose(i, multi_drone_count, multi_drone_spacing_m)
         entity_name = f'drone_{idx:02d}'
 
-        spawn_delay_sec = 1.5 * float(i)
+        spawn_delay_sec = base_spawn_delay_sec + (drone_spawn_step_sec * float(i))
 
         actions.extend([
             Node(
@@ -159,9 +165,10 @@ def setup_drone_nodes(context, use_sim_time, xacro_file, yaml_file_path):
             )
             if use_world_tag_as_first and idx == 1:
                 continue
+            tag_spawn_delay_sec = tag_phase_offset_sec + (tag_spawn_step_sec * float(i))
             actions.append(
                 TimerAction(
-                    period=spawn_delay_sec + 1.0,
+                    period=tag_spawn_delay_sec,
                     actions=[
                         ExecuteProcess(
                             cmd=[spawn_tag_exe, tag_name, f'{x:.3f}', f'{y:.3f}', '0.0', '0.0'],
@@ -220,6 +227,12 @@ def generate_launch_description():
     )
     use_gui = DeclareLaunchArgument("use_gui", default_value="true", choices=["true", "false"],
                                     description="Whether to execute gzclient")
+    pre_kill_gazebo = DeclareLaunchArgument(
+        'pre_kill_gazebo',
+        default_value='true',
+        choices=['true', 'false'],
+        description='Kill stale gzserver/gzclient before launching Gazebo',
+    )
     takeoff_hover_height = DeclareLaunchArgument(
         "takeoff_hover_height",
         default_value="1.0",
@@ -263,6 +276,7 @@ def generate_launch_description():
     return LaunchDescription([
         world,
         use_gui,
+        pre_kill_gazebo,
         drone_namespace,
         multi_drone_count,
         multi_drone_spacing_m,
@@ -272,22 +286,57 @@ def generate_launch_description():
         takeoff_hover_height,
         takeoff_vertical_speed,
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
-            ),
-            launch_arguments={'world': world_file,
-                              'verbose': "true",
-                              'extra_gazebo_args': 'verbose'}.items()
+        ExecuteProcess(
+            cmd=['bash', '-lc', 'pkill -9 -f "(^|/)gzserver([[:space:]]|$)" >/dev/null 2>&1 || true; pkill -9 -f "(^|/)gzclient([[:space:]]|$)" >/dev/null 2>&1 || true'],
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('pre_kill_gazebo')),
         ),
 
-        OpaqueFunction(function=launch_gzclient),
-        OpaqueFunction(
-            function=setup_drone_nodes,
-            kwargs={
-                "use_sim_time": use_sim_time,
-                "xacro_file": xacro_file,
-                "yaml_file_path": yaml_file_path,
-            },
+        TimerAction(
+            period=2.0,
+            condition=IfCondition(LaunchConfiguration('pre_kill_gazebo')),
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
+                    ),
+                    launch_arguments={'world': world_file,
+                                      'verbose': "true",
+                                      'extra_gazebo_args': 'verbose'}.items()
+                ),
+                OpaqueFunction(function=launch_gzclient),
+                OpaqueFunction(
+                    function=setup_drone_nodes,
+                    kwargs={
+                        "use_sim_time": use_sim_time,
+                        "xacro_file": xacro_file,
+                        "yaml_file_path": yaml_file_path,
+                    },
+                ),
+            ],
+        ),
+
+        TimerAction(
+            period=0.0,
+            condition=UnlessCondition(LaunchConfiguration('pre_kill_gazebo')),
+            actions=[
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(
+                        os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
+                    ),
+                    launch_arguments={'world': world_file,
+                                      'verbose': "true",
+                                      'extra_gazebo_args': 'verbose'}.items()
+                ),
+                OpaqueFunction(function=launch_gzclient),
+                OpaqueFunction(
+                    function=setup_drone_nodes,
+                    kwargs={
+                        "use_sim_time": use_sim_time,
+                        "xacro_file": xacro_file,
+                        "yaml_file_path": yaml_file_path,
+                    },
+                ),
+            ],
         ),
     ])

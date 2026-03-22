@@ -69,3 +69,25 @@ For non-GUI/headless environments, prefer:
 Teleop note:
 
 - `s` key sends zero `cmd_vel` (velocity hover command), not an explicit altitude hold setpoint.
+
+## Multi-Drone Control Notes
+
+In multi-drone mode (`multi_drone_count>1`), each drone uses its own namespace
+(`/drone_w01`, `/drone_w02`, ...). Publishing to a single namespace controls
+only that drone.
+
+Takeoff all 4 drones from CLI:
+
+```bash
+for ns in /drone_w01 /drone_w02 /drone_w03 /drone_w04; do
+  ros2 topic pub ${ns}/takeoff std_msgs/msg/Empty {} --once
+done
+```
+
+Land all 4 drones from CLI:
+
+```bash
+for ns in /drone_w01 /drone_w02 /drone_w03 /drone_w04; do
+  ros2 topic pub ${ns}/land std_msgs/msg/Empty {} --once
+done
+```

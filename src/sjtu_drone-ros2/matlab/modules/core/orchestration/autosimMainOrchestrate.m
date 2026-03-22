@@ -1,11 +1,19 @@
-function autosimMainOrchestrate(matlabDir)
-% autosimMainOrchestrate
+function autosimMainOrchestrate(matlabDir, multiDroneCount)
+% autosimMainOrchestrate(matlabDir, multiDroneCount)
 % Parallel worker launch + monitor + final merged training orchestration.
+%
+% Args:
+%   matlabDir (string, optional): Path to matlab root directory
+%   multiDroneCount (int, optional): Number of drones to spawn. Default: 4
 
 if nargin < 1 || strlength(string(matlabDir)) == 0
     matlabDir = autosimMainResolveMatlabDir('');
 else
     matlabDir = autosimMainResolveMatlabDir(matlabDir);
+end
+
+if nargin < 2 || isempty(multiDroneCount)
+    multiDroneCount = 4;  % Default: 4 drones
 end
 
 if strlength(string(matlabDir)) == 0
@@ -17,6 +25,13 @@ matlabDir = char(string(matlabDir));
 autosimCleanupGazebo();
 
 cfg = autosimMainBuildConfig();
+
+% Override multiDroneCount from parameter
+if nargin >= 2 && ~isempty(multiDroneCount)
+    cfg.multiDroneCount = multiDroneCount;
+    cfg.runtime.multi_drone_count = multiDroneCount;
+    fprintf('[AUTOSIM CONFIG] Override: multiDroneCount = %d (drones + landing pads)\n', multiDroneCount);
+end
 runScript = fullfile(matlabDir, 'scripts', 'run_autosim_parallel.sh');
 stopScript = fullfile(matlabDir, 'scripts', 'stop_autosim_parallel.sh');
 
@@ -155,7 +170,7 @@ cfg.workersArg = '1';
 cfg.scenarioCount = 300;
 cfg.domainBase = 0;
 cfg.gazeboPortBase = 13045;
-cfg.multiDroneCount = 3;
+cfg.multiDroneCount = 4;
 cfg.multiDroneSpacingM = 3.0;
 cfg.multiDroneNamespacePrefix = 'drone_w';
 cfg.multiDroneSpawnTags = true;

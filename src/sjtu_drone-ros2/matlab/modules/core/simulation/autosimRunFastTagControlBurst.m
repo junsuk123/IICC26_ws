@@ -76,7 +76,7 @@ function [pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTag
         msgCmd.angular.x = 0.0;
         msgCmd.angular.y = 0.0;
         msgCmd.angular.z = 0.0;
-        send(pubCmd, msgCmd);
+        autosimSendToFleet(rosCtx, 'cmd', msgCmd);
 
         nextTickT = nextTickT + fastDt;
     end

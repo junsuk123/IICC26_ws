@@ -1,25 +1,21 @@
 function AutoSimMain()
 % AutoSimMain
-% One-click parallel AutoSim runner for MATLAB Run button.
-% Launches single-worker simulation with real-time monitoring.
-clear; clc; close all
+% Single-world stable pipeline entrypoint.
+% Collects data in one Gazebo world, then merges data and runs train/validation.
+
 thisDir = fileparts(mfilename('fullpath'));
 if isempty(thisDir)
     error('Failed to resolve AutoSimMain path.');
 end
 
-% Keep main script as flow-only: delegate logic to orchestration module.
 modDir = fullfile(thisDir, 'modules');
-if isfolder(modDir)
+if exist(modDir, 'dir')
     addpath(modDir);
-    coreDir = fullfile(modDir, 'core');
-    if isfolder(coreDir)
-        addpath(genpath(coreDir));
-    end
+end
+coreDir = fullfile(modDir, 'core');
+if exist(coreDir, 'dir')
+    addpath(genpath(coreDir));
 end
 
-% Run parallel workers + realtime 4-panel monitor
-fprintf('[AUTOSIM MAIN] Starting parallel simulation with monitor...\n');
-autosimMainOrchestrate(thisDir);
-fprintf('[AUTOSIM MAIN] Simulation complete.\n');
+autosimSingleWorldPipeline(thisDir);
 end

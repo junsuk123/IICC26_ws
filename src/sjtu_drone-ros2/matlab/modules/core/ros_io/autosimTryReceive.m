@@ -7,6 +7,26 @@ function x = autosimTryReceive(sub, timeout)
         x = [];
         return;
     end
+
+    % Prefer non-blocking latest-sample access to keep control loops responsive.
+    try
+        if isprop(sub, 'LatestMessage')
+            latest = sub.LatestMessage;
+            if ~isempty(latest)
+                x = latest;
+                return;
+            end
+            if timeout <= 0.0
+                x = [];
+                return;
+            end
+        end
+    catch
+        % Fall through to receive() fallback for compatibility.
+    end
+
+    % Never let one topic stall the simulation loop for long.
+    timeout = min(timeout, 0.005);
     try
         x = receive(sub, timeout);
     catch

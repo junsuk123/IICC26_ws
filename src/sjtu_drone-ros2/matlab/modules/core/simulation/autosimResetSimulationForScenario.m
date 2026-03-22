@@ -19,7 +19,7 @@ function ok = autosimResetSimulationForScenario(cfg, rosCtx, scenarioId, scenari
             rosCtx.msgCmd.angular.x = 0.0;
             rosCtx.msgCmd.angular.y = 0.0;
             rosCtx.msgCmd.angular.z = 0.0;
-            send(rosCtx.pubCmd, rosCtx.msgCmd);
+            autosimSendToFleet(rosCtx, 'cmd', rosCtx.msgCmd);
         catch
         end
     end
@@ -99,7 +99,7 @@ function ok = autosimResetSimulationForScenario(cfg, rosCtx, scenarioId, scenari
         if isfield(rosCtx, 'pubLand') && ~isempty(rosCtx.pubLand) && isfield(rosCtx, 'msgLand') && ~isempty(rosCtx.msgLand)
             try
                 for i = 1:nLandPub
-                    send(rosCtx.pubLand, rosCtx.msgLand);
+                    autosimSendToFleet(rosCtx, 'land', rosCtx.msgLand);
                     pause(dtLandPub);
                 end
             catch ME
@@ -130,7 +130,7 @@ function ok = autosimResetSimulationForScenario(cfg, rosCtx, scenarioId, scenari
         end
         try
             for i = 1:nPub
-                send(rosCtx.pubReset, rosCtx.msgReset);
+                autosimSendToFleet(rosCtx, 'reset', rosCtx.msgReset);
                 pause(dtPub);
             end
         catch ME
@@ -164,7 +164,7 @@ function ok = autosimResetSimulationForScenario(cfg, rosCtx, scenarioId, scenari
 
         try
             for i = 1:nTakeoffPub
-                send(rosCtx.pubTakeoff, rosCtx.msgTakeoff);
+                autosimSendToFleet(rosCtx, 'takeoff', rosCtx.msgTakeoff);
                 pause(dtTakeoffPub);
             end
         catch ME

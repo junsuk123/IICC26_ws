@@ -44,6 +44,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     pubTakeoff = rosCtx.pubTakeoff;
     pubLand = rosCtx.pubLand;
     pubCmd = rosCtx.pubCmd;
+    pubDroneVelMode = [];
+    if isfield(rosCtx, 'pubDroneVelMode')
+        pubDroneVelMode = rosCtx.pubDroneVelMode;
+    end
+    pubDroneVelModeFollowers = {};
+    if isfield(rosCtx, 'pubDroneVelModeFollowers')
+        pubDroneVelModeFollowers = rosCtx.pubDroneVelModeFollowers;
+    end
+    followerCount = 0;
+    if isfield(rosCtx, 'pubCmdFollowers')
+        followerCount = numel(rosCtx.pubCmdFollowers);
+    end
 
     tagCallbackEnabled = isfield(rosCtx, 'tag_callback_enabled') && rosCtx.tag_callback_enabled;
     tagCacheKey = "";
@@ -55,6 +67,10 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     msgTakeoff = rosCtx.msgTakeoff;
     msgLand = rosCtx.msgLand;
     msgCmd = rosCtx.msgCmd;
+    msgDroneVelMode = [];
+    if isfield(rosCtx, 'msgDroneVelMode')
+        msgDroneVelMode = rosCtx.msgDroneVelMode;
+    end
 
     sampleN = 200;
 
@@ -94,6 +110,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     semanticSafe = false(sampleN,1);
     landingFeasibility = nan(sampleN,1);
     semFeat = nan(sampleN, numel(cfg.ontology.semantic_feature_names));
+    cmdXLog = nan(sampleN,1);
+    cmdYLog = nan(sampleN,1);
+    cmdZLog = nan(sampleN,1);
+    followerExpectedLog = zeros(sampleN,1);
+    followerPoseReadyLog = zeros(sampleN,1);
+    followerStateReadyLog = zeros(sampleN,1);
+    followerTagDetectLog = zeros(sampleN,1);
+    followerFlyingLog = zeros(sampleN,1);
+    followerCmdRmsLog = nan(sampleN,1);
 
     tagHist = nan(cfg.control.tag_history_len, 2);
     tagHistCount = 0;
@@ -120,6 +145,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     pidPoseY = autosimPidInit();
 
     lastTakeoffT = -inf;
+    takeoffCmdCount = 0;
+    takeoffBroadcastUntil = nan;
+    lastDroneVelModeT = -inf;
     lastWindT = -inf;
     lastDecisionT = -inf;
     lastCtrlT = 0.0;
@@ -144,6 +172,16 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     randomBiasX = 0.0;
     randomBiasY = 0.0;
     tagLostSearchStartT = nan;
+
+    pidXFollowers = repmat(autosimPidInit(), max(1, followerCount), 1);
+    pidYFollowers = repmat(autosimPidInit(), max(1, followerCount), 1);
+    tagLostFollowers = nan(max(1, followerCount), 1);
+    lastTagUFollowers = nan(max(1, followerCount), 1);
+    lastTagVFollowers = nan(max(1, followerCount), 1);
+    lastTagDetectFollowers = -inf(max(1, followerCount), 1);
+    haveLastTagFollowers = false(max(1, followerCount), 1);
+    tagRxCountFollowers = zeros(max(1, followerCount), 1);
+    stateFollowers = nan(max(1, followerCount), 1);
 
     landingSent = false;
     landingSentT = nan;
@@ -212,6 +250,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     if isfield(cfg, 'ros') && isfield(cfg.ros, 'wind_poll_disable_after_sec') && isfinite(cfg.ros.wind_poll_disable_after_sec)
         windPollDisableAfterSec = max(0.0, cfg.ros.wind_poll_disable_after_sec);
     end
+
+    multiCountForHome = 1;
+    if isfield(cfg, 'runtime') && isfield(cfg.runtime, 'multi_drone_count')
+        multiCountForHome = max(1, round(double(cfg.runtime.multi_drone_count)));
+    end
+    spacingForHome = 3.0;
+    if isfield(cfg, 'runtime') && isfield(cfg.runtime, 'multi_drone_spacing_m')
+        spacingForHome = max(0.5, double(cfg.runtime.multi_drone_spacing_m));
+    end
+    primaryIndexForHome = 1;
+    if isfield(cfg, 'runtime') && isfield(cfg.runtime, 'primary_drone_index')
+        primaryIndexForHome = max(1, round(double(cfg.runtime.primary_drone_index)));
+    end
+    [primaryHomeX, primaryHomeY, ~] = autosimComputeSpawnPose(primaryIndexForHome, multiCountForHome, spacingForHome);
+
     k = 0;
     while true
         iterStartT = toc(t0);
@@ -261,6 +314,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             semanticSafe = [semanticSafe; false(growN,1)]; %#ok<AGROW>
             landingFeasibility = [landingFeasibility; nan(growN,1)]; %#ok<AGROW>
             semFeat = [semFeat; nan(growN, numel(cfg.ontology.semantic_feature_names))]; %#ok<AGROW>
+            cmdXLog = [cmdXLog; nan(growN,1)]; %#ok<AGROW>
+            cmdYLog = [cmdYLog; nan(growN,1)]; %#ok<AGROW>
+            cmdZLog = [cmdZLog; nan(growN,1)]; %#ok<AGROW>
+            followerExpectedLog = [followerExpectedLog; zeros(growN,1)]; %#ok<AGROW>
+            followerPoseReadyLog = [followerPoseReadyLog; zeros(growN,1)]; %#ok<AGROW>
+            followerStateReadyLog = [followerStateReadyLog; zeros(growN,1)]; %#ok<AGROW>
+            followerTagDetectLog = [followerTagDetectLog; zeros(growN,1)]; %#ok<AGROW>
+            followerFlyingLog = [followerFlyingLog; zeros(growN,1)]; %#ok<AGROW>
+            followerCmdRmsLog = [followerCmdRmsLog; nan(growN,1)]; %#ok<AGROW>
             sampleN = sampleN + growN;
         end
 
@@ -268,7 +330,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         kLast = k;
         t(k) = tk;
 
-        if ~landingSent && isfinite(scenarioTimeoutSec) && (scenarioTimeoutSec > 0) && (tk >= scenarioTimeoutSec)
+        startupTelemetryReady = isfinite(lastPoseRxT) || isfinite(lastStateRxT);
+        if ~landingSent && startupTelemetryReady && isfinite(scenarioTimeoutSec) && (scenarioTimeoutSec > 0) && (tk >= scenarioTimeoutSec)
             scenarioTimeoutHit = true;
             landingDecisionMode = "HoldLanding";
             executedAction = "HoldLanding";
@@ -467,12 +530,59 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             end
         end
 
+        flyingStates = [1, 2];
+        if isfield(cfg.control, 'takeoff_state_values') && ~isempty(cfg.control.takeoff_state_values)
+            flyingStates = unique(double(cfg.control.takeoff_state_values(:)'));
+            flyingStates = flyingStates(isfinite(flyingStates));
+            if isempty(flyingStates)
+                flyingStates = [1, 2];
+            end
+        end
+
+        rearmAltMax = 0.8;
+        if isfield(cfg.control, 'takeoff_rearm_altitude_max_m') && isfinite(cfg.control.takeoff_rearm_altitude_max_m)
+            rearmAltMax = max(0.1, double(cfg.control.takeoff_rearm_altitude_max_m));
+        end
+
+        takeoffBroadcastWindowSec = 6.0;
+        if isfield(cfg.control, 'takeoff_broadcast_window_sec') && isfinite(cfg.control.takeoff_broadcast_window_sec)
+            takeoffBroadcastWindowSec = max(0.0, double(cfg.control.takeoff_broadcast_window_sec));
+        end
+
+        droneVelModeReassertSec = 1.0;
+        if isfield(cfg.control, 'dronevel_mode_reassert_sec') && isfinite(cfg.control.dronevel_mode_reassert_sec)
+            droneVelModeReassertSec = max(0.2, double(cfg.control.dronevel_mode_reassert_sec));
+        end
+
+        if ~isempty(pubDroneVelMode) && ~isempty(msgDroneVelMode) && ((tk - lastDroneVelModeT) >= droneVelModeReassertSec)
+            try
+                send(pubDroneVelMode, msgDroneVelMode);
+                for di = 1:numel(pubDroneVelModeFollowers)
+                    send(pubDroneVelModeFollowers{di}, msgDroneVelMode);
+                end
+                lastDroneVelModeT = tk;
+            catch
+                % Keep control loop running even if velocity-mode assertion temporarily fails.
+            end
+        end
+
+        % Keep takeoff retries active until broadcast window expires so late spawns can arm.
+        if isfinite(takeoffBroadcastUntil)
+            if (tk <= takeoffBroadcastUntil) && ((tk - lastTakeoffT) >= cfg.control.takeoff_retry_sec)
+                autosimSendToFleet(rosCtx, 'takeoff', msgTakeoff);
+                lastTakeoffT = tk;
+            elseif tk > takeoffBroadcastUntil
+                takeoffBroadcastUntil = nan;
+            end
+        end
+
         isFlying = false;
         if isfinite(stateVal(k))
-            isFlying = (stateVal(k) == 1);
+            isFlying = any(abs(stateVal(k) - flyingStates) < 1e-9);
         elseif isfinite(z(k))
             isFlying = z(k) >= cfg.control.flying_altitude_threshold;
         end
+        isNearGround = isfinite(z(k)) && (z(k) <= rearmAltMax);
 
         dtCtrl = max(1e-3, tk - lastCtrlT);
         lastCtrlT = tk;
@@ -562,11 +672,13 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     end
 
                 case 'takeoff'
-                    if ~isFlying && ((tk - lastTakeoffT) >= cfg.control.takeoff_retry_sec)
-                        send(pubTakeoff, msgTakeoff);
+                    if ~isFlying && ((tk - lastTakeoffT) >= cfg.control.takeoff_retry_sec) && (takeoffCmdCount == 0 || isNearGround)
+                        autosimSendToFleet(rosCtx, 'takeoff', msgTakeoff);
                         lastTakeoffT = tk;
+                        takeoffCmdCount = takeoffCmdCount + 1;
                     end
                     if isFlying
+                        takeoffBroadcastUntil = tk + takeoffBroadcastWindowSec;
                         controlPhase = "hover_settle";
                         phaseEnterT = tk;
                         hoverStartT = nan;
@@ -579,7 +691,8 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     end
 
                 case 'hover_settle'
-                    if ~isFlying
+                    if ~isFlying && isNearGround
+                        takeoffBroadcastUntil = nan;
                         controlPhase = "takeoff";
                         phaseEnterT = tk;
                         decisionEvalStartT = nan;
@@ -613,7 +726,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     end
 
                 case 'xy_hold'
-                    if ~isFlying
+                    if ~isFlying && isNearGround
                         controlPhase = "takeoff";
                         phaseEnterT = tk;
                         hoverStartT = nan;
@@ -635,7 +748,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                             pidPoseX = autosimPidInit();
                             pidPoseY = autosimPidInit();
                             [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
-                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
+                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT, primaryHomeX, primaryHomeY);
                         end
                     end
 
@@ -665,7 +778,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                             pidPoseX = autosimPidInit();
                             pidPoseY = autosimPidInit();
                             [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
-                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT);
+                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT, primaryHomeX, primaryHomeY);
                         end
 
                         if isfield(cfg.control, 'landing_use_z_tracking') && cfg.control.landing_use_z_tracking
@@ -1226,7 +1339,16 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     'tagDetected', logical(tagDetected), ...
                     'tagJitterPx', tagJitterPx, ...
                     'tagStabilityScore', tagStabilityScore, ...
-                    'detectionContinuity', detCont);
+                    'detectionContinuity', detCont, ...
+                    'cmdX', cmdX, ...
+                    'cmdY', cmdY, ...
+                    'cmdZ', cmdZ, ...
+                    'followerExpected', followerExpectedLog(k), ...
+                    'followerPoseReady', followerPoseReadyLog(k), ...
+                    'followerStateReady', followerStateReadyLog(k), ...
+                    'followerTagDetected', followerTagDetectLog(k), ...
+                    'followerFlying', followerFlyingLog(k), ...
+                    'followerCmdRms', followerCmdRmsLog(k));
                 if ~liveVizInitAttempted
                     try
                         liveViz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg);
@@ -1249,6 +1371,25 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             msgCmd.angular.y = 0.0;
             msgCmd.angular.z = 0.0;
             send(pubCmd, msgCmd);
+        end
+
+        cmdXLog(k) = cmdX;
+        cmdYLog(k) = cmdY;
+        cmdZLog(k) = cmdZ;
+        followerExpectedLog(k) = followerCount;
+
+        if followerCount > 0
+            [pidXFollowers, pidYFollowers, tagLostFollowers, lastTagUFollowers, lastTagVFollowers, lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers, followerDiag] = ...
+                autosimUpdateFollowerCommands(cfg, rosCtx, tk, dtCtrl, recvTimeoutSec, ...
+                pidXFollowers, pidYFollowers, tagLostFollowers, lastTagUFollowers, lastTagVFollowers, ...
+                lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers);
+
+            followerExpectedLog(k) = followerDiag.expected_count;
+            followerPoseReadyLog(k) = followerDiag.pose_ready_count;
+            followerStateReadyLog(k) = followerDiag.state_ready_count;
+            followerTagDetectLog(k) = followerDiag.tag_detect_count;
+            followerFlyingLog(k) = followerDiag.flying_count;
+            followerCmdRmsLog(k) = followerDiag.cmd_xy_rms;
         end
 
         if landingSent && isfield(cfg, 'scenario') && isfield(cfg.scenario, 'analysis_stop_at_landing') && cfg.scenario.analysis_stop_at_landing && ...
@@ -1294,6 +1435,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     pitchDeg = pitchDeg(1:kLast);
     tagErr = tagErr(1:kLast);
     windSpeed = windSpeed(1:kLast);
+    windDir = windDir(1:kLast);
     stateVal = stateVal(1:kLast);
     contact = contact(1:kLast);
     imuAngVel = imuAngVel(1:kLast);
@@ -1319,6 +1461,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     semanticSafe = semanticSafe(1:kLast);
     landingFeasibility = landingFeasibility(1:kLast);
     semFeat = semFeat(1:kLast, :);
+    cmdXLog = cmdXLog(1:kLast);
+    cmdYLog = cmdYLog(1:kLast);
+    cmdZLog = cmdZLog(1:kLast);
+    followerExpectedLog = followerExpectedLog(1:kLast);
+    followerPoseReadyLog = followerPoseReadyLog(1:kLast);
+    followerStateReadyLog = followerStateReadyLog(1:kLast);
+    followerTagDetectLog = followerTagDetectLog(1:kLast);
+    followerFlyingLog = followerFlyingLog(1:kLast);
+    followerCmdRmsLog = followerCmdRmsLog(1:kLast);
 
     if isfinite(analysisStartIdx) && (analysisStartIdx <= kLast)
         keepIdx = analysisStartIdx:kLast;
@@ -1338,6 +1489,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     pitchDeg = pitchDeg(keepIdx);
     tagErr = tagErr(keepIdx);
     windSpeed = windSpeed(keepIdx);
+    windDir = windDir(keepIdx);
     stateVal = stateVal(keepIdx);
     contact = contact(keepIdx);
     imuAngVel = imuAngVel(keepIdx);
@@ -1363,6 +1515,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     semanticSafe = semanticSafe(keepIdx);
     landingFeasibility = landingFeasibility(keepIdx);
     semFeat = semFeat(keepIdx, :);
+    cmdXLog = cmdXLog(keepIdx);
+    cmdYLog = cmdYLog(keepIdx);
+    cmdZLog = cmdZLog(keepIdx);
+    followerExpectedLog = followerExpectedLog(keepIdx);
+    followerPoseReadyLog = followerPoseReadyLog(keepIdx);
+    followerStateReadyLog = followerStateReadyLog(keepIdx);
+    followerTagDetectLog = followerTagDetectLog(keepIdx);
+    followerFlyingLog = followerFlyingLog(keepIdx);
+    followerCmdRmsLog = followerCmdRmsLog(keepIdx);
 
     msgCmd.linear.x = 0.0;
     msgCmd.linear.y = 0.0;
@@ -1370,7 +1531,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     msgCmd.angular.x = 0.0;
     msgCmd.angular.y = 0.0;
     msgCmd.angular.z = 0.0;
-    send(pubCmd, msgCmd);
+    autosimSendToFleet(rosCtx, 'cmd', msgCmd);
 
     if ~landingSent
         fprintf('[AUTOSIM] s%03d ended without LAND inference, so landing trajectory was not started.\n', scenarioId);
@@ -1440,10 +1601,12 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             windMsg = autosimTryReceive(subWind, recvTimeoutSec);
         end
         if ~isempty(windMsg)
-            [wsPost, ~] = autosimParseWindConditionMsg(windMsg);
+            [wsPost, wdPost] = autosimParseWindConditionMsg(windMsg);
             windSpeed(end+1,1) = wsPost; %#ok<AGROW>
+            windDir(end+1,1) = wdPost; %#ok<AGROW>
         else
             windSpeed(end+1,1) = nan; %#ok<AGROW>
+            windDir(end+1,1) = nan; %#ok<AGROW>
         end
 
         if ~isempty(subImu)
@@ -1491,6 +1654,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         predStableProb(end+1,1) = nan; %#ok<AGROW>
         decisionTxt(end+1,1) = "post_observe"; %#ok<AGROW>
         t(end+1,1) = toc(t0); %#ok<AGROW>
+        cmdXLog(end+1,1) = 0.0; %#ok<AGROW>
+        cmdYLog(end+1,1) = 0.0; %#ok<AGROW>
+        cmdZLog(end+1,1) = 0.0; %#ok<AGROW>
+        followerExpectedLog(end+1,1) = max(0, followerCount); %#ok<AGROW>
+        followerPoseReadyLog(end+1,1) = 0; %#ok<AGROW>
+        followerStateReadyLog(end+1,1) = 0; %#ok<AGROW>
+        followerTagDetectLog(end+1,1) = 0; %#ok<AGROW>
+        followerFlyingLog(end+1,1) = 0; %#ok<AGROW>
+        followerCmdRmsLog(end+1,1) = nan; %#ok<AGROW>
 
         inferPost = "HOLD_LANDING";
         if landingSent
@@ -1542,7 +1714,16 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 'tagDetected', isfinite(autosimNanLast(tagErr)), ...
                 'tagJitterPx', nan, ...
                 'tagStabilityScore', nan, ...
-                'detectionContinuity', nan);
+                'detectionContinuity', nan, ...
+                'cmdX', autosimNanLast(cmdXLog), ...
+                'cmdY', autosimNanLast(cmdYLog), ...
+                'cmdZ', autosimNanLast(cmdZLog), ...
+                'followerExpected', autosimNanLast(followerExpectedLog), ...
+                'followerPoseReady', autosimNanLast(followerPoseReadyLog), ...
+                'followerStateReady', autosimNanLast(followerStateReadyLog), ...
+                'followerTagDetected', autosimNanLast(followerTagDetectLog), ...
+                'followerFlying', autosimNanLast(followerFlyingLog), ...
+                'followerCmdRms', autosimNanLast(followerCmdRmsLog));
             if ~liveVizInitAttempted
                 try
                     liveViz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg);
@@ -1632,6 +1813,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     traceTbl.semantic_integration = autosimPadLenString(semanticIntegration, n);
     traceTbl.semantic_safe = autosimPadLen(double(semanticSafe), n);
     traceTbl.landing_feasibility = autosimPadLen(landingFeasibility, n);
+    traceTbl.cmd_x = autosimPadLen(cmdXLog, n);
+    traceTbl.cmd_y = autosimPadLen(cmdYLog, n);
+    traceTbl.cmd_z = autosimPadLen(cmdZLog, n);
+    traceTbl.follower_expected = autosimPadLen(followerExpectedLog, n);
+    traceTbl.follower_pose_ready = autosimPadLen(followerPoseReadyLog, n);
+    traceTbl.follower_state_ready = autosimPadLen(followerStateReadyLog, n);
+    traceTbl.follower_tag_detected = autosimPadLen(followerTagDetectLog, n);
+    traceTbl.follower_flying = autosimPadLen(followerFlyingLog, n);
+    traceTbl.follower_cmd_xy_rms = autosimPadLen(followerCmdRmsLog, n);
     for i = 1:numel(cfg.ontology.semantic_feature_names)
         fn = char(cfg.ontology.semantic_feature_names(i));
         traceTbl.(['sem_' fn]) = autosimPadLen(semFeat(:, i), n);

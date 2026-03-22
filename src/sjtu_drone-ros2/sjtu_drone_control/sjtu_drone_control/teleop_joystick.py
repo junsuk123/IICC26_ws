@@ -20,9 +20,29 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import Empty
 
 
+def _normalize_namespace(ns: str) -> str:
+    ns = (ns or '').strip()
+    if not ns:
+        return '/drone'
+    if not ns.startswith('/'):
+        ns = '/' + ns
+    return ns
+
+
+def _namespace_from_prefix(prefix: str, index: int) -> str:
+    p = (prefix or 'drone_w').strip().strip('/')
+    if not p:
+        p = 'drone_w'
+    return f'/{p}{index:02d}'
+
+
 class TeleopNode(Node):
     def __init__(self) -> None:
         super().__init__('teleop_node')
+
+        self.declare_parameter('multi_drone_count', 1)
+        self.declare_parameter('multi_drone_namespace_prefix', 'drone_w')
+        self.declare_parameter('primary_namespace', '')
 
         # Subscribers
         self.create_subscription(Joy, 'joy', self.joy_callback, 0)
@@ -31,6 +51,27 @@ class TeleopNode(Node):
         self.cmd_vel_publisher = self.create_publisher(Twist, 'cmd_vel', 10)
         self.takeoff_publisher = self.create_publisher(Empty, 'takeoff', 10)
         self.land_publisher = self.create_publisher(Empty, 'land', 10)
+
+        self.cmd_vel_followers = []
+        self.takeoff_followers = []
+        self.land_followers = []
+
+        multi_count = int(self.get_parameter('multi_drone_count').value)
+        ns_prefix = str(self.get_parameter('multi_drone_namespace_prefix').value)
+        primary_ns_param = str(self.get_parameter('primary_namespace').value)
+        primary_ns = _normalize_namespace(primary_ns_param if primary_ns_param else self.get_namespace())
+
+        if multi_count > 1:
+            all_ns = [_namespace_from_prefix(ns_prefix, i + 1) for i in range(multi_count)]
+            followers = [ns for ns in all_ns if ns != primary_ns]
+            for ns in followers:
+                self.cmd_vel_followers.append(self.create_publisher(Twist, f'{ns}/cmd_vel', 10))
+                self.takeoff_followers.append(self.create_publisher(Empty, f'{ns}/takeoff', 10))
+                self.land_followers.append(self.create_publisher(Empty, f'{ns}/land', 10))
+            self.get_logger().info(
+                'Multi-drone joystick teleop enabled: primary=%s followers=%s'
+                % (primary_ns, ','.join(followers))
+            )
 
     def joy_callback(self, msg: Joy) -> None:
         """
@@ -77,16 +118,28 @@ class TeleopNode(Node):
         angular_vec = Vector3()
         angular_vec.z = msg.axes[2]
 
-        self.cmd_vel_publisher.publish(Twist(linear=linear_vec, angular=angular_vec))
+        twist = Twist(linear=linear_vec, angular=angular_vec)
+        self.cmd_vel_publisher.publish(twist)
+        for pub in self.cmd_vel_followers:
+            pub.publish(twist)
 
         # Handle other keys for different movements
         if msg.buttons[0] == 1:
             # Takeoff
-            self.takeoff_publisher.publish(Empty())
+            takeoff_msg = Empty()
+            self.takeoff_publisher.publish(takeoff_msg)
+            for pub in self.takeoff_followers:
+                pub.publish(takeoff_msg)
         elif msg.buttons[1] == 1:
             # Land
-            self.cmd_vel_publisher.publish(Twist())
-            self.land_publisher.publish(Empty())
+            stop_msg = Twist()
+            self.cmd_vel_publisher.publish(stop_msg)
+            for pub in self.cmd_vel_followers:
+                pub.publish(stop_msg)
+            land_msg = Empty()
+            self.land_publisher.publish(land_msg)
+            for pub in self.land_followers:
+                pub.publish(land_msg)
 
 
 def main(args=None):

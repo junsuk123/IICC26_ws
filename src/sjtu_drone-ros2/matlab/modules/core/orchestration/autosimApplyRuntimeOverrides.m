@@ -84,6 +84,26 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     cfg.paths.log_dir = fullfile(cfg.paths.log_root, cfg.paths.run_id);
     cfg.paths.lock_file = fullfile(cfg.paths.data_root, sprintf('autosim_w%02d.lock', workerId));
 
+    % Keep persistence outputs aligned with runtime-adjusted data directory.
+    if isfield(cfg, 'persistence') && isstruct(cfg.persistence)
+        cfg.persistence.checkpoint_mat = fullfile(cfg.paths.data_dir, 'autosim_checkpoint_latest.mat');
+        cfg.persistence.checkpoint_csv = fullfile(cfg.paths.data_dir, 'autosim_dataset_latest.csv');
+        cfg.persistence.trace_csv = fullfile(cfg.paths.data_dir, 'autosim_trace_latest.csv');
+    end
+
+    % In multi-worker runs, GUI/RViz defaults are headless unless explicitly overridden.
+    defaultUseGui = true;
+    defaultUseRviz = true;
+    if workerCount > 1
+        defaultUseGui = false;
+        defaultUseRviz = false;
+    end
+    if ~isfield(cfg, 'launch') || ~isstruct(cfg.launch)
+        cfg.launch = struct();
+    end
+    cfg.launch.use_gui = autosimEnvBool('AUTOSIM_USE_GUI', defaultUseGui);
+    cfg.launch.use_rviz = autosimEnvBool('AUTOSIM_USE_RVIZ', defaultUseRviz);
+
     envItems = strings(0, 1);
     if isfinite(domainId)
         envItems(end+1, 1) = sprintf('export ROS_DOMAIN_ID=%d', round(domainId)); %#ok<AGROW>

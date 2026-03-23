@@ -70,9 +70,58 @@ $$
 s_{sem}=w_w(1-r_w)+w_v c_v+w_a s_a
 $$
 
+## Sigmoid 인코딩: 특징 정규화
+
+온톨로지 모듈은 위의 규칙 기반 점수들($r_w, c_v, s_a$)을 **Sigmoid 인코딩**을 통해 확률 범위 [0,1]로 변환한다. 이는 학습 모듈의 의사결정 모델에 입력되기 전 단계이다.
+
+### 아키텍처
+
+$$
+\text{Raw Features} \xrightarrow[\text{규칙식}]{r_w, c_v, s_a} \text{점수 (0~∞)} \xrightarrow[\text{Sigmoid}]{\sigma} \text{인코딩 (0~1)} \xrightarrow[\text{GaussianNB}]{\text{Learning}} \text{판정}
+$$
+
+### Sigmoid 변환 함수
+
+각 의미 특징을 독립적으로 sigmoid 활성화한다.
+
+$$
+\text{wind\_risk\_enc} = \sigma(w_w^T[\|\mathbf{v}_w\|, \|\mathbf{a}_w\|, \ldots] + b_w) \in [0,1]
+$$
+
+$$
+\text{alignment\_enc} = \sigma(w_a^T[e_{tag}, \text{trend}, \ldots] + b_a) \in [0,1]
+$$
+
+$$
+\text{visual\_enc} = \sigma(w_v^T[\text{stability}, \text{jitter}, \ldots] + b_v) \in [0,1]
+$$
+
+여기서 $\sigma(z) = \frac{1}{1 + e^{-z}}$이다.
+
+### 왜 Sigmoid를 사용하나?
+
+| 이유 | 상세 |
+|------|------|
+| **확률 해석** | [0,1] 범위로 정규화되어 물리량이 아닌 "신뢰도" 또는 "위험도"로 해석 가능 |
+| **비선형 분리** | 선형 결합 후 비선형 활성화로 복잡한 특징 공간 매핑 |
+| **극도 경량** | exp 연산만 필요, 온콜로지 엔진에서 실시간 계산 가능 |
+| **미분 가능** | $\frac{d\sigma}{dz}=\sigma(z)(1-\sigma(z))$ — 향후 학습 기반 최적화 확장 가능 |
+| **Learning 예비** | 변환된 특징 공간에서 GaussianNB가 클래스 경계를 더 잘 학습 |
+
+### 구현
+
+[autosimLinearSigmoid.m](autosimLinearSigmoid.m)에서 구현되며, 안전 핸들링(NaN/inf 방지)을 포함한다.
+
+```matlab
+function y = autosimLinearSigmoid(x, w, b, fallback)
+    z = sum(x .* w) + b;
+    y = 1.0 / (1.0 + exp(-z));
+end
+```
+
 ## 수식 변수 정의 (상세)
 
-아래 변수 정의는 본 문서의 풍하중/자세 수식 전체에 공통으로 적용한다.
+아래 변수 정의는 본 문서의 풍하중/자세/Sigmoid 수식 전체에 공통으로 적용한다.
 
 ### 1) 바람 벡터와 항력 식 변수
 

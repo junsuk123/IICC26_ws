@@ -44,6 +44,67 @@ $$
 \pi'_c=(1-\lambda)\pi_c+\lambda\frac{1}{K}
 $$
 
+## GaussianNB와 Sigmoid의 역할 분리
+
+Learning 모듈은 의사결정 파이프라인 내에서 **특징 인코딩(Sigmoid)과 확률 분류(GaussianNB)** 두 단계를 보완적으로 사용한다.
+
+### 아키텍처
+
+$$
+\text{센서 신호} \xrightarrow[\text{ontology}]{\text{Sigmoid}} \text{특징 벡터} \xrightarrow[\text{learning}]{\text{GaussianNB}} \text{착륙 판정}
+$$
+
+### 역할 구분
+
+| 단계 | 기법 | 담당 모듈 | 입력 | 출력 | 목적 |
+|------|------|---------|------|------|------|
+| **1단계** | Sigmoid | `autosim_ontology_engine.m` | Raw 센서 (풍속, 오차, 자세) | $[\text{wind\_risk\_enc}, \text{align\_enc}, \text{visual\_enc}]$ | 비선형 정규화 + 물리 해석 |
+| **2단계** | GaussianNB | `autosimPredictGaussianNB.m` | 인코딩된 특징 (13차원) | $P(\text{AttemptLanding}\|X)$ | 확률 기반 분류 + 신뢰도 |
+
+### 왜 두 기법을 함께 사용하나?
+
+**Sigmoid의 역할 (특징 변환):**
+- 각 센서 그룹을 독립적으로 [0,1] 범위로 정규화  
+- 선형 결합 후 시그모이드: $\text{enc}_i = \sigma(w_i^T x + b_i) \in [0,1]$
+- **장점:** 경량(O(1)), 물리 의미 명확, 온톨로지 규칙과 자연스러운 통합
+
+**GaussianNB의 역할 (확률 분류):**
+- Sigmoid로 변환된 특징 공간에서 **클래스 조건부 분포를 학습**
+- 사후확률 계산: $P(\text{착륙}\|X) = \frac{P(X|\text{착륙})P(\text{착륙})}{P(X)}$
+- **장점:** 해석 가능, 데이터 효율성, 불균형 자동 처리, 실시간 추론
+
+### 선택 근거
+
+| 평가 항목 | Sigmoid 단독 | Sigmoid+GaussianNB |
+|-----------|------------|-------------------|
+| 특징 정규화 | ✓ | ✓ |
+| 클래스 경계 학습 | ✗ | ✓ |
+| 신뢰도 수량화 | 고정 점수 | 동적 사후확률 |
+| 데이터 필요량 | 중간 | 적음 (분포 기반) |
+| 해석성 | 낮음 | 높음 (μ, σ² 가시화) |
+| 불균형 처리 | 수동 | 자동 (prior blend) |
+| 실시간 성능 | 극도로 빠름 | 빠름 (O(n) 로그 연산) |
+
+### 구체적 예시
+
+```matlab
+% 1) Sigmoid 인코딩 (ontology engine)
+wind_risk_enc = sigmoid(0.5 * wind_speed + (-0.3) * wind_accel + 0.2)  % = 0.62
+align_enc = sigmoid(2.0 * (-tag_error) + 0.1)                          % = 0.78
+visual_enc = sigmoid(1.5 * attitude_stability + (-0.5))                % = 0.85
+
+% 2) GaussianNB 분류 (learning module)
+X = [0.62, 0.78, 0.85, ..., other_features];  % 13차원 입력
+
+% 조건부 분포: P(X|AttemptLanding), P(X|HoldLanding)
+log_prob_attempt = sum(log_likelihood_attempt);  % 학습된 μ, σ²로 계산
+log_prob_hold = sum(log_likelihood_hold);
+
+% 사후확률
+post_prob_attempt = softmax(log_prob_attempt, log_prob_hold);
+% post_prob_attempt ≈ 0.91 → "AttemptLanding" 결정 (신뢰도 91%)
+```
+
 ## 핵심 변수/용어 표
 
 | 항목 | 의미 | 단위/범위 | 비고 |

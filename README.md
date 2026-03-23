@@ -7,40 +7,32 @@ IICC26 워크스페이스는 ROS2+Gazebo 시뮬레이션과 MATLAB `AutoSim`을 
 
 ## 최근 업데이트 (2026-03-23)
 
-이번 업데이트의 핵심은 바람 위험도를 항력 물리량 기반으로 계산하도록 정렬하고, 수집 타임아웃 상한을 고정한 것이다.
+이번 업데이트의 핵심은 온톨로지 위험도와 AI 결합 규칙을 실행 데이터 스키마와 1:1로 정렬한 것이다.
 
-- 온톨로지 바람 위험도는 풍속 벡터로부터 항력을 계산해 하중 비율로 평가한다.
-- 바람 가속도는 gust gain으로 반영해 급격한 외란에서 위험도를 보수적으로 증폭한다.
+- 온톨로지 바람 위험도는 풍속/가속도의 벡터 성분과 크기를 함께 보존해 계산한다.
+- 모델 기반 착륙 결정은 온톨로지 가드(문맥/시각/풍위험/관계 일관성)를 통과해야 활성화된다.
+- 의미론과 모델이 충돌하거나 주의 상태일 때는 모델 가중치가 자동 축소되는 적응 융합을 적용한다.
 - 드론 1대 기준 데이터 수집은 시나리오당 최대 120초를 넘지 않도록 하드 타임아웃을 적용했다.
 
-항력 기반 위험도 요약식:
+최신 위험도/융합 요약식:
 
 $$
-\mathbf{v}_w = [v_x, v_y]^\top,\quad
-\mathbf{a}_w = [a_x, a_y]^\top,
-v = \max\left(\|\mathbf{v}_w\|_2, \max(|v_x|, |v_y|)\right)
-$$
-
-$$
-F_d = \frac{1}{2}\rho C_d A v^2
+\mathbf{v}_w=[v_x,v_y]^\top,\ \mathbf{a}_w=[a_x,a_y]^\top
 $$
 
 $$
-r_d = \frac{F_d}{F_{cap}},\quad
-v_{eq} = v_{unsafe}\cdot\sqrt{r_d}
+r_v=\max\!\left(\|\mathbf{v}_w\|_2,\max(|v_x|,|v_y|)\right),\quad
+r_a=\max\!\left(\|\mathbf{a}_w\|_2,\max(|a_x|,|a_y|)\right)
 $$
 
 $$
-c_{tilt}=\cos(|roll|)\cos(|pitch|),\quad
-T_{req}=\frac{mg}{\max(c_{tilt},c_{min})},\quad
-F_{cap}=\max(T_{max}-T_{req},F_{min})
+r_{wind}=\max(r_v,r_a)
 $$
 
 $$
-r_{wind} = \max\left(v,\ v_{eq}\right)
+s_{fusion}=w_m\,p_{model}(safe)+(1-w_m)\,s_{semantic},\quad
+w_m\downarrow\ \text{if semantic caution/conflict}
 $$
-
-수집 시간 상한식:
 
 $$
 t_{collect} \le 120\ \text{s per drone}
@@ -78,7 +70,7 @@ $$
 v_{landing\_{limit}} = \alpha \cdot v_{hover\_limit}, \quad \alpha \approx 0.5
 $$
 
-### 2) 온톨로지+AI 결합 판단
+### 2) 온톨로지+AI 결합 판단 (최신)
 
 최종 착륙 점수는 모델 확률과 의미론적 안전 점수의 가중 결합으로 구성한다.
 
@@ -86,9 +78,10 @@ $$
 s_{fusion} = w_m \cdot p_{model}(safe) + (1-w_m) \cdot s_{semantic}
 $$
 
-- `s_semantic`: 온톨로지 규칙(풍하중 위험, 시각 신뢰도, 자세 안정성) 기반 안전도
+- `s_semantic`: 온톨로지 규칙(풍속/가속도 결합 위험, 시각 신뢰도, 자세 안정성) 기반 안전도
 - `p_model(safe)`: 학습 모델의 안전 착륙 확률
 - `w_m`: 의미론 충돌/주의 상태에서 자동 축소되는 적응 가중치
+- 모델 분기는 온톨로지 가드 통과 시에만 활성화되며, 비통과 시 의미론 보수 정책으로 즉시 폴백한다.
 
 최종 정책은 임계값 비교로 이진화한다.
 
@@ -211,7 +204,7 @@ graph TD
 
 각 센서 도메인을 의미론적 점수로 변환합니다.
 
-- **풍하중 위험도 $r_w$**: 항력 하중 비율로부터 계산된 정규화 위험도 (0~1)
+- **풍위험도 $r_w$**: 풍속/가속도의 벡터 성분과 크기를 동시 반영한 결합 위험도
 - **정렬 신뢰도 $c_v$**: 태그 투영 오차로부터 비전 정렬 품질 평가
 - **자세 안정도 $s_a$**: Roll/Pitch 각도의 지수 감쇠 모델로 자세 안정성 평가
 
@@ -233,6 +226,7 @@ graph TD
 
 - **학습**: 클래스별 평균, 분산, 사전확률 추정 (클래스 불균형 보정용 사전 혼합)
 - **추론**: 우도(likelihood)와 사전확률의 로그합으로부터 사후확률 계산
+- **프로토콜(2026-03-23)**: FinalDataset 통합 테이블 기준 결정론적 70/30 분할로 학습/검증 일관성을 유지
 
 **7) 융합 및 의사결정 (Fusion & Decision)**
 

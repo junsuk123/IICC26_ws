@@ -20,6 +20,12 @@ r_d=\frac{F_d}{F_{cap}},\quad
 r_{wind}=\min\left(1,\sqrt{r_d}\right)
 $$
 
+$$
+c_{tilt}=\cos(|roll|)\cos(|pitch|),\quad
+T_{req}=\frac{mg}{\max(c_{tilt},c_{min})},\quad
+F_{cap}=\max(T_{max}-T_{req},F_{min})
+$$
+
 semantic 출력에도 `wind_velocity_x/y`, `wind_acceleration_x/y`를 유지해 차원 누락을 방지한다.
 
 ## 기능 설명
@@ -43,6 +49,8 @@ $$
 $$
 r_w = \min\left(1,\sqrt{\frac{F_d}{F_{cap}}}\right)
 $$
+
+여기서 $F_{cap}$은 현재 자세 기울기(roll/pitch)에 따라 감소하는 유효 추력 여유를 사용한다.
 
 시각 정렬 신뢰도는 중심 오차 정규화로 계산한다.
 

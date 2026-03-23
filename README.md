@@ -37,6 +37,12 @@ v_{eq} = v_{unsafe}\cdot\sqrt{r_d}
 $$
 
 $$
+c_{tilt}=\cos(|roll|)\cos(|pitch|),\quad
+T_{req}=\frac{mg}{\max(c_{tilt},c_{min})},\quad
+F_{cap}=\max(T_{max}-T_{req},F_{min})
+$$
+
+$$
 r_{wind} = \max\left(v,\ v_{eq}\right)
 $$
 
@@ -56,18 +62,20 @@ $$
 
 ### 1) 바람 하중 기반 물리 한계
 
-드론이 횡풍을 버틸 수 있는 최대 조건을, 추력 여유와 항력 평형으로 근사한다.
+드론이 횡풍을 버틸 수 있는 최대 조건을, 기울기 보정 추력 여유와 항력 평형으로 근사한다.
 
 $$
 F_d = \frac{1}{2}\rho C_d A v^2
 $$
 
 $$
-F_{margin} = T_{max} - mg
+c_{tilt}=\cos(|roll|)\cos(|pitch|),\quad
+T_{req}=\frac{mg}{\max(c_{tilt},c_{min})},\quad
+F_{cap}=\max(T_{max}-T_{req},F_{min})
 $$
 
 $$
-v_{hover\_{limit}} = \sqrt{\frac{2(T_{max}-mg)}{\rho C_d A}}
+v_{hover\_{limit}} = \sqrt{\frac{2F_{cap}}{\rho C_d A}}
 $$
 
 착륙 구간은 호버보다 보수적으로 제한한다.
@@ -132,16 +140,16 @@ $$
 ```mermaid
 graph TD
     subgraph Input["SENSOR INPUT STAGE"]
-        S1["Wind Sensors<br/>---<br/>v: wind speed<br/>theta: wind direction<br/>a_v: wind acceleration"]
-        S2["IMU<br/>---<br/>phi, theta: roll, pitch<br/>v_z: vertical velocity<br/>omega, a: angular/linear acc"]
+        S1["Wind Sensors<br/>---<br/>wind speed<br/>wind direction<br/>wind acceleration"]
+        S2["IMU<br/>---<br/>roll and pitch<br/>vertical velocity<br/>angular and linear acceleration"]
         S3["Vision System<br/>---<br/>u, v: tag position<br/>error: projection error<br/>jitter: frame variance"]
     end
 
     subgraph OntoProc["ONTOLOGY ENCODING STAGE"]
         direction LR
-        O1["Wind Risk Computation<br/>---<br/>F_d=0.5*rho*C_d*A*v^2<br/>r_w from drag load ratio<br/>output: wind_risk_enc"]
-        O2["Alignment Confidence<br/>---<br/>c_v = min(1, max(0, 1 - e_tag/e_thr))<br/>output: alignment_enc"]
-        O3["Attitude Stability<br/>---<br/>s_a = exp(-beta_r*|phi|/phi_thr - beta_p*|theta|/theta_thr)<br/>output: visual_enc"]
+        O1["Wind Risk Computation<br/>---<br/>drag load based risk encoding<br/>output: wind_risk_enc"]
+        O2["Alignment Confidence<br/>---<br/>tag error normalization<br/>output: alignment_enc"]
+        O3["Attitude Stability<br/>---<br/>roll pitch stability assessment<br/>output: visual_enc"]
         O4["Temporal Context<br/>---<br/>m_ctx: consistency across decision window<br/>output: context_enc"]
     end
 
@@ -151,8 +159,8 @@ graph TD
 
     subgraph StatExtract["STATISTICAL FEATURE EXTRACTION"]
         direction LR
-        FE1["Window Aggregation<br/>---<br/>T_window = decision_horizon<br/>Attributes: mean, max, std"]
-        FE2["Compositional Features<br/>---<br/>vector_x, vector_y<br/>magnitude: sqrt(x^2 + y^2)"]
+        FE1["Window Aggregation<br/>---<br/>decision horizon window<br/>attributes: mean, max, std"]
+        FE2["Compositional Features<br/>---<br/>vector components<br/>magnitude feature"]
     end
 
     subgraph AIInput["AI INPUT VECTOR (24-dim)"]
@@ -161,15 +169,15 @@ graph TD
 
     subgraph Learning["LEARNING MODULE<br/>(Gaussian Naive Bayes)"]
         direction LR
-        L1["Training Phase<br/>---<br/>Per-class statistics:<br/>mu_k = E[X|y=k]<br/>sigma2_k = Var[X|y=k]<br/>p_k = P(y=k)<br/><br/>Prior blending for imbalance:<br/>p_k = (1-lambda)*empirical + lambda/K"]
-        L2["Inference Phase<br/>---<br/>Likelihood: P(x|y=k)<br/>= exp(-0.5*sum((x-mu_k)^2/sigma2_k))<br/><br/>Posterior:<br/>P(y=k|x) = softmax(log P(x|y=k) + log p_k)"]
+        L1["Training Phase<br/>---<br/>class statistics estimation<br/>prior estimation and blending"]
+        L2["Inference Phase<br/>---<br/>likelihood evaluation<br/>posterior estimation"]
     end
 
     subgraph Decision["FUSION & DECISION"]
         direction LR
-        D1["Semantic Safety Score<br/>---<br/>s_semantic = w_w*(1-r_w) + w_v*c_v<br/>          + w_a*s_a + w_m*m_ctx"]
-        D2["Model Fusion<br/>---<br/>s_fusion = w_m * p_model(safe)<br/>         + (1-w_m) * s_semantic"]
-        D3["Decision Rule<br/>---<br/>if s_fusion >= tau:<br/>  AttemptLanding<br/>else:<br/>  HoldLanding"]
+        D1["Semantic Safety Score<br/>---<br/>semantic risk and stability aggregation"]
+        D2["Model Fusion<br/>---<br/>combine model confidence<br/>and semantic safety score"]
+        D3["Decision Rule<br/>---<br/>threshold based decision<br/>AttemptLanding or HoldLanding"]
     end
 
     S1 --> O1

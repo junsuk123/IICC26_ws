@@ -49,7 +49,7 @@ onto.wind_velocity_vec = asv(windObs, 'wind_velocity', [onto.wind_speed; 0.0]);
 onto.wind_velocity = vector_mag(onto.wind_velocity_vec);
 onto.wind_acceleration_vec = asv(windObs, 'wind_acceleration', [0.0; 0.0]);
 onto.wind_acceleration = vector_mag(onto.wind_acceleration_vec);
-onto.wind_risk = compute_wind_risk(onto.wind_velocity_vec, onto.wind_acceleration_vec, cfg);
+onto.wind_risk = compute_wind_risk(onto.wind_velocity_vec, onto.wind_acceleration_vec, cfg, onto.roll_abs, onto.pitch_abs);
 windVelComp = ensure_vec2(onto.wind_velocity_vec, [onto.wind_velocity; 0.0]);
 windAccComp = ensure_vec2(onto.wind_acceleration_vec, [onto.wind_acceleration; 0.0]);
 onto.wind_velocity_x = windVelComp(1);
@@ -95,7 +95,9 @@ windVelocity = hypot(windVelocityVec(1), windVelocityVec(2));
 windAcc = hypot(windAccVec(1), windAccVec(2));
 windCaution = cfg.ontology.wind_caution_speed;
 windUnsafe = cfg.ontology.wind_unsafe_speed;
-windRisk = compute_wind_risk(windVelocityVec, windAccVec, cfg);
+rollAbs = abs(asv(onto, 'roll_abs', 0.0));
+pitchAbs = abs(asv(onto, 'pitch_abs', 0.0));
+windRisk = compute_wind_risk(windVelocityVec, windAccVec, cfg, rollAbs, pitchAbs);
 
 % Assign wind risk display name and encoding
 if windRisk >= windUnsafe
@@ -317,12 +319,19 @@ p = polyfit(t, recentSamples, 1);
 windAcc = p(1);  % Slope in m/s per second = m/s^2
 end
 
-function windRisk = compute_wind_risk(windVelocity, windAcceleration, cfg)
+function windRisk = compute_wind_risk(windVelocity, windAcceleration, cfg, rollAbs, pitchAbs)
+    if nargin < 4 || ~isfinite(double(rollAbs))
+        rollAbs = 0.0;
+    end
+    if nargin < 5 || ~isfinite(double(pitchAbs))
+        pitchAbs = 0.0;
+    end
+
     [velMag, velComp] = vector_mag_and_component_max(windVelocity);
     [accMag, accComp] = vector_mag_and_component_max(windAcceleration);
     windUnsafe = max(1e-3, asv(cfg.ontology, 'wind_unsafe_speed', 1.0));
 
-    model = get_wind_load_model(cfg);
+    model = get_wind_load_model(cfg, rollAbs, pitchAbs);
     dynPressure = 0.5 * model.rho * model.cd * model.area;
 
     dragMag = dynPressure * (velMag ^ 2);
@@ -338,7 +347,14 @@ function windRisk = compute_wind_risk(windVelocity, windAcceleration, cfg)
     windRisk = max([velMag, velComp, dragEquivalentSpeed]);
 end
 
-function model = get_wind_load_model(cfg)
+function model = get_wind_load_model(cfg, rollAbs, pitchAbs)
+    if nargin < 2 || ~isfinite(double(rollAbs))
+        rollAbs = 0.0;
+    end
+    if nargin < 3 || ~isfinite(double(pitchAbs))
+        pitchAbs = 0.0;
+    end
+
     model = struct();
     model.rho = 1.225;
     model.cd = 1.10;
@@ -354,15 +370,25 @@ function model = get_wind_load_model(cfg)
     model.cd = max(1e-6, windPhysicsField(p, 'drag_coefficient', model.cd));
     model.area = max(1e-6, windPhysicsField(p, 'frontal_area_m2', model.area));
 
-    margin = windPhysicsField(p, 'thrust_margin_n', nan);
+    massKg = windPhysicsField(p, 'mass_kg', 1.4);
+    grav = windPhysicsField(p, 'gravity_mps2', 9.81);
+    maxThrust = windPhysicsField(p, 'max_total_thrust_n', 24.0);
+    minMargin = max(0.0, windPhysicsField(p, 'min_thrust_margin_n', 0.5));
+
+    cosTilt = cos(abs(double(rollAbs))) * cos(abs(double(pitchAbs)));
+    cosTilt = min(1.0, max(0.15, cosTilt));
+    requiredHoverThrust = (massKg * grav) / cosTilt;
+
+    margin = maxThrust - requiredHoverThrust;
     if ~(isfinite(margin) && (margin > 0))
-        massKg = windPhysicsField(p, 'mass_kg', 1.4);
-        grav = windPhysicsField(p, 'gravity_mps2', 9.81);
-        maxThrust = windPhysicsField(p, 'max_total_thrust_n', 24.0);
-        minMargin = max(0.0, windPhysicsField(p, 'min_thrust_margin_n', 0.5));
-        margin = max(maxThrust - massKg * grav, minMargin);
+        marginFlat = windPhysicsField(p, 'thrust_margin_n', maxThrust - massKg * grav);
+        if isfinite(marginFlat)
+            margin = marginFlat;
+        else
+            margin = maxThrust - massKg * grav;
+        end
     end
-    margin = max(1e-6, margin);
+    margin = max(1e-6, max(margin, minMargin));
 
     model.drag_capacity_n = margin;
 end

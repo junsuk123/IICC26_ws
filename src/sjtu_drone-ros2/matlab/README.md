@@ -23,6 +23,12 @@ r_d=\frac{F_d}{F_{cap}}
 $$
 
 $$
+c_{tilt}=\cos(|roll|)\cos(|pitch|),\quad
+T_{req}=\frac{mg}{\max(c_{tilt},c_{min})},\quad
+F_{cap}=\max(T_{max}-T_{req},F_{min})
+$$
+
+$$
 v_{eq}=v_{unsafe}\cdot\sqrt{r_d},\quad
 r_{wind}=\max(v,v_{eq})
 $$
@@ -191,13 +197,13 @@ graph TD
     end
 
     subgraph Model["🤖 Gaussian Naive Bayes 분류기"]
-        Train["Training with:<br/>μ = class mean<br/>σ² = class variance<br/>P(class) = prior"]
-        Infer["Inference:<br/>log P(x|class) + log P(class)<br/>⬇<br/>softmax → posteriors"]
-        Output["Output:<br/>P(AttemptLanding)"]
+        Train["Training with:<br/>class mean and variance<br/>class prior estimation"]
+        Infer["Inference:<br/>likelihood and prior combination<br/>posterior scoring"]
+        Output["Output:<br/>AttemptLanding confidence"]
     end
 
     subgraph Decision["✅ 최종 의사결정"]
-        Rule["Ontology Rules<br/>+<br/>AI Probability<br/>=>"]
+        Rule["Ontology Rules<br/>and<br/>AI Confidence"]
         Final["AttemptLanding<br/>or<br/>HoldLanding"]
     end
 
@@ -327,7 +333,7 @@ r_d = \frac{F_d}{F_{cap}},\quad
 r_w = \min\left(1,\sqrt{r_d}\right)
 $$
 
-- $F_{cap}$: 추력 여유에서 유도된 횡풍 항력 허용치
+- $F_{cap}$: 현재 기울기(roll/pitch) 보정 후 남는 추력 여유에서 유도된 횡풍 항력 허용치
 - 풍가속도는 gust gain으로 $F_d$에 보수적으로 반영
 
 시각 정렬 신뢰도는 태그 중심 오차를 기준으로 다음과 같이 정의한다.

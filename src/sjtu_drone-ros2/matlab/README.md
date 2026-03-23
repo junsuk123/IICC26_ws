@@ -45,6 +45,56 @@ $$
 
 수집 루프에서는 해당 상한 도달 시 즉시 중단하고 안전 측으로 귀결한다.
 
+### 3) 의사결정 모델: GaussianNB와 Sigmoid의 역할 분리
+
+AutoSim의 의사결정 파이프라인은 **Sigmoid 인코딩**과 **Gaussian Naive Bayes (GaussianNB) 분류**를 보완적으로 사용한다.
+
+| 기법 | 용도 | 목적 | 함수 |
+|------|------|------|------|
+| **Sigmoid** | 특징 인코딩 | Raw 센서 → 확률 범위(0~1) | `autosimLinearSigmoid()` |
+| **GaussianNB** | 의사결정 분류 | 인코딩된 특징 → AttemptLanding/HoldLanding | `autosimTrainGaussianNB()` |
+
+**아키텍처 플로우:**
+
+$$
+\text{Raw Sensors} \xrightarrow{\text{Sigmoid}} [\text{wind\_risk\_enc}, \text{alignment\_enc}, \text{visual\_enc}, \ldots] \xrightarrow{\text{GaussianNB}} \text{Decision}
+$$
+
+**Sigmoid 역할 (특징 변환):**
+- 각 센서 그룹(풍속, 정렬 오차, 자세)을 독립적으로 0~1 범위로 정규화
+- 선형 결합 후 시그모이드 활성화: $\sigma(w_i \cdot x_i + b_i) \in [0,1]$
+- 비용이 극도로 가볍고 온톨로지 규칙 기반 조건과 자연스럽게 결합
+
+**GaussianNB 역할 (확률 분류):**
+- 변환된 특징 공간에서 **착륙 가능/불가능 클래스를 확률 분포로 학습**
+- 사후확률 계산: $P(\text{AttemptLanding}|X) = \frac{P(X|\text{AttemptLanding})P(\text{AttemptLanding})}{P(X)}$
+- 해석 가능한 신뢰도 점수 제공 (단순 임계값이 아닌 동적 사후확률)
+
+**왜 GaussianNB를 선택했나:**
+- **확률 해석력**: 각 클래스별 $\mu, \sigma^2$로 조건부 밀도 모델링
+- **데이터 효율성**: 분포 기반이라 적은 샘플로도 학습 가능
+- **실시간 추론**: O(n) 로그 확률 연산만 필요
+- **노이즈 저항**: Naive 독립 가정이 오히려 overfitting 방지
+- **온톨로지 융합**: Bayes 결합으로 규칙 기반 가드 조건과 통합 가능
+
+**구체적 예시:**
+```
+입력 센서:
+  wind_vel_x=-0.5, wind_accel_y=2.1, tag_error=0.12, roll=0.08rad
+
+↓ [Sigmoid 인코딩 (특징 변환)]
+
+  wind_risk_enc = σ(w_w·[-0.5, 2.1] + b_w) = 0.62
+  alignment_enc = σ(w_a·0.12 + b_a) = 0.78
+  visual_enc = σ(w_v·0.08 + b_v) = 0.85
+
+↓ [GaussianNB 분류 (확률 판정)]
+
+  P(AttemptLanding|[0.62, 0.78, 0.85, ...]) = 0.91
+  
+  → 결론: "AttemptLanding" (신뢰도 91%)
+```
+
 ## 실행 목적
 
 AutoSim은 다음 과정을 자동화한다.

@@ -2,6 +2,22 @@
 
 정책 선택, feature 조합, 판단 결과 해석을 담당한다.
 
+## 최근 업데이트 (2026-03-23)
+
+의사결정 입력으로 들어가는 온톨로지 변환에서 바람 벡터 성분 반영을 강화했다.
+
+$$
+	ext{onto\_wind\_condition} \propto
+w_1\,\|\mathbf{v}_w\|_2 + w_2\max(|v_x|,|v_y|) + w_3\,\text{wind\_risk\_enc}
+$$
+
+$$
+	ext{onto\_gust} \propto
+u_1\,\|\mathbf{a}_w\|_2 + u_2\max(|a_x|,|a_y|) + u_3\,\Delta v_{gust}
+$$
+
+즉, 크기 정보와 방향 성분 정보를 함께 사용해 feature 차원 손실을 줄인다.
+
 ## 기능 설명
 
 - 시나리오별 정책 모드 선택(exploit/boundary/hard-negative)

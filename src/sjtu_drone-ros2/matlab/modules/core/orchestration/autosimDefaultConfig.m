@@ -72,6 +72,7 @@ function cfg = autosimDefaultConfig()
     cfg.scenario.count = 1000;
     cfg.scenario.duration_sec = inf;
     cfg.scenario.pre_landing_timeout_sec = 75.0;
+    cfg.scenario.max_collection_timeout_sec = 120.0;
     cfg.scenario.sample_period_sec = 0.1;
     cfg.scenario.analysis_stop_at_landing = true;
     cfg.scenario.post_land_observe_sec = 3.0;

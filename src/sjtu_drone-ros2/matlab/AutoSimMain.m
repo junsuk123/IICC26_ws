@@ -8,7 +8,7 @@ mainCfg = struct();
 
 % Data collection settings (editable in main).
 mainCfg.collection = struct();
-mainCfg.collection.scenario_count = 10;
+mainCfg.collection.scenario_count = 100;
 mainCfg.collection.drone_count = 4;
 mainCfg.collection.independent_per_drone = true;
 mainCfg.collection.merge_last_runs = 5;

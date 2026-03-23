@@ -2,6 +2,23 @@
 
 드론 모델, 월드, Gazebo 플러그인을 제공하는 패키지다.
 
+## 최근 업데이트 (2026-03-23)
+
+MATLAB AutoSim 계층과의 연계 기준을 문서화했다.
+
+- `/wind_condition`은 방향 성분을 포함한 벡터 해석을 전제로 사용한다.
+- 상위 수집 파이프라인은 드론 1대당 120초 타임아웃 정책을 적용한다.
+
+풍장 해석 식:
+
+$$
+v_x=v\cos\theta,\quad v_y=v\sin\theta
+$$
+
+$$
+t_{collect}\le120\,\text{s}
+$$
+
 ## 구조
 
 - `models/`: Gazebo 모델 리소스

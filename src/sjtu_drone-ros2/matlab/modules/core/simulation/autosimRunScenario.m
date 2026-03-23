@@ -209,12 +209,20 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     probePolicySelected = isfield(scenarioCfg, 'probe_landing_selected') && logical(scenarioCfg.probe_landing_selected);
     requireLandingOutcomeEvaluation = false;
     scenarioTimeoutHit = false;
+    collectionTimeoutHit = false;
+    collectionTimeoutSec = autosimClampNaN(cfg.scenario.max_collection_timeout_sec, 120.0);
+    if isfield(scenarioCfg, 'max_collection_timeout_sec') && isfinite(scenarioCfg.max_collection_timeout_sec)
+        collectionTimeoutSec = max(0.0, scenarioCfg.max_collection_timeout_sec);
+    end
     scenarioTimeoutSec = autosimClampNaN(cfg.scenario.pre_landing_timeout_sec, nan);
     if isfield(scenarioCfg, 'pre_landing_timeout_sec') && isfinite(scenarioCfg.pre_landing_timeout_sec)
         scenarioTimeoutSec = max(0.0, scenarioCfg.pre_landing_timeout_sec);
     end
     if (~isfinite(scenarioTimeoutSec) || scenarioTimeoutSec <= 0) && isfield(cfg.scenario, 'duration_sec') && isfinite(cfg.scenario.duration_sec)
         scenarioTimeoutSec = max(0.0, cfg.scenario.duration_sec);
+    end
+    if isfinite(collectionTimeoutSec) && (collectionTimeoutSec > 0) && isfinite(scenarioTimeoutSec) && (scenarioTimeoutSec > 0)
+        scenarioTimeoutSec = min(scenarioTimeoutSec, collectionTimeoutSec);
     end
     landedHoldStartT = nan;
     kLast = 0;
@@ -329,6 +337,18 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         tk = toc(t0);
         kLast = k;
         t(k) = tk;
+
+        if ~landingSent && isfinite(collectionTimeoutSec) && (collectionTimeoutSec > 0) && (tk >= collectionTimeoutSec)
+            collectionTimeoutHit = true;
+            scenarioTimeoutHit = true;
+            landingDecisionMode = "HoldLanding";
+            executedAction = "HoldLanding";
+            actionSource = "collection_timeout";
+            decisionTxt(k) = "abort_by_collection_timeout";
+            lastDecisionT = tk;
+            fprintf('[AUTOSIM] s%03d collection timeout hit at t=%.1fs (limit=%.1fs).\n', scenarioId, tk, collectionTimeoutSec);
+            break;
+        end
 
         startupTelemetryReady = isfinite(lastPoseRxT) || isfinite(lastStateRxT);
         if ~landingSent && startupTelemetryReady && isfinite(scenarioTimeoutSec) && (scenarioTimeoutSec > 0) && (tk >= scenarioTimeoutSec)

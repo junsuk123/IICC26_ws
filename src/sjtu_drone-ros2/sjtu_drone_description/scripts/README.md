@@ -2,6 +2,22 @@
 
 `wind_tuner.py`는 wind plugin 파라미터 스윕을 수행하고 `/wind_condition`을 기록한다.
 
+## 최근 업데이트 (2026-03-23)
+
+튜닝 결과 해석 시 MATLAB 판단 계층의 최신 기준을 함께 고려한다.
+
+- 위험도는 풍속/풍가속도 벡터 성분 보존형 계산을 사용
+- 시나리오 수집은 드론 1대당 120초 상한
+
+$$
+\mathbf{v}_w=[v_x,v_y]^\top,\quad
+\mathbf{a}_w=[a_x,a_y]^\top
+$$
+
+$$
+r_{wind}=\max\left(r_v,\ r_v+k_a r_a\right),\quad t_{collect}\le120\,\text{s}
+$$
+
 ## 사전 준비
 
 ```bash

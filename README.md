@@ -11,6 +11,36 @@
 
 IICC26 워크스페이스는 ROS2+Gazebo 시뮬레이션과 MATLAB `AutoSim`을 결합해, 바람 외란 환경에서 드론 착륙 의사결정(AttemptLanding vs HoldLanding)을 연구하는 통합 실험 환경이다.
 
+## 최근 업데이트 (2026-03-23)
+
+이번 업데이트의 핵심은 바람 위험도의 방향 성분 보존과 수집 타임아웃 상한 고정이다.
+
+- 온톨로지 바람 위험도 계산에서 풍속/풍가속도의 벡터 성분을 유지한다.
+- 스칼라 크기만이 아니라 성분 최대치도 함께 반영해 방향성 영향이 누락되지 않도록 했다.
+- 드론 1대 기준 데이터 수집은 시나리오당 최대 120초를 넘지 않도록 하드 타임아웃을 적용했다.
+
+벡터 기반 위험도 요약식:
+
+$$
+\mathbf{v}_w = [v_x, v_y]^\top,\quad
+\mathbf{a}_w = [a_x, a_y]^\top
+$$
+
+$$
+r_v = \max\left(\|\mathbf{v}_w\|_2,\ \max(|v_x|, |v_y|)\right),\quad
+r_a = \max\left(\|\mathbf{a}_w\|_2,\ \max(|a_x|, |a_y|)\right)
+$$
+
+$$
+r_{wind} = \max\left(r_v,\ r_v + k_a\,r_a\right)
+$$
+
+수집 시간 상한식:
+
+$$
+t_{collect} \le 120\ \text{s per drone}
+$$
+
 ## 연구 목표
 
 - 바람/시각 정렬 오차/자세 안정성의 결합 위험도를 정량화한다.

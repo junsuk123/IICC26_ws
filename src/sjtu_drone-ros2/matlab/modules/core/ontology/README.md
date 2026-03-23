@@ -2,6 +2,25 @@
 
 온톨로지 상태 생성과 의미론 기반 위험/안전 추론을 담당한다.
 
+## 최근 업데이트 (2026-03-23)
+
+바람 위험도 계산이 성분 보존형으로 확장되었다.
+
+$$
+\mathbf{v}_w=[v_x,v_y]^\top,\ \mathbf{a}_w=[a_x,a_y]^\top
+$$
+
+$$
+r_v=\max(\|\mathbf{v}_w\|_2,\max(|v_x|,|v_y|)),\quad
+r_a=\max(\|\mathbf{a}_w\|_2,\max(|a_x|,|a_y|))
+$$
+
+$$
+r_{wind}=\max(r_v,\ r_v+k_a r_a)
+$$
+
+semantic 출력에도 `wind_velocity_x/y`, `wind_acceleration_x/y`를 유지해 차원 누락을 방지한다.
+
 ## 기능 설명
 
 - Wind/Drone/Vision 관측을 객체 상태로 구조화

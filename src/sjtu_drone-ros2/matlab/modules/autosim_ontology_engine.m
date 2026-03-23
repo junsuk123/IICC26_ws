@@ -50,6 +50,12 @@ onto.wind_velocity = vector_mag(onto.wind_velocity_vec);
 onto.wind_acceleration_vec = asv(windObs, 'wind_acceleration', [0.0; 0.0]);
 onto.wind_acceleration = vector_mag(onto.wind_acceleration_vec);
 onto.wind_risk = compute_wind_risk(onto.wind_velocity, onto.wind_acceleration, cfg.ontology.wind_caution_speed, cfg.ontology.wind_unsafe_speed);
+windVelComp = ensure_vec2(onto.wind_velocity_vec, [onto.wind_velocity; 0.0]);
+windAccComp = ensure_vec2(onto.wind_acceleration_vec, [onto.wind_acceleration; 0.0]);
+onto.wind_velocity_x = windVelComp(1);
+onto.wind_velocity_y = windVelComp(2);
+onto.wind_acceleration_x = windAccComp(1);
+onto.wind_acceleration_y = windAccComp(2);
 
 onto.gust_intensity = nanstd_safe(diff_with_zero(onto.wind_speed_hist));
 onto.wind_variability = nanstd_safe(onto.wind_speed_hist);
@@ -83,9 +89,13 @@ semantic = struct();
 % WindRisk is explicitly derived from WindVelocity and WindAcceleration.
 windVelocity = asv(onto, 'wind_velocity', onto.wind_speed);
 windAcc = asv(onto, 'wind_acceleration', 0.0);
+windVelocityVec = ensure_vec2(asv(onto, 'wind_velocity_vec', [windVelocity; 0.0]), [windVelocity; 0.0]);
+windAccVec = ensure_vec2(asv(onto, 'wind_acceleration_vec', [windAcc; 0.0]), [windAcc; 0.0]);
+windVelocity = hypot(windVelocityVec(1), windVelocityVec(2));
+windAcc = hypot(windAccVec(1), windAccVec(2));
 windCaution = cfg.ontology.wind_caution_speed;
 windUnsafe = cfg.ontology.wind_unsafe_speed;
-windRisk = compute_wind_risk(windVelocity, windAcc, windCaution, windUnsafe);
+windRisk = compute_wind_risk(windVelocityVec, windAccVec, windCaution, windUnsafe);
 
 % Assign wind risk display name and encoding
 if windRisk >= windUnsafe
@@ -102,6 +112,10 @@ end
 % Store raw physical measurements for downstream use
 semantic.wind_velocity = windVelocity;
 semantic.wind_acceleration = windAcc;
+semantic.wind_velocity_x = windVelocityVec(1);
+semantic.wind_velocity_y = windVelocityVec(2);
+semantic.wind_acceleration_x = windAccVec(1);
+semantic.wind_acceleration_y = windAccVec(2);
 
 attWarn = deg2rad(cfg.ontology.control_attitude_warn_deg);
 attHigh = deg2rad(cfg.ontology.control_attitude_high_deg);
@@ -315,28 +329,16 @@ function windRisk = compute_wind_risk(windVelocity, windAcceleration, windCautio
 % windAcceleration: rate of change of wind speed (m/s^2)
 % windCaution: velocity threshold for caution (m/s)
 % windUnsafe: velocity threshold for unsafe (m/s)
+    [velMag, velComp] = vector_mag_and_component_max(windVelocity);
+    [accMag, accComp] = vector_mag_and_component_max(windAcceleration);
 
-    if ~isfinite(windVelocity)
-        windVelocity = 0.0;
-    end
-    if ~isfinite(windAcceleration)
-        windAcceleration = 0.0;
-    end
-    
-    % Component 1: Direct velocity-based risk
-    velocityRisk = windVelocity;
-    
-    % Component 2: Acceleration-adjusted risk
-    % If wind is accelerating quickly, treat it as more risky even if current value is lower
-    % Use acceleration to project near-future wind conditions
+    velocityRisk = max(velMag, velComp);
+    accelEffective = max(accMag, accComp);
     accelAdjustment = 0.0;
-    if windAcceleration > 0
-        % Positive acceleration (increasing wind) adds risk
-        % Scale: each 0.5 m/s^2 of acceleration is worth ~0.1 m/s of risk margin
-        accelAdjustment = min(0.3 * windUnsafe, 0.2 * windAcceleration);
+    if accelEffective > 0
+        accelAdjustment = min(0.3 * windUnsafe, 0.2 * accelEffective);
     end
-    
-    % Combine: risk is the maximum of velocity and accelerated estimate
+
     windRisk = max(velocityRisk, velocityRisk + accelAdjustment);
 end
 
@@ -364,4 +366,25 @@ m(~isfinite(m)) = 0.0;
 if numel(m) > 1
     m = mean(m);
 end
+end
+
+function v2 = ensure_vec2(v, fallback)
+vv = double(v(:));
+if isempty(vv)
+    vv = double(fallback(:));
+end
+if isempty(vv)
+    v2 = [0.0; 0.0];
+elseif numel(vv) == 1
+    v2 = [vv(1); 0.0];
+else
+    v2 = vv(1:2);
+end
+v2(~isfinite(v2)) = 0.0;
+end
+
+function [magVal, compMax] = vector_mag_and_component_max(v)
+v2 = ensure_vec2(v, [0.0; 0.0]);
+magVal = hypot(v2(1), v2(2));
+compMax = max(abs(v2(1)), abs(v2(2)));
 end

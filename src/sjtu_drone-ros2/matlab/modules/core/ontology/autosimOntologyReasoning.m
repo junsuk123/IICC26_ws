@@ -18,9 +18,34 @@ function semantic = autosimOntologyReasoning(onto, cfg)
 
     windVelocity = autosimClampNaN(w.wind_speed, 0.0);
     windAcceleration = autosimClampNaN(g.dvdt_peak, 0.0);
-    velScore = autosimNormalize01(windVelocity, c.wind_speed_caution, c.wind_speed_unsafe);
-    accScore = autosimNormalize01(abs(windAcceleration), cfg.ontology.gust_dvdt_min, cfg.ontology.gust_dvdt_high);
-    condScore = autosimClamp(0.72 * velScore + 0.28 * accScore, 0.0, 1.0);
+    windVelocityVec = [windVelocity; 0.0];
+    if isfield(w, 'wind_velocity_vec')
+        vv = double(w.wind_velocity_vec(:));
+        if numel(vv) >= 2
+            windVelocityVec = vv(1:2);
+        elseif numel(vv) == 1
+            windVelocityVec = [vv(1); 0.0];
+        end
+    end
+    windAccelerationVec = [windAcceleration; 0.0];
+    if isfield(g, 'wind_acceleration_vec')
+        va = double(g.wind_acceleration_vec(:));
+        if numel(va) >= 2
+            windAccelerationVec = va(1:2);
+        elseif numel(va) == 1
+            windAccelerationVec = [va(1); 0.0];
+        end
+    end
+    windVelocity = hypot(windVelocityVec(1), windVelocityVec(2));
+    windAcceleration = hypot(windAccelerationVec(1), windAccelerationVec(2));
+
+    velScoreMag = autosimNormalize01(windVelocity, c.wind_speed_caution, c.wind_speed_unsafe);
+    velScoreComp = autosimNormalize01(max(abs(windVelocityVec(1)), abs(windVelocityVec(2))), c.wind_speed_caution, c.wind_speed_unsafe);
+    velScore = autosimClamp(0.65 * velScoreMag + 0.35 * velScoreComp, 0.0, 1.0);
+    accScoreMag = autosimNormalize01(abs(windAcceleration), cfg.ontology.gust_dvdt_min, cfg.ontology.gust_dvdt_high);
+    accScoreComp = autosimNormalize01(max(abs(windAccelerationVec(1)), abs(windAccelerationVec(2))), cfg.ontology.gust_dvdt_min, cfg.ontology.gust_dvdt_high);
+    accScore = autosimClamp(0.65 * accScoreMag + 0.35 * accScoreComp, 0.0, 1.0);
+    condScore = autosimClamp(0.62 * velScore + 0.38 * accScore, 0.0, 1.0);
     windRiskRuleEnc = autosimClamp( ...
         0.26 * condScore + 0.22 * g.intensity + 0.22 * tp.wind_persistence + 0.14 * tp.wind_variability + 0.08 * tp.wind_direction_shift + 0.08 * tp.wind_direction_spread, 0.0, 1.0);
 
@@ -214,6 +239,10 @@ function semantic = autosimOntologyReasoning(onto, cfg)
     semantic.isSafeForLanding = strcmp(finalDecision, 'AttemptLanding');
     semantic.wind_velocity = windVelocity;
     semantic.wind_acceleration = windAcceleration;
+    semantic.wind_velocity_x = windVelocityVec(1);
+    semantic.wind_velocity_y = windVelocityVec(2);
+    semantic.wind_acceleration_x = windAccelerationVec(1);
+    semantic.wind_acceleration_y = windAccelerationVec(2);
     semantic.wind_risk_enc = windRiskEnc;
     semantic.alignment_enc = alignEnc;
     semantic.visual_enc = visualEnc;

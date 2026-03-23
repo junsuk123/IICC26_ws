@@ -2,6 +2,41 @@
 
 이 폴더는 IICC26 드론 착륙 연구의 MATLAB 실험 파이프라인을 담당한다. 기본 진입점은 `AutoSimMain.m`이며, 내부적으로 `AutoSim.m`을 실행한다.
 
+## 최근 업데이트 (2026-03-23)
+
+### 1) 온톨로지 바람 위험도 벡터 보존
+
+바람 위험도 계산에서 풍속/풍가속도를 크기만 사용하지 않고 성분을 함께 반영하도록 갱신했다.
+
+$$
+\mathbf{v}_w=[v_x,v_y]^\top,\quad
+\mathbf{a}_w=[a_x,a_y]^\top
+$$
+
+$$
+r_v=\max\left(\|\mathbf{v}_w\|_2,\max(|v_x|,|v_y|)\right)
+$$
+
+$$
+r_a=\max\left(\|\mathbf{a}_w\|_2,\max(|a_x|,|a_y|)\right)
+$$
+
+$$
+r_{wind}=\max\left(r_v,\ r_v+k_a r_a\right)
+$$
+
+또한 semantic 출력과 ontology feature 변환 단계에서도 `wind_velocity_x/y`, `wind_acceleration_x/y`를 유지한다.
+
+### 2) 데이터 수집 타임아웃 강화
+
+드론 1대당 시나리오 수집 시간 상한을 120초로 고정했다.
+
+$$
+t_{collect}\le 120\,\text{s}
+$$
+
+수집 루프에서는 해당 상한 도달 시 즉시 중단하고 안전 측으로 귀결한다.
+
 ## 실행 목적
 
 AutoSim은 다음 과정을 자동화한다.

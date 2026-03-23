@@ -6,6 +6,7 @@ MATLAB_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SESSION_ROOT="${1:-}"
 PID_TABLE=""
 PID_TABLES=()
+GAZEBO_PORTS=()
 
 sanitize_arg() {
   local x="$1"
@@ -103,6 +104,40 @@ collect_pattern_matches() {
   pgrep -af "$pattern" 2>/dev/null || true
 }
 
+pid_listen_on_port() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "( sport = :$port )" 2>/dev/null \
+      | awk -F'pid=' 'NF>1 {split($2,a,","); print a[1]}' \
+      | tr -d '[:space:]' \
+      | grep -E '^[0-9]+$' \
+      | sort -u || true
+    return 0
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | sort -u || true
+    return 0
+  fi
+
+  return 1
+}
+
+is_port_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn "( sport = :$port )" 2>/dev/null | tail -n +2 | grep -q .
+    return $?
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+
+  return 1
+}
+
 for tbl in "${PID_TABLES[@]}"; do
   if [[ ! -f "$tbl" ]]; then
     echo "[AUTOSIM] PID table not found: $tbl"
@@ -110,7 +145,7 @@ for tbl in "${PID_TABLES[@]}"; do
   fi
 
   echo "[AUTOSIM] Stopping workers from: $tbl"
-  tail -n +2 "$tbl" | while IFS=$'\t' read -r pid worker_id domain_id gazebo_port log_file; do
+  while IFS=$'\t' read -r pid worker_id domain_id gazebo_port log_file; do
     if [[ -z "$pid" ]]; then
       continue
     fi
@@ -121,8 +156,17 @@ for tbl in "${PID_TABLES[@]}"; do
     else
       echo "[AUTOSIM] worker=$worker_id pid=$pid already exited"
     fi
-  done
+
+    if [[ -n "$gazebo_port" && "$gazebo_port" =~ ^[0-9]+$ ]]; then
+      GAZEBO_PORTS+=("$gazebo_port")
+    fi
+  done < <(tail -n +2 "$tbl")
 done
+
+# de-duplicate tracked gazebo ports
+if [[ ${#GAZEBO_PORTS[@]} -gt 0 ]]; then
+  mapfile -t GAZEBO_PORTS < <(printf '%s\n' "${GAZEBO_PORTS[@]}" | sort -u)
+fi
 
 # Phase 2: Kill stray ROS visualization and simulation processes
 echo "[AUTOSIM] Cleaning up RViz, Gazebo, and bridge/control processes..."
@@ -142,31 +186,74 @@ kill_pattern_graceful "robot_state_publisher.*drone" "robot_state_publisher(dron
 kill_pattern_graceful "(^|/)joy_node([[:space:]]|$)" "joy_node"
 kill_pattern_graceful "teleop" "teleop"
 
+# Phase 2.5: enforce cleanup on tracked gazebo ports.
+if [[ ${#GAZEBO_PORTS[@]} -gt 0 ]]; then
+  for port in "${GAZEBO_PORTS[@]}"; do
+    if is_port_listening "$port"; then
+      echo "[AUTOSIM] Forcing shutdown on occupied Gazebo port $port"
+      while IFS= read -r owner_pid; do
+        if [[ -n "$owner_pid" ]] && kill -0 "$owner_pid" 2>/dev/null; then
+          kill "$owner_pid" 2>/dev/null || true
+          sleep 0.2
+          kill -9 "$owner_pid" 2>/dev/null || true
+        fi
+      done < <(pid_listen_on_port "$port")
+    fi
+  done
+fi
+
 # Phase 3: Final verification
 sleep 1
 remaining=""
-for pattern in \
-  "(^|/)rviz2([[:space:]]|$)" \
-  "(^|/)gzserver([[:space:]]|$)" \
-  "(^|/)gzclient([[:space:]]|$)" \
-  "(^|/)gz([[:space:]]+sim|$)" \
-  "ign[[:space:]]+gazebo" \
-  "(^|/)domain_bridge([[:space:]]|$)" \
-  "[r]os2 launch sjtu_drone_bringup" \
-  "MATLAB[[:space:]].*-batch.*AutoSimMain" \
-  "[a]priltag_detector_node" \
-  "[a]priltag_state_bridge" \
-  "[s]pawn_drone" \
-  "[s]pawn_apriltag"; do
-  matches="$(collect_pattern_matches "$pattern")"
-  if [[ -n "$matches" ]]; then
-    remaining+="$matches"$'\n'
+
+for _ in {1..3}; do
+  remaining=""
+  for pattern in \
+    "(^|/)rviz2([[:space:]]|$)" \
+    "(^|/)gzserver([[:space:]]|$)" \
+    "(^|/)gzclient([[:space:]]|$)" \
+    "(^|/)gz([[:space:]]+sim|$)" \
+    "ign[[:space:]]+gazebo" \
+    "(^|/)domain_bridge([[:space:]]|$)" \
+    "[r]os2 launch sjtu_drone_bringup" \
+    "MATLAB[[:space:]].*-batch.*AutoSimMain" \
+    "[a]priltag_detector_node" \
+    "[a]priltag_state_bridge" \
+    "[s]pawn_drone" \
+    "[s]pawn_apriltag"; do
+    matches="$(collect_pattern_matches "$pattern")"
+    if [[ -n "$matches" ]]; then
+      remaining+="$matches"$'\n'
+    fi
+  done
+
+  if [[ -z "$remaining" ]]; then
+    break
   fi
+
+  # Retry targeted hard-stop once more before final warning.
+  kill_pattern_graceful "(^|/)rviz2([[:space:]]|$)" "rviz2(retry)"
+  kill_pattern_graceful "(^|/)gzserver([[:space:]]|$)" "gzserver(retry)"
+  sleep 0.5
 done
 
-if [[ -n "$remaining" ]]; then
+occupied_ports=""
+if [[ ${#GAZEBO_PORTS[@]} -gt 0 ]]; then
+  for port in "${GAZEBO_PORTS[@]}"; do
+    if is_port_listening "$port"; then
+      occupied_ports+="$port "
+    fi
+  done
+fi
+
+if [[ -n "$remaining" || -n "$occupied_ports" ]]; then
   echo "[AUTOSIM] Warning: residual simulation/visualization processes detected:"
-  printf '%s' "$remaining"
+  if [[ -n "$remaining" ]]; then
+    printf '%s' "$remaining"
+  fi
+  if [[ -n "$occupied_ports" ]]; then
+    echo "[AUTOSIM] Warning: occupied Gazebo ports after cleanup: $occupied_ports"
+  fi
 else
   echo "[AUTOSIM] Cleanup complete: no residual Gazebo/RViz/bridge processes detected."
 fi

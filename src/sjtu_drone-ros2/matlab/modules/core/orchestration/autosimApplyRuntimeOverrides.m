@@ -96,7 +96,7 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
         cfg.persistence.trace_csv = fullfile(cfg.paths.data_dir, 'autosim_trace_latest.csv');
     end
 
-    % In multi-worker runs, keep Gazebo GUI headless by default, but keep RViz enabled.
+    % In multi-worker runs, keep Gazebo headless but allow RViz by default.
     defaultUseGui = true;
     defaultUseRviz = true;
     if workerCount > 1

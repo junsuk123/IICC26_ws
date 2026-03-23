@@ -294,3 +294,12 @@ AutoSim 주요 기능:
 - `build/`, `install/`, `log/`는 빌드/실행 산출물
 - `matlab/data`, `matlab/logs`, `matlab/models`, `matlab/plots`는 실험 산출물
 - 버전 관리 대상과 산출물 경로를 분리해 재현성을 유지한다
+
+## 데모 및 스크린캐스트
+
+병렬 시뮬레이션과 AutoSim 실행 화면:
+
+<video width="1200" controls>
+  <source src="../../video/스크린캐스트 03-23-2026 03:09:24 PM.webm" type="video/webm">
+  브라우저가 video 태그를 지원하지 않습니다.
+</video>

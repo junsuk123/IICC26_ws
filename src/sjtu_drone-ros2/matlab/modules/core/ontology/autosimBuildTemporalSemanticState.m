@@ -35,6 +35,26 @@ function temporal = autosimBuildTemporalSemanticState(windObs, droneObs, tagObs,
     windDirectionShiftDeg = abs(autosimWrapTo180(autosimCircularMeanDeg(wdShort) - autosimCircularMeanDeg(wdLong)));
     windDirectionShift = autosimNormalize01(windDirectionShiftDeg, cfg.ontology.wind_direction_shift_warn_deg, cfg.ontology.wind_direction_shift_high_deg);
     speedNorm = autosimNormalize01(autosimNanMean(wsShort), 0.0, cfg.wind.speed_max);
+    windVelNow = autosimVizField(windObs, 'wind_velocity', [autosimClampNaN(windObs.wind_speed, 0.0); 0.0]);
+    windVelNow = double(windVelNow(:));
+    if isempty(windVelNow)
+        windVelNow = [autosimClampNaN(windObs.wind_speed, 0.0); 0.0];
+    elseif numel(windVelNow) == 1
+        windVelNow = [windVelNow(1); 0.0];
+    else
+        windVelNow = windVelNow(1:2);
+    end
+    windVelNow(~isfinite(windVelNow)) = 0.0;
+    windAccNow = autosimVizField(windObs, 'wind_acceleration', [0.0; 0.0]);
+    windAccNow = double(windAccNow(:));
+    if isempty(windAccNow)
+        windAccNow = [0.0; 0.0];
+    elseif numel(windAccNow) == 1
+        windAccNow = [windAccNow(1); 0.0];
+    else
+        windAccNow = windAccNow(1:2);
+    end
+    windAccNow(~isfinite(windAccNow)) = 0.0;
 
     attMeanDeg = rad2deg(autosimNanMean(attLong));
     attStdDeg = rad2deg(autosimNanStd(attLong));
@@ -54,6 +74,12 @@ function temporal = autosimBuildTemporalSemanticState(windObs, droneObs, tagObs,
     temporal.wind_variability = autosimClampNaN(windVariability, 0.0);
     temporal.wind_direction_spread = autosimClampNaN(windDirectionSpread, 0.0);
     temporal.wind_direction_shift = autosimClampNaN(windDirectionShift, 0.0);
+    temporal.wind_speed_norm = autosimClampNaN(speedNorm, 0.0);
+    temporal.wind_acc_norm = autosimClampNaN(autosimNormalize01(hypot(windAccNow(1), windAccNow(2)), 0.0, max(1.0, cfg.ontology.gust_dvdt_high)), 0.0);
+    temporal.wind_velocity_x = autosimClampNaN(windVelNow(1), 0.0);
+    temporal.wind_velocity_y = autosimClampNaN(windVelNow(2), 0.0);
+    temporal.wind_acceleration_x = autosimClampNaN(windAccNow(1), 0.0);
+    temporal.wind_acceleration_y = autosimClampNaN(windAccNow(2), 0.0);
     temporal.control_load = autosimClampNaN(controlLoad, 0.0);
     temporal.visual_dropout = autosimClampNaN(visualDropout, 0.0);
     temporal.tag_error_volatility = autosimClampNaN(tagErrorVolatility, 0.0);

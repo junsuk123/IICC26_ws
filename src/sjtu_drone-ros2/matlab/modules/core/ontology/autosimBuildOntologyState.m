@@ -65,6 +65,9 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
     end
 
     temporal = autosimBuildTemporalSemanticState(windObs, droneObs, tagObs, gustIntensity, cfg);
+    rollAbs = abs(autosimClampNaN(droneObs.roll, 0.0));
+    pitchAbs = abs(autosimClampNaN(droneObs.pitch, 0.0));
+    windRiskComp = autosimBuildWindRiskState(windVelObs(1:2), windAccObs(1:2), cfg, rollAbs, pitchAbs);
 
     onto = struct();
     onto.entities = struct();
@@ -73,7 +76,15 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
         'wind_direction', windDirRep, ...
         'wind_velocity_vec', windVelObs(1:2), ...
         'wind_velocity_x', windVelObs(1), ...
-        'wind_velocity_y', windVelObs(2));
+        'wind_velocity_y', windVelObs(2), ...
+        'wind_speed_norm', autosimNormalize01(hypot(windVelObs(1), windVelObs(2)), 0.0, max(1.0, cfg.wind.speed_max)), ...
+        'wind_body_force_x', windRiskComp.F_wx, ...
+        'wind_body_force_y', windRiskComp.F_wy, ...
+        'wind_body_force', windRiskComp.F_body, ...
+        'wind_body_risk', windRiskComp.r_body, ...
+        'wind_gust_risk', windRiskComp.r_gust, ...
+        'wind_risk_raw', windRiskComp.r_wind, ...
+        'thrust_margin', windRiskComp.F_cap);
 
     onto.entities.Gust = struct( ...
         'active', gustActive, ...
@@ -83,6 +94,7 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
         'wind_acceleration_vec', windAccObs(1:2), ...
         'wind_acceleration_x', windAccObs(1), ...
         'wind_acceleration_y', windAccObs(2), ...
+        'wind_acc_norm', autosimNormalize01(hypot(windAccObs(1), windAccObs(2)), 0.0, max(1.0, cfg.ontology.gust_dvdt_high)), ...
         'level', gustLevel);
     onto.entities.TemporalPattern = temporal;
 
@@ -117,6 +129,13 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
         'gust_active', gustActive, ...
         'gust_intensity', gustIntensity, ...
         'gust_level', string(gustLevel), ...
+        'wind_body_force_x', windRiskComp.F_wx, ...
+        'wind_body_force_y', windRiskComp.F_wy, ...
+        'wind_body_force', windRiskComp.F_body, ...
+        'wind_body_risk', windRiskComp.r_body, ...
+        'wind_gust_risk', windRiskComp.r_gust, ...
+        'wind_risk_raw', windRiskComp.r_wind, ...
+        'thrust_margin', windRiskComp.F_cap, ...
         'wind_pattern', string(temporal.wind_pattern), ...
         'wind_persistence', temporal.wind_persistence, ...
         'wind_variability', temporal.wind_variability);
@@ -140,6 +159,132 @@ function onto = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg)
     onto.semantic_state.LandingContext = struct( ...
         'landing_area_size', cfg.ontology.landing_area_size, ...
         'obstacle_presence', cfg.ontology.obstacle_presence);
+end
+
+function comp = autosimBuildWindRiskState(windVelocityVec, windAccelerationVec, cfg, rollAbs, pitchAbs)
+    vel = double(windVelocityVec(:));
+    if isempty(vel)
+        vel = [0.0; 0.0];
+    elseif numel(vel) < 2
+        vel = [autosimClampNaN(vel(1), 0.0); 0.0];
+    else
+        vel = vel(1:2);
+    end
+    vel(~isfinite(vel)) = 0.0;
+
+    acc = double(windAccelerationVec(:));
+    if isempty(acc)
+        acc = [0.0; 0.0];
+    elseif numel(acc) < 2
+        acc = [autosimClampNaN(acc(1), 0.0); 0.0];
+    else
+        acc = acc(1:2);
+    end
+    acc(~isfinite(acc)) = 0.0;
+
+    model = autosimWindRiskModel(cfg);
+    c_tilt = cos(abs(double(rollAbs))) * cos(abs(double(pitchAbs)));
+    c_tilt = max(model.c_min, min(1.0, c_tilt));
+    T_req = (model.mass_kg * model.gravity_mps2) / max(c_tilt, model.c_min);
+    if ~isfinite(T_req)
+        T_req = model.mass_kg * model.gravity_mps2;
+    end
+    F_cap = max(model.F_min, model.max_total_thrust_n - T_req);
+    if ~isfinite(F_cap)
+        F_cap = model.F_min;
+    end
+
+    vx = vel(1);
+    vy = vel(2);
+    ax = acc(1);
+    ay = acc(2);
+    F_wx = 0.5 * model.rho * model.c_x * model.S_x * vx * abs(vx);
+    F_wy = 0.5 * model.rho * model.c_y * model.S_y * vy * abs(vy);
+    if ~isfinite(F_wx)
+        F_wx = 0.0;
+    end
+    if ~isfinite(F_wy)
+        F_wy = 0.0;
+    end
+    F_body = hypot(F_wx, F_wy);
+    if ~isfinite(F_body)
+        F_body = 0.0;
+    end
+
+    r_body = autosimClamp(F_body / max(F_cap, 1e-6), 0.0, 1.0);
+    a_w = hypot(ax, ay);
+    if ~isfinite(a_w)
+        a_w = 0.0;
+    end
+    r_gust = autosimClamp(a_w / max(model.a_thr, 1e-6), 0.0, 1.0);
+    wSum = model.w_body + model.w_gust;
+    if ~(isfinite(wSum) && wSum > 0)
+        w_body = 0.7;
+        w_gust = 0.3;
+    else
+        w_body = model.w_body / wSum;
+        w_gust = model.w_gust / wSum;
+    end
+    r_wind = autosimClamp(w_body * r_body + w_gust * r_gust, 0.0, 1.0);
+
+    comp = struct('F_wx', F_wx, 'F_wy', F_wy, 'F_body', F_body, 'F_cap', F_cap, ...
+        'r_body', r_body, 'r_gust', r_gust, 'r_wind', r_wind);
+end
+
+function model = autosimWindRiskModel(cfg)
+    model = struct('rho', 1.225, 'c_x', 1.10, 'c_y', 1.10, 'S_x', 0.075, 'S_y', 0.075, ...
+        'c_min', 0.2, 'F_min', 0.5, 'a_thr', 1.2, 'w_body', 0.7, 'w_gust', 0.3, ...
+        'mass_kg', 1.4, 'gravity_mps2', 9.81, 'max_total_thrust_n', 24.0);
+    if isstruct(cfg) && isfield(cfg, 'ontology') && isstruct(cfg.ontology) && isfield(cfg.ontology, 'wind_risk_model') && isstruct(cfg.ontology.wind_risk_model)
+        orm = cfg.ontology.wind_risk_model;
+        model.rho = max(1e-6, autosimStateField(orm, 'rho', model.rho));
+        model.c_min = max(1e-6, autosimStateField(orm, 'c_min', model.c_min));
+        model.F_min = max(1e-6, autosimStateField(orm, 'F_min', model.F_min));
+        model.a_thr = max(1e-6, autosimStateField(orm, 'a_thr', model.a_thr));
+        model.w_body = max(0.0, autosimStateField(orm, 'w_body', model.w_body));
+        model.w_gust = max(0.0, autosimStateField(orm, 'w_gust', model.w_gust));
+        cX = autosimStateField(orm, 'c_x', nan);
+        cY = autosimStateField(orm, 'c_y', nan);
+        sX = autosimStateField(orm, 'S_x', nan);
+        sY = autosimStateField(orm, 'S_y', nan);
+        if isfinite(cX)
+            model.c_x = max(1e-6, cX);
+        end
+        if isfinite(cY)
+            model.c_y = max(1e-6, cY);
+        end
+        if isfinite(sX)
+            model.S_x = max(1e-6, sX);
+        end
+        if isfinite(sY)
+            model.S_y = max(1e-6, sY);
+        end
+    end
+    if isstruct(cfg) && isfield(cfg, 'wind') && isstruct(cfg.wind) && isfield(cfg.wind, 'physics') && isstruct(cfg.wind.physics)
+        p = cfg.wind.physics;
+        cd = max(1e-6, autosimStateField(p, 'drag_coefficient', model.c_x));
+        area = max(1e-6, autosimStateField(p, 'frontal_area_m2', model.S_x));
+        model.rho = max(1e-6, autosimStateField(p, 'air_density_kgpm3', model.rho));
+        model.c_x = max(1e-6, autosimStateField(p, 'drag_coefficient_x', cd));
+        model.c_y = max(1e-6, autosimStateField(p, 'drag_coefficient_y', cd));
+        model.S_x = max(1e-6, autosimStateField(p, 'frontal_area_x_m2', area));
+        model.S_y = max(1e-6, autosimStateField(p, 'frontal_area_y_m2', area));
+        model.mass_kg = autosimStateField(p, 'mass_kg', model.mass_kg);
+        model.gravity_mps2 = autosimStateField(p, 'gravity_mps2', model.gravity_mps2);
+        model.max_total_thrust_n = autosimStateField(p, 'max_total_thrust_n', model.max_total_thrust_n);
+        model.F_min = max(model.F_min, max(0.0, autosimStateField(p, 'min_thrust_margin_n', model.F_min)));
+    end
+end
+
+function v = autosimStateField(s, name, fallback)
+    if isstruct(s) && isfield(s, name)
+        vv = double(s.(name));
+        if isfinite(vv)
+            v = vv;
+            return;
+        end
+    end
+    v = fallback;
 end
 
 

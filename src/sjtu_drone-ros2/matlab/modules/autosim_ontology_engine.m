@@ -49,13 +49,21 @@ onto.wind_velocity_vec = asv(windObs, 'wind_velocity', [onto.wind_speed; 0.0]);
 onto.wind_velocity = vector_mag(onto.wind_velocity_vec);
 onto.wind_acceleration_vec = asv(windObs, 'wind_acceleration', [0.0; 0.0]);
 onto.wind_acceleration = vector_mag(onto.wind_acceleration_vec);
-onto.wind_risk = compute_wind_risk(onto.wind_velocity_vec, onto.wind_acceleration_vec, cfg, onto.roll_abs, onto.pitch_abs);
+windRiskComp = compute_wind_risk_components(onto.wind_velocity_vec, onto.wind_acceleration_vec, cfg, onto.roll_abs, onto.pitch_abs);
+onto.wind_risk = windRiskComp.r_wind;
 windVelComp = ensure_vec2(onto.wind_velocity_vec, [onto.wind_velocity; 0.0]);
 windAccComp = ensure_vec2(onto.wind_acceleration_vec, [onto.wind_acceleration; 0.0]);
 onto.wind_velocity_x = windVelComp(1);
 onto.wind_velocity_y = windVelComp(2);
 onto.wind_acceleration_x = windAccComp(1);
 onto.wind_acceleration_y = windAccComp(2);
+onto.wind_body_force_x = windRiskComp.F_wx;
+onto.wind_body_force_y = windRiskComp.F_wy;
+onto.wind_body_force = windRiskComp.F_body;
+onto.wind_body_risk = windRiskComp.r_body;
+onto.wind_gust_risk = windRiskComp.r_gust;
+onto.wind_risk_raw = windRiskComp.r_wind;
+onto.thrust_margin = windRiskComp.F_cap;
 
 onto.gust_intensity = nanstd_safe(diff_with_zero(onto.wind_speed_hist));
 onto.wind_variability = nanstd_safe(onto.wind_speed_hist);
@@ -94,10 +102,10 @@ windAccVec = ensure_vec2(asv(onto, 'wind_acceleration_vec', [windAcc; 0.0]), [wi
 windVelocity = hypot(windVelocityVec(1), windVelocityVec(2));
 windAcc = hypot(windAccVec(1), windAccVec(2));
 windCaution = cfg.ontology.wind_caution_speed;
-windUnsafe = cfg.ontology.wind_unsafe_speed;
 rollAbs = abs(asv(onto, 'roll_abs', 0.0));
 pitchAbs = abs(asv(onto, 'pitch_abs', 0.0));
-windRisk = compute_wind_risk(windVelocityVec, windAccVec, cfg, rollAbs, pitchAbs);
+windRiskComp = compute_wind_risk_components(windVelocityVec, windAccVec, cfg, rollAbs, pitchAbs);
+windRisk = windRiskComp.r_wind;
 
 % Assign wind risk display name and encoding
 if windRisk >= windUnsafe
@@ -118,6 +126,13 @@ semantic.wind_velocity_x = windVelocityVec(1);
 semantic.wind_velocity_y = windVelocityVec(2);
 semantic.wind_acceleration_x = windAccVec(1);
 semantic.wind_acceleration_y = windAccVec(2);
+semantic.wind_body_force_x = windRiskComp.F_wx;
+semantic.wind_body_force_y = windRiskComp.F_wy;
+semantic.wind_body_force = windRiskComp.F_body;
+semantic.wind_body_risk = windRiskComp.r_body;
+semantic.wind_gust_risk = windRiskComp.r_gust;
+semantic.wind_risk_raw = windRiskComp.r_wind;
+semantic.thrust_margin = windRiskComp.F_cap;
 
 attWarn = deg2rad(cfg.ontology.control_attitude_warn_deg);
 attHigh = deg2rad(cfg.ontology.control_attitude_high_deg);
@@ -300,7 +315,7 @@ p = polyfit(t, recentSamples, 1);
 windAcc = p(1);  % Slope in m/s per second = m/s^2
 end
 
-function windRisk = compute_wind_risk(windVelocity, windAcceleration, cfg, rollAbs, pitchAbs)
+function risk = compute_wind_risk_components(windVelocity, windAcceleration, cfg, rollAbs, pitchAbs)
     if nargin < 4 || ~isfinite(double(rollAbs))
         rollAbs = 0.0;
     end
@@ -308,39 +323,103 @@ function windRisk = compute_wind_risk(windVelocity, windAcceleration, cfg, rollA
         pitchAbs = 0.0;
     end
 
-    [velMag, velComp] = vector_mag_and_component_max(windVelocity);
-    [accMag, accComp] = vector_mag_and_component_max(windAcceleration);
-    windUnsafe = max(1e-3, asv(cfg.ontology, 'wind_unsafe_speed', 1.0));
+    velVec = ensure_vec2(windVelocity, [0.0; 0.0]);
+    velVec(~isfinite(velVec)) = 0.0;
+    accVec = ensure_vec2(windAcceleration, [0.0; 0.0]);
+    accVec(~isfinite(accVec)) = 0.0;
 
-    model = get_wind_load_model(cfg, rollAbs, pitchAbs);
-    dynPressure = 0.5 * model.rho * model.cd * model.area;
+    vx = velVec(1);
+    vy = velVec(2);
+    ax = accVec(1);
+    ay = accVec(2);
 
-    dragMag = dynPressure * (velMag ^ 2);
-    dragComp = dynPressure * (velComp ^ 2);
+    model = get_wind_risk_model(cfg);
 
-    accelPeak = max(accMag, accComp);
-    gustGain = 1.0 + min(0.5, 0.08 * max(0.0, accelPeak));
+    F_wx = 0.5 * model.rho * model.c_x * model.S_x * vx * abs(vx);
+    F_wy = 0.5 * model.rho * model.c_y * model.S_y * vy * abs(vy);
+    if ~isfinite(F_wx)
+        F_wx = 0.0;
+    end
+    if ~isfinite(F_wy)
+        F_wy = 0.0;
+    end
+    F_body = hypot(F_wx, F_wy);
+    if ~isfinite(F_body)
+        F_body = 0.0;
+    end
 
-    dragEff = max(dragMag, dragComp) * gustGain;
-    dragRatio = dragEff / max(1e-6, model.drag_capacity_n);
-    dragEquivalentSpeed = windUnsafe * sqrt(max(0.0, dragRatio));
+    c_tilt = cos(abs(double(rollAbs))) * cos(abs(double(pitchAbs)));
+    c_tilt = min(1.0, max(model.c_min, c_tilt));
+    T_req = (model.mass_kg * model.gravity_mps2) / max(c_tilt, model.c_min);
+    if ~isfinite(T_req)
+        T_req = model.mass_kg * model.gravity_mps2;
+    end
+    F_cap = max(model.F_min, model.max_total_thrust_n - T_req);
+    if ~isfinite(F_cap)
+        F_cap = model.F_min;
+    end
 
-    windRisk = max([velMag, velComp, dragEquivalentSpeed]);
+    r_body = clamp(F_body / max(F_cap, 1e-6), 0.0, 1.0);
+    a_w = hypot(ax, ay);
+    if ~isfinite(a_w)
+        a_w = 0.0;
+    end
+    r_gust = clamp(a_w / max(model.a_thr, 1e-6), 0.0, 1.0);
+    wSum = model.w_body + model.w_gust;
+    if ~(isfinite(wSum) && wSum > 0)
+        w_body = 0.7;
+        w_gust = 0.3;
+    else
+        w_body = model.w_body / wSum;
+        w_gust = model.w_gust / wSum;
+    end
+    r_wind = clamp(w_body * r_body + w_gust * r_gust, 0.0, 1.0);
+
+    risk = struct('F_wx', F_wx, 'F_wy', F_wy, 'F_body', F_body, 'F_cap', F_cap, ...
+        'r_body', r_body, 'r_gust', r_gust, 'r_wind', r_wind);
 end
 
-function model = get_wind_load_model(cfg, rollAbs, pitchAbs)
-    if nargin < 2 || ~isfinite(double(rollAbs))
-        rollAbs = 0.0;
-    end
-    if nargin < 3 || ~isfinite(double(pitchAbs))
-        pitchAbs = 0.0;
-    end
-
+function model = get_wind_risk_model(cfg)
     model = struct();
     model.rho = 1.225;
-    model.cd = 1.10;
-    model.area = 0.075;
-    model.drag_capacity_n = 6.0;
+    model.c_x = 1.10;
+    model.c_y = 1.10;
+    model.S_x = 0.075;
+    model.S_y = 0.075;
+    model.c_min = 0.2;
+    model.F_min = 0.5;
+    model.a_thr = 1.2;
+    model.w_body = 0.7;
+    model.w_gust = 0.3;
+    model.mass_kg = 1.4;
+    model.gravity_mps2 = 9.81;
+    model.max_total_thrust_n = 24.0;
+
+    if isstruct(cfg) && isfield(cfg, 'ontology') && isstruct(cfg.ontology) && isfield(cfg.ontology, 'wind_risk_model') && isstruct(cfg.ontology.wind_risk_model)
+        orm = cfg.ontology.wind_risk_model;
+        model.rho = max(1e-6, windPhysicsField(orm, 'rho', model.rho));
+        model.c_min = max(1e-6, windPhysicsField(orm, 'c_min', model.c_min));
+        model.F_min = max(1e-6, windPhysicsField(orm, 'F_min', model.F_min));
+        model.a_thr = max(1e-6, windPhysicsField(orm, 'a_thr', model.a_thr));
+        model.w_body = max(0.0, windPhysicsField(orm, 'w_body', model.w_body));
+        model.w_gust = max(0.0, windPhysicsField(orm, 'w_gust', model.w_gust));
+        cX = windPhysicsField(orm, 'c_x', nan);
+        cY = windPhysicsField(orm, 'c_y', nan);
+        sX = windPhysicsField(orm, 'S_x', nan);
+        sY = windPhysicsField(orm, 'S_y', nan);
+        if isfinite(cX)
+            model.c_x = max(1e-6, cX);
+        end
+        if isfinite(cY)
+            model.c_y = max(1e-6, cY);
+        end
+        if isfinite(sX)
+            model.S_x = max(1e-6, sX);
+        end
+        if isfinite(sY)
+            model.S_y = max(1e-6, sY);
+        end
+    end
 
     if ~isstruct(cfg) || ~isfield(cfg, 'wind') || ~isstruct(cfg.wind) || ~isfield(cfg.wind, 'physics') || ~isstruct(cfg.wind.physics)
         return;
@@ -348,30 +427,16 @@ function model = get_wind_load_model(cfg, rollAbs, pitchAbs)
 
     p = cfg.wind.physics;
     model.rho = max(1e-6, windPhysicsField(p, 'air_density_kgpm3', model.rho));
-    model.cd = max(1e-6, windPhysicsField(p, 'drag_coefficient', model.cd));
-    model.area = max(1e-6, windPhysicsField(p, 'frontal_area_m2', model.area));
-
-    massKg = windPhysicsField(p, 'mass_kg', 1.4);
-    grav = windPhysicsField(p, 'gravity_mps2', 9.81);
-    maxThrust = windPhysicsField(p, 'max_total_thrust_n', 24.0);
-    minMargin = max(0.0, windPhysicsField(p, 'min_thrust_margin_n', 0.5));
-
-    cosTilt = cos(abs(double(rollAbs))) * cos(abs(double(pitchAbs)));
-    cosTilt = min(1.0, max(0.15, cosTilt));
-    requiredHoverThrust = (massKg * grav) / cosTilt;
-
-    margin = maxThrust - requiredHoverThrust;
-    if ~(isfinite(margin) && (margin > 0))
-        marginFlat = windPhysicsField(p, 'thrust_margin_n', maxThrust - massKg * grav);
-        if isfinite(marginFlat)
-            margin = marginFlat;
-        else
-            margin = maxThrust - massKg * grav;
-        end
-    end
-    margin = max(1e-6, max(margin, minMargin));
-
-    model.drag_capacity_n = margin;
+    cd = max(1e-6, windPhysicsField(p, 'drag_coefficient', model.c_x));
+    area = max(1e-6, windPhysicsField(p, 'frontal_area_m2', model.S_x));
+    model.c_x = max(1e-6, windPhysicsField(p, 'drag_coefficient_x', cd));
+    model.c_y = max(1e-6, windPhysicsField(p, 'drag_coefficient_y', cd));
+    model.S_x = max(1e-6, windPhysicsField(p, 'frontal_area_x_m2', area));
+    model.S_y = max(1e-6, windPhysicsField(p, 'frontal_area_y_m2', area));
+    model.mass_kg = windPhysicsField(p, 'mass_kg', model.mass_kg);
+    model.gravity_mps2 = windPhysicsField(p, 'gravity_mps2', model.gravity_mps2);
+    model.max_total_thrust_n = windPhysicsField(p, 'max_total_thrust_n', model.max_total_thrust_n);
+    model.F_min = max(model.F_min, max(0.0, windPhysicsField(p, 'min_thrust_margin_n', model.F_min)));
 end
 
 function v = windPhysicsField(p, name, fallback)

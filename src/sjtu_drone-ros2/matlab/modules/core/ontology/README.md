@@ -4,26 +4,35 @@
 
 ## 최근 업데이트 (2026-03-23)
 
-바람 위험도 계산이 항력 하중 기반으로 확장되었다.
+바람 위험도 계산이 body-frame 축별 항력 하중 + gust 가속도 결합 방식으로 갱신되었다.
 
 $$
-\mathbf{v}_w=[v_x,v_y]^\top,\ \mathbf{a}_w=[a_x,a_y]^\top,
-v=\max\left(\|\mathbf{v}_w\|_2,\max(|v_x|,|v_y|)\right)
-$$
-
-$$
-F_d=\frac{1}{2}\rho C_d A v^2
+\mathbf{v}_w=[v_x,v_y]^\top,\ \mathbf{a}_w=[a_x,a_y]^\top
 $$
 
 $$
-r_d=\frac{F_d}{F_{cap}},\quad
-r_{wind}=\min\left(1,\sqrt{r_d}\right)
+F_{wx}=\frac{1}{2}\rho c_x S_x\,v_x|v_x|,\quad
+F_{wy}=\frac{1}{2}\rho c_y S_y\,v_y|v_y|
+$$
+
+$$
+F_{body}=\sqrt{F_{wx}^2+F_{wy}^2},\quad
+r_{body}=\min\left(1,\frac{F_{body}}{F_{cap}}\right)
 $$
 
 $$
 c_{tilt}=\cos(|roll|)\cos(|pitch|),\quad
 T_{req}=\frac{mg}{\max(c_{tilt},c_{min})},\quad
 F_{cap}=\max(T_{max}-T_{req},F_{min})
+$$
+
+$$
+a_w=\sqrt{a_x^2+a_y^2},\quad
+r_{gust}=\min\left(1,\frac{a_w}{a_{thr}}\right)
+$$
+
+$$
+r_{wind}=\min\left(1,w_{body}r_{body}+w_{gust}r_{gust}\right)
 $$
 
 semantic 출력에도 `wind_velocity_x/y`, `wind_acceleration_x/y`를 유지해 차원 누락을 방지한다.
@@ -40,14 +49,20 @@ semantic 출력에도 `wind_velocity_x/y`, `wind_acceleration_x/y`를 유지해 
 - 시각 안정도: 태그 검출 연속성 + 중심 오차 + jitter
 - 최종 의미 점수는 decision feature의 `*_enc`로 전달
 
-항력 기반 위험도 예시는 다음과 같다.
+동체 외란 + gust 결합 위험도 예시는 다음과 같다.
 
 $$
-F_d = \frac{1}{2}\rho C_d A v^2
+F_{wx}=\frac{1}{2}\rho c_x S_x\,v_x|v_x|,\quad
+F_{wy}=\frac{1}{2}\rho c_y S_y\,v_y|v_y|
 $$
 
 $$
-r_w = \min\left(1,\sqrt{\frac{F_d}{F_{cap}}}\right)
+r_{body}=\min\left(1,\frac{\sqrt{F_{wx}^2+F_{wy}^2}}{F_{cap}}\right),\quad
+r_{gust}=\min\left(1,\frac{\sqrt{a_x^2+a_y^2}}{a_{thr}}\right)
+$$
+
+$$
+r_w = \min\left(1,w_{body}r_{body}+w_{gust}r_{gust}\right)
 $$
 
 여기서 $F_{cap}$은 현재 자세 기울기(roll/pitch)에 따라 감소하는 유효 추력 여유를 사용한다.
@@ -123,15 +138,15 @@ end
 
 아래 변수 정의는 본 문서의 풍하중/자세/Sigmoid 수식 전체에 공통으로 적용한다.
 
-### 1) 바람 벡터와 항력 식 변수
+### 1) 바람 벡터와 축별 항력 식 변수
 
 - $\mathbf{v}_w=[v_x,v_y]^\top$: 수평면 바람 속도 벡터 (m/s)
 - $v_x, v_y$: 바람 속도의 x/y 성분 (m/s)
-- $v=\max(\|\mathbf{v}_w\|_2,\max(|v_x|,|v_y|))$: 위험도 평가에 사용하는 대표 풍속 (m/s)
-- $F_d$: 바람으로 인한 등가 항력 (N)
+- $F_{wx}, F_{wy}$: 동체 x/y축 항력 성분 (N)
+- $F_{body}=\sqrt{F_{wx}^2+F_{wy}^2}$: 등가 동체 풍하중 (N)
 - $\rho$: 공기 밀도 (kg/m^3)
-- $C_d$: 항력 계수 (무차원)
-- $A$: 기준 정면 면적 (m^2)
+- $c_x, c_y$: 축별 항력 계수 (무차원)
+- $S_x, S_y$: 축별 기준 면적 (m^2)
 
 ### 2) 기울기 보정 추력 여유 변수
 
@@ -147,8 +162,10 @@ end
 
 ### 3) 풍위험 인코딩 변수
 
-- $r_d=F_d/F_{cap}$: 항력 하중비 (무차원)
-- $r_w$: 풍위험 인코딩 (0~1)
+- $r_{body}=\min(1,F_{body}/F_{cap})$: 동체 외란 기반 위험도
+- $a_w=\sqrt{a_x^2+a_y^2}$: 가속도 크기 (m/s$^2$)
+- $r_{gust}=\min(1,a_w/a_{thr})$: gust 기반 위험도
+- $r_w=\min(1,w_{body}r_{body}+w_{gust}r_{gust})$: 최종 풍위험 인코딩
 - $\min(1,\cdot)$: 위험도 상한 1로 포화
 
 ### 4) 시각/자세 변수
@@ -171,7 +188,9 @@ end
 
 | 항목 | 의미 | 단위/범위 | 비고 |
 |---|---|---|---|
-| r_w | 풍 위험도 인코딩 | 0~1 | 높을수록 위험 |
+| r_body | 동체 외란 위험도 | 0~1 | 축별 항력 기반 |
+| r_gust | gust 위험도 | 0~1 | 가속도 기반 |
+| r_w | 최종 풍 위험도 인코딩 | 0~1 | 높을수록 위험 |
 | c_v | 시각 정렬 신뢰도 | 0~1 | 높을수록 안정 |
 | s_a | 자세 안정도 | 0~1 | roll/pitch 기반 |
 | wind_risk_enc | 풍 위험 feature | 0~1 | decision 입력 |

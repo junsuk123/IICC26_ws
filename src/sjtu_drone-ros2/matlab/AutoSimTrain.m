@@ -40,6 +40,9 @@ cfg = autosimDefaultConfig();
 [cfg, ~] = autosimApplyRuntimeOverrides(cfg);
 if isfield(cfg, 'learning') && isstruct(cfg.learning)
     cfg.learning.enable = true;
+    % Train-only workflow should always produce a fresh model artifact.
+    cfg.learning.save_every_scenario = true;
+    cfg.learning.update_every_n_scenarios = 1;
 end
 autosimEnsureDirectories(cfg);
 

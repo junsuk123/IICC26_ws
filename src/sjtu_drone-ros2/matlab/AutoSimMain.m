@@ -26,6 +26,10 @@ mainCfg.run_collection = true;
 mainCfg.run_training = true;
 mainCfg.run_validation = true;
 mainCfg.run_plots = true;
+
+% Use only recent N rows from FinalDataset for train/validation/plots.
+% Set to Inf (or <=0) to use full dataset.
+mainCfg.dataset_recent_n = Inf;
 % ==============================================================
 
 thisDir = fileparts(mfilename('fullpath'));
@@ -47,6 +51,15 @@ if mainCfg.run_collection
     fprintf('[AutoSimMain] Stage 1/4: data collection start (scenarios=%d, drones=%d)\n', ...
         round(c.scenario_count), round(c.drone_count));
     AutoSimCollect(c);
+end
+
+recentN = double(mainCfg.dataset_recent_n);
+if isfinite(recentN) && recentN > 0
+    setenv('AUTOSIM_RECENT_DATASET_N', sprintf('%d', round(recentN)));
+    fprintf('[AutoSimMain] Recent dataset window enabled: last %d rows\n', round(recentN));
+else
+    setenv('AUTOSIM_RECENT_DATASET_N', '');
+    fprintf('[AutoSimMain] Recent dataset window disabled: using full dataset\n');
 end
 
 if mainCfg.run_training

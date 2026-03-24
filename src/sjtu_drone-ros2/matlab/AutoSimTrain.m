@@ -50,6 +50,8 @@ autosimEnsureDirectories(cfg);
 if isempty(allTbl)
     error('AutoSimTrain:NoDataset', 'No usable FinalDataset found for training.');
 end
+allTblRawCount = height(allTbl);
+[allTbl, recentNUsed] = autosimTrainApplyRecentWindow(allTbl);
 allTbl = autosimEnsureOntologyFeatureColumns(allTbl, cfg);
 
 [trainTbl, valTbl, splitInfo] = autosimTrainSplit70_30(allTbl, trainCfg.train_ratio, trainCfg.split_seed);
@@ -77,7 +79,7 @@ end
 scenarioId = max(1, height(trainTbl));
 [model, learnInfo] = autosim_learning_engine('incremental_train_and_save', cfg, trainTbl, modelPrev, scenarioId);
 
-summary = autosimTrainBuildSummary(trainTbl, sourceFiles, sourceMode, mergedCsv, learnInfo, cfg, droneMeta);
+summary = autosimTrainBuildSummary(trainTbl, sourceFiles, sourceMode, mergedCsv, learnInfo, cfg, droneMeta, allTblRawCount, recentNUsed);
 summaryCsv = fullfile(cfg.paths.data_root, sprintf('autosim_train_summary_%s_%s.csv', tag, ts));
 writetable(summary, summaryCsv);
 
@@ -106,6 +108,9 @@ else
 end
 
 fprintf('[AutoSimTrain] Data source mode: %s\n', sourceMode);
+if isfinite(recentNUsed) && recentNUsed > 0
+    fprintf('[AutoSimTrain] Recent window: last %d rows (raw=%d, used=%d)\n', round(recentNUsed), allTblRawCount, height(allTbl));
+end
 fprintf('[AutoSimTrain] All dataset:   %s (rows=%d)\n', mergedCsv, height(allTbl));
 fprintf('[AutoSimTrain] Train dataset: %s (rows=%d)\n', trainCsv, height(trainTbl));
 fprintf('[AutoSimTrain] Val dataset:   %s (rows=%d)\n', valCsv, height(valTbl));
@@ -200,18 +205,49 @@ info.val_ratio = height(valTbl) / max(1, n);
 info.seed = seed;
 end
 
-function S = autosimTrainBuildSummary(T, sourceFiles, sourceMode, mergedCsv, learnInfo, cfg, droneMeta)
+function S = autosimTrainBuildSummary(T, sourceFiles, sourceMode, mergedCsv, learnInfo, cfg, droneMeta, rawCount, recentNUsed)
 S = table();
 S.created_at = string(datetime('now'));
 S.source_mode = string(sourceMode);
 S.source_count = numel(sourceFiles);
 S.total_rows = height(T);
+S.total_rows_raw = rawCount;
+if isfinite(recentNUsed) && recentNUsed > 0
+    S.recent_dataset_n = round(recentNUsed);
+else
+    S.recent_dataset_n = nan;
+end
 S.merged_dataset_path = string(mergedCsv);
 
 if isempty(sourceFiles)
     S.source_files = "";
 else
     S.source_files = strjoin(sourceFiles, ';');
+end
+
+function [T, recentN] = autosimTrainApplyRecentWindow(T)
+recentN = autosimTrainResolveRecentDatasetN();
+if ~(isfinite(recentN) && recentN > 0)
+    return;
+end
+n = height(T);
+if n <= 0
+    return;
+end
+k = min(n, round(recentN));
+T = T(n - k + 1:n, :);
+end
+
+function recentN = autosimTrainResolveRecentDatasetN()
+recentN = inf;
+raw = string(getenv('AUTOSIM_RECENT_DATASET_N'));
+if strlength(raw) == 0
+    return;
+end
+v = str2double(raw);
+if isfinite(v) && v > 0
+    recentN = round(v);
+end
 end
 
 S.model_updated = false;

@@ -16,13 +16,16 @@ mainCfg.collection.drone_count = 3;
 mainCfg.collection.independent_per_drone = true;
 mainCfg.collection.merge_last_runs = 5;
 mainCfg.collection.launch_use_gui = false;
-mainCfg.collection.launch_use_rviz = true;
+mainCfg.collection.launch_use_rviz = false;
 mainCfg.collection.launch_use_teleop = false;
 mainCfg.collection.multi_drone_spacing_m = 10.0;
 mainCfg.collection.multi_drone_namespace_prefix = 'drone_w';
 mainCfg.collection.multi_drone_spawn_tags = true;
 mainCfg.collection.multi_drone_use_world_tag_as_first = true;
 mainCfg.collection.primary_drone_index = 1;
+% Parallel autoscaling controls (applied by run_autosim_parallel.sh).
+mainCfg.collection.dynamic_worker_scale = true;
+mainCfg.collection.memory_probe_wait_sec = 8;
 
 % Pipeline stages (main always executes all stages).
 mainCfg.run_collection = true;

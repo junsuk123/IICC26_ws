@@ -225,31 +225,6 @@ else
     S.source_files = strjoin(sourceFiles, ';');
 end
 
-function [T, recentN] = autosimTrainApplyRecentWindow(T)
-recentN = autosimTrainResolveRecentDatasetN();
-if ~(isfinite(recentN) && recentN > 0)
-    return;
-end
-n = height(T);
-if n <= 0
-    return;
-end
-k = min(n, round(recentN));
-T = T(n - k + 1:n, :);
-end
-
-function recentN = autosimTrainResolveRecentDatasetN()
-recentN = inf;
-raw = string(getenv('AUTOSIM_RECENT_DATASET_N'));
-if strlength(raw) == 0
-    return;
-end
-v = str2double(raw);
-if isfinite(v) && v > 0
-    recentN = round(v);
-end
-end
-
 S.model_updated = false;
 S.skip_reason = "";
 S.scenario_id = nan;
@@ -285,6 +260,31 @@ if isstruct(learnInfo)
     if isfield(learnInfo, 'stable_ratio')
         S.stable_ratio = double(learnInfo.stable_ratio);
     end
+end
+end
+
+function [T, recentN] = autosimTrainApplyRecentWindow(T)
+recentN = autosimTrainResolveRecentDatasetN();
+if ~(isfinite(recentN) && recentN > 0)
+    return;
+end
+n = height(T);
+if n <= 0
+    return;
+end
+k = min(n, round(recentN));
+T = T(n - k + 1:n, :);
+end
+
+function recentN = autosimTrainResolveRecentDatasetN()
+recentN = inf;
+raw = string(getenv('AUTOSIM_RECENT_DATASET_N'));
+if strlength(raw) == 0
+    return;
+end
+v = str2double(raw);
+if isfinite(v) && v > 0
+    recentN = round(v);
 end
 end
 

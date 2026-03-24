@@ -19,6 +19,11 @@ if isempty(thisDir)
     error('Failed to resolve AutoSimCollect path.');
 end
 
+if isfield(collectionCfg, 'safe_cleanup_on_start') && collectionCfg.safe_cleanup_on_start
+    autosimCollectForceCleanup(thisDir, 'startup');
+end
+cleanupGuard = onCleanup(@() autosimCollectCleanupOnExit(collectionCfg, thisDir)); %#ok<NASGU>
+
 fprintf('[AutoSimCollect] Start collection (scenarios=%d, drones=%d)\n', ...
     round(collectionCfg.scenario_count), round(collectionCfg.drone_count));
 setenv('AUTOSIM_DISABLE_INCREMENTAL_TRAIN', 'true');
@@ -118,6 +123,44 @@ if ~isfield(cfg, 'multi_drone_use_world_tag_as_first')
 end
 if ~isfield(cfg, 'primary_drone_index')
     cfg.primary_drone_index = 1;
+end
+if ~isfield(cfg, 'safe_cleanup_on_start')
+    cfg.safe_cleanup_on_start = true;
+end
+if ~isfield(cfg, 'safe_cleanup_on_exit')
+    cfg.safe_cleanup_on_exit = true;
+end
+end
+
+function autosimCollectCleanupOnExit(cfg, thisDir)
+if isfield(cfg, 'safe_cleanup_on_exit') && cfg.safe_cleanup_on_exit
+    autosimCollectForceCleanup(thisDir, 'exit');
+end
+end
+
+function autosimCollectForceCleanup(thisDir, reason)
+fprintf('[AutoSimCollect] Safe cleanup (%s): checking stale Gazebo/RViz/ROS processes...\n', char(string(reason)));
+try
+    modDir = fullfile(thisDir, 'modules');
+    if exist(modDir, 'dir')
+        addpath(modDir);
+    end
+    coreDir = fullfile(modDir, 'core');
+    if exist(coreDir, 'dir')
+        addpath(genpath(coreDir));
+    end
+
+    cfg = autosimDefaultConfig();
+    [cfg, ~] = autosimApplyRuntimeOverrides(cfg);
+    autosimCleanupProcesses(cfg);
+catch ME
+    warning('[AutoSimCollect] Structured cleanup failed (%s). Fallback kill will run.', ME.message);
+    system(['bash -i -c "set +m; ' ...
+        'pkill -9 gzserver >/dev/null 2>&1 || true; ' ...
+        'pkill -9 gzclient >/dev/null 2>&1 || true; ' ...
+        'pkill -9 -x rviz2 >/dev/null 2>&1 || true; ' ...
+        'pkill -9 -f \"[r]os2 launch sjtu_drone_bringup\" >/dev/null 2>&1 || true; ' ...
+        'pkill -9 -f \"[s]jtu_drone_bringup.launch.py\" >/dev/null 2>&1 || true"']);
 end
 end
 

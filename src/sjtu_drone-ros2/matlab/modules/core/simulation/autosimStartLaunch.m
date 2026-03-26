@@ -1,4 +1,9 @@
 function info = autosimStartLaunch(cfg, scenarioCfg, scenarioId)
+    persistent rvizStartedKeys;
+    if isempty(rvizStartedKeys)
+        rvizStartedKeys = strings(0, 1);
+    end
+
     autosimCleanupProcesses(cfg);
 
     cleanupScope = "global";
@@ -35,6 +40,15 @@ function info = autosimStartLaunch(cfg, scenarioCfg, scenarioId)
     useRvizTxt = 'false';
     if isfield(cfg, 'launch') && isfield(cfg.launch, 'use_rviz') && cfg.launch.use_rviz
         useRvizTxt = 'true';
+    end
+    rvizOnce = autosimLocalEnvBool('AUTOSIM_RVIZ_ONCE', true);
+    rvizKey = autosimLocalRvizKey(cfg);
+    rvizAlive = autosimLocalRvizProcessRunning();
+    if strcmp(useRvizTxt, 'true') && rvizOnce && any(strcmp(rvizStartedKeys, rvizKey)) && rvizAlive
+        useRvizTxt = 'false';
+        fprintf('[AUTOSIM] RViz one-shot active: skip relaunch for %s (rviz_alive=true)\n', char(rvizKey));
+    elseif strcmp(useRvizTxt, 'true') && rvizOnce && any(strcmp(rvizStartedKeys, rvizKey)) && ~rvizAlive
+        fprintf('[AUTOSIM] RViz one-shot reset for %s (rviz_alive=false): launching RViz again\n', char(rvizKey));
     end
     useTeleopTxt = 'false';
     if isfield(cfg, 'launch') && isfield(cfg.launch, 'use_teleop') && cfg.launch.use_teleop
@@ -84,8 +98,39 @@ function info = autosimStartLaunch(cfg, scenarioCfg, scenarioId)
     end
 
     info = struct('pid', pid, 'log_file', string(logFile));
+    if strcmp(useRvizTxt, 'true') && rvizOnce
+        rvizStartedKeys(end+1, 1) = rvizKey; %#ok<AGROW>
+    end
     fprintf('[AUTOSIM] Launch started (pid=%d), hover=%.2f, wind=%.2f@%.1f\n', ...
         pid, scenarioCfg.hover_height_m, scenarioCfg.wind_speed, scenarioCfg.wind_dir);
+end
+
+function key = autosimLocalRvizKey(cfg)
+    wid = 0;
+    did = 0;
+    if isfield(cfg, 'runtime') && isstruct(cfg.runtime)
+        if isfield(cfg.runtime, 'worker_id') && isfinite(cfg.runtime.worker_id)
+            wid = round(double(cfg.runtime.worker_id));
+        end
+        if isfield(cfg.runtime, 'domain_id') && isfinite(cfg.runtime.domain_id)
+            did = round(double(cfg.runtime.domain_id));
+        end
+    end
+    key = sprintf('w%d_d%d', wid, did);
+end
+
+function tf = autosimLocalEnvBool(name, defaultVal)
+    txt = strtrim(lower(getenv(name)));
+    if isempty(txt)
+        tf = logical(defaultVal);
+        return;
+    end
+    tf = any(strcmp(txt, {'1', 'true', 'yes', 'y', 'on'}));
+end
+
+function tf = autosimLocalRvizProcessRunning()
+    [st, ~] = system('pgrep -x rviz2 >/dev/null 2>&1');
+    tf = (st == 0);
 end
 
 

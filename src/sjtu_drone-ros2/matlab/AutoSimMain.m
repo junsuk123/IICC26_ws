@@ -14,13 +14,16 @@ mainCfg.dataset_recent_n = 5000;
 mainCfg.validation_recent_n = 1000;
 % Data collection settings (editable in main).
 mainCfg.collection = struct();
-mainCfg.collection.scenario_count = 100;
-mainCfg.collection.drone_count = 2;
+mainCfg.collection.scenario_count = 1000;
+mainCfg.collection.drone_count = 3;
 mainCfg.collection.independent_per_drone = true;
 mainCfg.collection.merge_last_runs = 5;
 mainCfg.collection.launch_use_gui = false;
 mainCfg.collection.launch_use_rviz = true;
 mainCfg.collection.launch_use_teleop = false;
+mainCfg.collection.domain_base = 60;
+mainCfg.collection.parallel_rviz_mode = 'single';
+mainCfg.collection.allow_parallel_rviz = false;
 mainCfg.collection.multi_drone_spacing_m = 10.0;
 mainCfg.collection.multi_drone_namespace_prefix = 'drone_w';
 mainCfg.collection.multi_drone_spawn_tags = true;
@@ -29,9 +32,9 @@ mainCfg.collection.primary_drone_index = 1;
 % Parallel autoscaling controls (applied by run_autosim_parallel.sh).
 mainCfg.collection.dynamic_worker_scale = true;
 mainCfg.collection.memory_probe_wait_sec = 8;
-mainCfg.collection.allow_scale_above_requested = false;
-mainCfg.collection.enable_progress_plot = true;
-mainCfg.collection.enable_scenario_live_viz = true;
+mainCfg.collection.allow_scale_above_requested = true;
+mainCfg.collection.enable_progress_plot = false;
+mainCfg.collection.enable_scenario_live_viz = false;
 
 % Pipeline stages (main always executes all stages).
 mainCfg.run_collection = true;

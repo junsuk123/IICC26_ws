@@ -124,6 +124,26 @@ def rviz_node_generator(context, rviz_path):
             '      Value: true\n'
         )
 
+    def _build_camera_display(ns: str, camera_name: str, topic_suffix: str) -> str:
+        topic = f'{ns}/{topic_suffix}'
+        clean = ns.strip('/').replace('/', '_')
+        return (
+            '    - Class: rviz_default_plugins/Image\n'
+            '      Enabled: true\n'
+            '      Max Value: 1\n'
+            '      Median window: 5\n'
+            '      Min Value: 0\n'
+            f'      Name: {camera_name} {clean}\n'
+            '      Normalize Range: true\n'
+            '      Topic:\n'
+            '        Depth: 5\n'
+            '        Durability Policy: Volatile\n'
+            '        History Policy: Keep Last\n'
+            '        Reliability Policy: Reliable\n'
+            f'        Value: {topic}\n'
+            '      Value: true\n'
+        )
+
     def _build_robot_model_display(ns: str) -> str:
         clean = ns.strip('/').replace('/', '_')
         tf_prefix = ns.strip('/')
@@ -147,14 +167,18 @@ def rviz_node_generator(context, rviz_path):
         with open(rviz_path, 'r') as f:
             rviz_config = f.read()
 
-        # Keep base image entry for the first namespace and append additional entries for others.
+        # Keep base displays for the first namespace and append additional entries for others.
         rviz_config = rviz_config.replace('Value: /drone/landing_tag_state_image', f'Value: {drone_namespaces[0]}/landing_tag_state_image')
+        rviz_config = rviz_config.replace('Value: /drone/front/image_raw', f'Value: {drone_namespaces[0]}/front/image_raw')
+        rviz_config = rviz_config.replace('Value: /drone/bottom/image_raw', f'Value: {drone_namespaces[0]}/bottom/image_raw')
 
         extra_blocks = ''
         for ns in drone_namespaces:
             extra_blocks += _build_robot_model_display(ns)
         for ns in drone_namespaces[1:]:
             extra_blocks += _build_image_display(ns)
+            extra_blocks += _build_camera_display(ns, 'Front Camera', 'front/image_raw')
+            extra_blocks += _build_camera_display(ns, 'Bottom Camera', 'bottom/image_raw')
 
         if extra_blocks:
             rviz_config = rviz_config.replace('  Enabled: true\n  Global Options:', f'{extra_blocks}  Enabled: true\n  Global Options:', 1)
@@ -455,6 +479,13 @@ def generate_launch_description():
             description='Whether to launch Gazebo with GUI',
         ),
 
+        DeclareLaunchArgument(
+            'pre_kill_gazebo',
+            default_value='false',
+            choices=['true', 'false'],
+            description='Whether to kill existing gzserver/gzclient before launch',
+        ),
+
         OpaqueFunction(
             function=rviz_node_generator,
             kwargs={'rviz_path': rviz_path},
@@ -475,6 +506,7 @@ def generate_launch_description():
                 'takeoff_hover_height': LaunchConfiguration('takeoff_hover_height'),
                 'takeoff_vertical_speed': LaunchConfiguration('takeoff_vertical_speed'),
                 'use_gui': LaunchConfiguration('use_gui'),
+                'pre_kill_gazebo': LaunchConfiguration('pre_kill_gazebo'),
             }.items(),
         ),
 

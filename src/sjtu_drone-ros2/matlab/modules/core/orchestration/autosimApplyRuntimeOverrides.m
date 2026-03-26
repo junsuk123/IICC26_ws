@@ -110,7 +110,8 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     cfg.launch.use_rviz = autosimEnvBool('AUTOSIM_USE_RVIZ', defaultUseRviz);
     if workerCount > 1 && cfg.launch.use_rviz
         allowParallelRviz = autosimEnvBool('AUTOSIM_ALLOW_PARALLEL_RVIZ', false);
-        if ~allowParallelRviz
+        forceWorkerRviz = autosimEnvBool('AUTOSIM_WORKER_FORCE_RVIZ', false);
+        if ~allowParallelRviz && ~forceWorkerRviz
             cfg.launch.use_rviz = false;
         end
     end

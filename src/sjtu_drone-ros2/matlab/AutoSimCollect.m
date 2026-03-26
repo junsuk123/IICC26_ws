@@ -109,6 +109,15 @@ end
 if ~isfield(cfg, 'launch_use_teleop')
     cfg.launch_use_teleop = true;
 end
+if ~isfield(cfg, 'domain_base')
+    cfg.domain_base = 60;
+end
+if ~isfield(cfg, 'parallel_rviz_mode')
+    cfg.parallel_rviz_mode = 'single';
+end
+if ~isfield(cfg, 'allow_parallel_rviz')
+    cfg.allow_parallel_rviz = false;
+end
 if ~isfield(cfg, 'multi_drone_spacing_m')
     cfg.multi_drone_spacing_m = 10.0;
 end
@@ -224,6 +233,15 @@ if isfield(cfg, 'launch_use_gui')
 end
 if isfield(cfg, 'launch_use_rviz')
     setenv('AUTOSIM_USE_RVIZ', autosimCollectBoolText(logical(cfg.launch_use_rviz)));
+end
+if isfield(cfg, 'domain_base') && isfinite(cfg.domain_base)
+    setenv('DOMAIN_BASE', num2str(round(double(cfg.domain_base))));
+end
+if isfield(cfg, 'parallel_rviz_mode') && strlength(string(cfg.parallel_rviz_mode)) > 0
+    setenv('AUTOSIM_PARALLEL_RVIZ_MODE', char(string(cfg.parallel_rviz_mode)));
+end
+if isfield(cfg, 'allow_parallel_rviz')
+    setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', autosimCollectBoolText(logical(cfg.allow_parallel_rviz)));
 end
 if isfield(cfg, 'launch_use_teleop')
     setenv('AUTOSIM_USE_TELEOP', autosimCollectBoolText(logical(cfg.launch_use_teleop)));

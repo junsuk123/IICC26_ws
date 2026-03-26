@@ -41,6 +41,10 @@ AUTOSIM_MEMORY_MONITOR_INTERVAL_SEC="${AUTOSIM_MEMORY_MONITOR_INTERVAL_SEC:-10}"
 AUTOSIM_SCALE_STEP="${AUTOSIM_SCALE_STEP:-1}"
 AUTOSIM_CPU_TARGET_UTIL_PCT="${AUTOSIM_CPU_TARGET_UTIL_PCT:-75}"
 AUTOSIM_CPU_HARD_LIMIT_PCT="${AUTOSIM_CPU_HARD_LIMIT_PCT:-90}"
+AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC="${AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC:-5}"
+AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC="${AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC:-90}"
+AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC="${AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC:-30}"
+AUTOSIM_WORKER_MAX_RESPAWN="${AUTOSIM_WORKER_MAX_RESPAWN:-3}"
 
 if ! [[ "$AUTOSIM_WORKER_LAUNCH_STAGGER_SEC" =~ ^[0-9]+$ ]]; then
   AUTOSIM_WORKER_LAUNCH_STAGGER_SEC=4
@@ -56,6 +60,30 @@ if ! [[ "$AUTOSIM_SCALE_STEP" =~ ^[0-9]+$ ]]; then
 fi
 if (( AUTOSIM_SCALE_STEP < 1 )); then
   AUTOSIM_SCALE_STEP=1
+fi
+if ! [[ "$AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC" =~ ^[0-9]+$ ]]; then
+  AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC=5
+fi
+if (( AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC < 1 )); then
+  AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC=1
+fi
+if ! [[ "$AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC" =~ ^[0-9]+$ ]]; then
+  AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC=90
+fi
+if (( AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC < 20 )); then
+  AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC=20
+fi
+if ! [[ "$AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC" =~ ^[0-9]+$ ]]; then
+  AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC=30
+fi
+if (( AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC < 5 )); then
+  AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC=5
+fi
+if ! [[ "$AUTOSIM_WORKER_MAX_RESPAWN" =~ ^[0-9]+$ ]]; then
+  AUTOSIM_WORKER_MAX_RESPAWN=3
+fi
+if (( AUTOSIM_WORKER_MAX_RESPAWN < 0 )); then
+  AUTOSIM_WORKER_MAX_RESPAWN=0
 fi
 if ! [[ "$AUTOSIM_CPU_TARGET_UTIL_PCT" =~ ^[0-9]+$ ]]; then
   AUTOSIM_CPU_TARGET_UTIL_PCT=75
@@ -438,6 +466,7 @@ echo "[AUTOSIM] Allow scale above requested: $AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTE
 echo "[AUTOSIM] CPU hybrid policy: target=${AUTOSIM_CPU_TARGET_UTIL_PCT}% hard=${AUTOSIM_CPU_HARD_LIMIT_PCT}%"
 echo "[AUTOSIM] Visualization defaults: use_gui=$AUTOSIM_USE_GUI use_rviz=$AUTOSIM_USE_RVIZ"
 echo "[AUTOSIM] Worker launch stagger: ${AUTOSIM_WORKER_LAUNCH_STAGGER_SEC}s"
+echo "[AUTOSIM] Worker health monitor: interval=${AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC}s spawn_timeout=${AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC}s cooldown=${AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC}s max_respawn=${AUTOSIM_WORKER_MAX_RESPAWN}"
 echo "[AUTOSIM] Force software GL: $AUTOSIM_FORCE_SOFTWARE_GL"
 echo "[AUTOSIM] CLI inspect tip: export ROS_DOMAIN_ID=$DOMAIN_BASE"
 echo "[AUTOSIM] Dynamic worker scaling: $AUTOSIM_DYNAMIC_WORKER_SCALE"
@@ -545,6 +574,154 @@ kill_pid_graceful() {
     sleep 0.2
   done
   kill -9 "$pid" 2>/dev/null || true
+}
+
+worker_ns_from_id() {
+  local wid="$1"
+  printf "/%s%02d" "$AUTOSIM_MULTI_DRONE_NAMESPACE_PREFIX" "$wid"
+}
+
+cleanup_worker_instance_by_id() {
+  local wid="$1"
+  local ns
+  ns="$(worker_ns_from_id "$wid")"
+  local ns_pattern
+  ns_pattern="$(printf '%s' "$ns" | sed -E 's/([\.^$|()\[\]{}*+?])/\\\\\1/g')"
+  local gazebo_port="$((GAZEBO_PORT_BASE + wid - 1))"
+
+  bash -i -c "set +m; \
+    pkill -9 -f '[r]os2 launch sjtu_drone_bringup.*${ns_pattern}' || true; \
+    pkill -9 -f '[a]priltag.*${ns_pattern}' || true; \
+    pkill -9 -f '[s]pawn_drone.*${ns_pattern}' || true; \
+    pkill -9 -f '[s]pawn_apriltag.*${ns_pattern}' || true; \
+    pkill -9 -f '[r]obot_state_publisher.*${ns_pattern}' || true; \
+    pkill -9 -f '[j]oint_state_publisher.*${ns_pattern}' || true; \
+    pkill -9 -f '[s]tatic_transform_publisher.*${ns_pattern}' || true; \
+    for p in \$(ss -ltnp '( sport = :${gazebo_port} )' 2>/dev/null | awk -F'pid=' 'NF>1 {split(\$2,a,","); print a[1]}' | tr -d '[:space:]' | grep -E '^[0-9]+$' | sort -u); do \
+      kill -9 \$p >/dev/null 2>&1 || true; \
+    done" >/dev/null 2>&1 || true
+}
+
+worker_spawn_failure_reason() {
+  local wid="$1"
+  local log_file="$LOG_ROOT/worker_${wid}.log"
+  local now_sec
+  now_sec="$(date +%s)"
+  local started_at="${WORKER_START_TS[$wid]:-0}"
+  local elapsed="$((now_sec - started_at))"
+
+  if [[ ! -f "$log_file" ]]; then
+    echo ""
+    return
+  fi
+
+  if [[ "${WORKER_SPAWN_CONFIRMED[$wid]:-0}" != "1" ]]; then
+    if grep -q "pad=ok" "$log_file" 2>/dev/null; then
+      WORKER_SPAWN_CONFIRMED[$wid]=1
+      echo ""
+      return
+    fi
+  else
+    echo ""
+    return
+  fi
+
+  local recent
+  recent="$(tail -n 180 "$log_file" 2>/dev/null || true)"
+  if [[ -z "$recent" ]]; then
+    echo ""
+    return
+  fi
+
+  if grep -q "process has died .*gzserver" <<< "$recent"; then
+    echo "gzserver_died"
+    return
+  fi
+
+  local spawn_wait_count
+  spawn_wait_count="$(grep -c "service not available, waiting again" <<< "$recent" || true)"
+  if [[ "$spawn_wait_count" =~ ^[0-9]+$ ]] && (( spawn_wait_count >= 10 )); then
+    echo "spawn_service_unavailable"
+    return
+  fi
+
+  if grep -q "Takeoff gate hard-bypass" <<< "$recent"; then
+    echo "takeoff_gate_hard_bypass"
+    return
+  fi
+
+  if (( elapsed >= AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC )); then
+    if grep -q "pad=stale" "$log_file" 2>/dev/null; then
+      echo "spawn_timeout_stale_pad"
+      return
+    fi
+  fi
+
+  echo ""
+}
+
+check_and_recover_workers() {
+  local total_hint="$1"
+  local now_sec
+  now_sec="$(date +%s)"
+
+  local idx pid wid reason last_restart restart_count
+  for idx in "${!ACTIVE_PIDS[@]}"; do
+    pid="${ACTIVE_PIDS[$idx]}"
+    wid="${ACTIVE_WORKER_IDS[$idx]}"
+
+    if [[ -z "$pid" || -z "$wid" ]]; then
+      continue
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+
+    reason="$(worker_spawn_failure_reason "$wid")"
+    if [[ -z "$reason" ]]; then
+      continue
+    fi
+
+    restart_count="${WORKER_RESTART_COUNT[$wid]:-0}"
+    if (( restart_count >= AUTOSIM_WORKER_MAX_RESPAWN )); then
+      echo "[AUTOSIM] Worker $wid spawn-failure=$reason but max respawn reached ($restart_count/$AUTOSIM_WORKER_MAX_RESPAWN)."
+      continue
+    fi
+
+    last_restart="${WORKER_LAST_RESTART_TS[$wid]:-0}"
+    if (( now_sec - last_restart < AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC )); then
+      continue
+    fi
+
+    echo "[AUTOSIM] Worker $wid spawn failure detected ($reason). Safe restart in progress..."
+    WORKER_LAST_RESTART_TS[$wid]="$now_sec"
+    WORKER_RESTART_COUNT[$wid]="$((restart_count + 1))"
+
+    kill_pid_graceful "$pid"
+    cleanup_worker_instance_by_id "$wid"
+    launch_worker "$wid" "$total_hint"
+    ACTIVE_PIDS[$idx]="$LAST_LAUNCHED_PID"
+    WORKER_START_TS[$wid]="$(date +%s)"
+    WORKER_SPAWN_CONFIRMED[$wid]=0
+
+    echo "[AUTOSIM] Worker $wid restarted (attempt ${WORKER_RESTART_COUNT[$wid]}/$AUTOSIM_WORKER_MAX_RESPAWN) pid=$LAST_LAUNCHED_PID"
+  done
+}
+
+start_worker_supervisor_background() {
+  (
+    while true; do
+      reap_workers
+      local active_count="${#ACTIVE_PIDS[@]}"
+      if (( active_count == 0 )); then
+        break
+      fi
+      check_and_recover_workers "$REQUESTED_WORKERS"
+      sleep "$AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC"
+    done
+  ) >/dev/null 2>&1 &
+  WORKER_SUPERVISOR_PID="$!"
+  echo "[AUTOSIM] Worker supervisor started (pid=$WORKER_SUPERVISOR_PID)"
 }
 
 reap_workers() {
@@ -673,6 +850,10 @@ start_worker_with_new_id() {
   launch_worker "$worker_id" "$total_hint"
   ACTIVE_PIDS+=("$LAST_LAUNCHED_PID")
   ACTIVE_WORKER_IDS+=("$worker_id")
+  WORKER_START_TS[$worker_id]="$(date +%s)"
+  WORKER_LAST_RESTART_TS[$worker_id]=0
+  WORKER_RESTART_COUNT[$worker_id]=0
+  WORKER_SPAWN_CONFIRMED[$worker_id]=0
   TOTAL_LAUNCHED="$((TOTAL_LAUNCHED + 1))"
 }
 
@@ -690,6 +871,10 @@ stop_latest_worker() {
   unset 'ACTIVE_WORKER_IDS[idx]'
   ACTIVE_PIDS=("${ACTIVE_PIDS[@]}")
   ACTIVE_WORKER_IDS=("${ACTIVE_WORKER_IDS[@]}")
+  unset 'WORKER_START_TS[$wid]'
+  unset 'WORKER_LAST_RESTART_TS[$wid]'
+  unset 'WORKER_RESTART_COUNT[$wid]'
+  unset 'WORKER_SPAWN_CONFIRMED[$wid]'
 }
 
 reserve_kb="$((MEM_RESERVE_GB * 1024 * 1024))"
@@ -700,11 +885,16 @@ fi
 
 ACTIVE_PIDS=()
 ACTIVE_WORKER_IDS=()
+declare -A WORKER_START_TS=()
+declare -A WORKER_LAST_RESTART_TS=()
+declare -A WORKER_RESTART_COUNT=()
+declare -A WORKER_SPAWN_CONFIRMED=()
 NEXT_WORKER_ID=1
 TOTAL_LAUNCHED=0
 PEAK_WORKERS=0
 dynamic_worker_kb="$fallback_worker_kb"
 mem_start_kb="$mem_avail_kb"
+WORKER_SUPERVISOR_PID=""
 CURRENT_CPU_UTIL_PCT=0
 smoothed_cpu_util=0
 read -r prev_cpu_total prev_cpu_idle < <(read_cpu_counters)
@@ -734,6 +924,13 @@ if [[ "$AUTOSIM_DYNAMIC_WORKER_SCALE" == "1" || "$AUTOSIM_DYNAMIC_WORKER_SCALE" 
 
     if (( active_count > PEAK_WORKERS )); then
       PEAK_WORKERS="$active_count"
+    fi
+
+    check_and_recover_workers "$active_count"
+    reap_workers
+    active_count="${#ACTIVE_PIDS[@]}"
+    if (( active_count == 0 )); then
+      break
     fi
 
     update_cpu_util_pct
@@ -773,12 +970,19 @@ else
   echo "[AUTOSIM] Launching workers: $WORKERS"
   for ((i=1; i<=WORKERS; i++)); do
     launch_worker "$i" "$WORKERS"
+    ACTIVE_PIDS+=("$LAST_LAUNCHED_PID")
+    ACTIVE_WORKER_IDS+=("$i")
+    WORKER_START_TS[$i]="$(date +%s)"
+    WORKER_LAST_RESTART_TS[$i]=0
+    WORKER_RESTART_COUNT[$i]=0
+    WORKER_SPAWN_CONFIRMED[$i]=0
     if (( i < WORKERS )) && (( AUTOSIM_WORKER_LAUNCH_STAGGER_SEC > 0 )); then
       sleep "$AUTOSIM_WORKER_LAUNCH_STAGGER_SEC"
     fi
   done
   TOTAL_LAUNCHED="$WORKERS"
   PEAK_WORKERS="$WORKERS"
+  start_worker_supervisor_background
 fi
 
 echo "workers=$WORKERS" >> "$SESSION_ROOT/session_info.txt"
@@ -788,6 +992,9 @@ if [[ -n "$TOTAL_SCENARIOS" ]]; then
   echo "scenario_total=$TOTAL_SCENARIOS" >> "$SESSION_ROOT/session_info.txt"
   echo "scenario_per_worker_base=$SCENARIO_PER_WORKER_BASE" >> "$SESSION_ROOT/session_info.txt"
   echo "scenario_per_worker_remainder=$SCENARIO_PER_WORKER_REMAINDER" >> "$SESSION_ROOT/session_info.txt"
+fi
+if [[ -n "$WORKER_SUPERVISOR_PID" ]]; then
+  echo "worker_supervisor_pid=$WORKER_SUPERVISOR_PID" >> "$SESSION_ROOT/session_info.txt"
 fi
 echo "worker_id_policy=monotonic_no_reuse" >> "$SESSION_ROOT/session_info.txt"
 if (( TOTAL_LAUNCHED > 0 )); then

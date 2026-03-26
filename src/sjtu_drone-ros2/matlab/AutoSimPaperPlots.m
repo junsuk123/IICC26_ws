@@ -356,8 +356,8 @@ fig7 = figure('Name', 'WindBandDecisionBreakdown', 'Color', 'w', 'Position', [18
 ax7 = axes(fig7);
 hold(ax7, 'on');
 
-attemptCount7 = nan(nB7, 1);
-holdCount7 = nan(nB7, 1);
+attemptPct7 = nan(nB7, 1);
+holdPct7 = nan(nB7, 1);
 unsafeAttemptRate7 = nan(nB7, 1);
 unsafeAttemptRate7b = nan(nB7, 1);
 for b = 1:nB7
@@ -365,8 +365,10 @@ for b = 1:nB7
         fnTotal = bCounts7(b,3) + bCounts7(b,4);
         fnTotalB = bCounts7b(b,3) + bCounts7b(b,4);
 
-        attemptCount7(b) = bCounts7(b,1) + bCounts7(b,2);  % TP + FP
-        holdCount7(b) = bCounts7(b,5) + fnTotal;           % TN + FN
+        attemptCount = bCounts7(b,1) + bCounts7(b,2);  % TP + FP
+        holdCount = bCounts7(b,5) + fnTotal;           % TN + FN
+        attemptPct7(b) = 100 * safeDiv(attemptCount, bTotal7(b));
+        holdPct7(b) = 100 * safeDiv(holdCount, bTotal7(b));
 
         unsafeAttemptRate7(b) = 100 * safeDiv(bCounts7(b,2), bCounts7(b,2) + bCounts7(b,5));
         unsafeAttemptRate7b(b) = 100 * safeDiv(bCounts7b(b,2), bCounts7b(b,2) + bCounts7b(b,5));
@@ -379,8 +381,8 @@ if ~any(validBandMask)
 end
 plotLabels = bLabels(validBandMask);
 plotN = bTotal7(validBandMask);
-attemptPlot = attemptCount7(validBandMask);
-holdPlot = holdCount7(validBandMask);
+attemptPlot = attemptPct7(validBandMask);
+holdPlot = holdPct7(validBandMask);
 riskPlot = unsafeAttemptRate7(validBandMask);
 riskPlotB = unsafeAttemptRate7b(validBandMask);
 x = 1:numel(plotLabels);
@@ -390,20 +392,14 @@ countBars = bar(ax7, x, [attemptPlot, holdPlot], 0.70, 'grouped');
 set(countBars(1), ...
     'FaceColor', [0.15 0.56 0.86], ...
     'EdgeColor', [0.09 0.39 0.65], ...
-    'DisplayName', 'Attempt count (TP+FP)');
+    'DisplayName', 'Attempt ratio in band (%)');
 set(countBars(2), ...
     'FaceColor', [0.29 0.70 0.33], ...
     'EdgeColor', [0.20 0.52 0.24], ...
-    'DisplayName', 'Hold count (TN+FN)');
+    'DisplayName', 'Hold ratio in band (%)');
 
-ylabel(ax7, 'Decision count (Ontology+AI)', 'FontSize', FONT_LABEL);
-yCandidates = [attemptPlot; holdPlot];
-yCandidates = yCandidates(isfinite(yCandidates));
-if isempty(yCandidates)
-    ylim(ax7, [0 1]);
-else
-    ylim(ax7, [0 max(1, 1.15 * max(yCandidates))]);
-end
+ylabel(ax7, 'Decision ratio in wind band (%)', 'FontSize', FONT_LABEL);
+ylim(ax7, [0 100]);
 
 yyaxis(ax7, 'right');
 pRisk = plot(ax7, x, riskPlot, '-^', ...
@@ -448,7 +444,7 @@ for i = 1:numel(x)
 end
 
 legend(ax7, [countBars(1) countBars(2) pRisk pRiskB], ...
-    {'Attempt count (TP+FP)', 'Hold count (TN+FN)', ...
+    {'Attempt ratio in band (%)', 'Hold ratio in band (%)', ...
      'Unsafe attempt rate FP/(FP+TN)', 'Unsafe attempt rate (threshold)'}, ...
     'Location', 'northoutside', 'Orientation', 'horizontal', ...
     'FontSize', FONT_LEGEND, 'Box', 'off');
@@ -1023,19 +1019,23 @@ end
 
 
 function plotConfusion(ax, m, ttl)
+    fs = 36;
     cm = [m.tp m.fn; m.fp m.tn];
     imagesc(ax, cm);
     cmap = parula(256);
     colormap(ax, cmap);
-    colorbar(ax);
+    cb = colorbar(ax);
+    cb.FontSize = fs;
     axis(ax, 'equal');
     axis(ax, 'tight');
     xticks(ax, 1:2);
     yticks(ax, 1:2);
-    xticklabels(ax, {'Pred AttemptLanding', 'Pred HoldLanding'});
-    yticklabels(ax, {'GT AttemptLanding', 'GT HoldLanding'});
-    title(ax, ttl, 'FontSize', 13);
-    set(ax, 'FontSize', 11);
+    xticklabels(ax, {'Land', 'Hold'});
+    yticklabels(ax, {'Land', 'Hold'});
+    xlabel(ax, 'Pred', 'FontSize', fs);
+    ylabel(ax, 'GT', 'FontSize', fs);
+    title(ax, ttl, 'FontSize', fs);
+    set(ax, 'FontSize', fs);
 
     cMin = min(cm(:));
     cMax = max(cm(:));
@@ -1055,7 +1055,7 @@ function plotConfusion(ax, m, ttl)
                 txtColor = [1 1 1];
             end
             text(ax, c, r, num2str(cm(r,c)), 'HorizontalAlignment', 'center', ...
-                'VerticalAlignment', 'middle', 'Color', txtColor, 'FontWeight', 'bold', 'FontSize', 12);
+                'VerticalAlignment', 'middle', 'Color', txtColor, 'FontWeight', 'bold', 'FontSize', fs);
         end
     end
 end

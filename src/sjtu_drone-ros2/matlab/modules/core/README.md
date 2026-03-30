@@ -1,42 +1,26 @@
 # Core Modules Overview
 
-`modules/core`는 AutoSim 기능을 영역별로 분리한 폴더다.
+`modules/core`는 AutoSim의 도메인별 구현 레이어입니다.
 
-## 최근 업데이트 (2026-03-23)
-
-core 모듈 간 공통 정책이 다음과 같이 정리되었다.
-
-- 바람 위험도 계산은 벡터 성분 보존 원칙을 적용한다.
-- 시나리오 수집은 드론 1대당 120초 하드 타임아웃을 적용한다.
-
-$$
-r_v=\max(\|\mathbf{v}_w\|_2,\max(|v_x|,|v_y|)),\quad
-r_a=\max(\|\mathbf{a}_w\|_2,\max(|a_x|,|a_y|))
-$$
-
-$$
-t_{collect}\le120\,\text{s}
-$$
-
-## 목적
-
-- 메인 스크립트(`AutoSim.m`)는 오케스트레이션만 유지
-- 기능 구현은 영역별 모듈에 위임
-- 실험/논문 수정 시 영향 범위를 폴더 단위로 제한
+마지막 업데이트: 2026-03-30
 
 ## 폴더 맵
 
-- `orchestration/`: 실행 흐름, 설정, 종료/체크포인트
-- `simulation/`: 시나리오 실행, 리셋, 동역학/착륙 판정 집계
-- `decision_making/`: 정책 선택, 의사결정 테이블, 온라인 feature 조합
-- `ontology/`: 의미론 상태/관계 추론 및 인코딩
-- `learning/`: 모델 로드/학습/예측/신뢰도 검증
-- `ros_io/`: ROS2 메시지 입출력, 파싱, 콜백/컨텍스트
-- `visualization/`: 실시간/오프라인 시각화
-- `utils/`: 공통 수치/문자열/시스템 유틸리티
+- `orchestration`: 설정, 실행 흐름, 체크포인트, 종료
+- `simulation`: 시나리오 실행, reset, takeoff/landing 제어
+- `ros_io`: 토픽/서비스 IO, 메시지 파싱, ROS 컨텍스트
+- `ontology`: 의미 상태 구성, 인코딩, 규칙 추론
+- `decision_making`: 정책 선택, 온라인 feature 벡터, 결과 평가
+- `learning`: 모델 로드/학습/추론/GaussianNB
+- `visualization`: 실시간/오프라인 플롯
+- `utils`: 공통 수치/시스템/프로세스 유틸
 
-## 설계 원칙
+## 공통 원칙
 
-1. 도메인 로직은 해당 폴더에만 둔다.
-2. 교차 의존은 최소화하고, 공통은 `utils/`로 올린다.
-3. 새 기능은 먼저 도메인 폴더를 정하고 그 안에서 확장한다.
+- 벡터 성분(`wind_velocity_x/y`, `wind_acceleration_x/y`)을 유지한 채 위험도/feature를 계산합니다.
+- 수집 타임아웃은 드론 기준 120초 상한을 따릅니다.
+- 모듈 간 공통 로직은 `utils`로 올리고, 도메인 로직은 해당 모듈에 둡니다.
+
+## 참고
+
+각 폴더의 상세 문서는 하위 `README.md`를 참조하세요.

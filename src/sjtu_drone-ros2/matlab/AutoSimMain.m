@@ -9,9 +9,9 @@ mainCfg = struct();
 % Use up to recent N rows for training.
 % If total data is insufficient, training rows are reduced automatically
 % after reserving validation_recent_n rows for validation.
-mainCfg.dataset_recent_n = 10000;
+mainCfg.dataset_recent_n = 20000;
 % Validation is fixed to this many recent scenarios.
-mainCfg.validation_recent_n = 1000;
+mainCfg.validation_recent_n = 10000;
 % Data collection settings (editable in main).
 mainCfg.collection = struct();
 mainCfg.collection.scenario_count = 5000;

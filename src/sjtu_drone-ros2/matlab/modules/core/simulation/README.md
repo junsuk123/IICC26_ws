@@ -1,69 +1,29 @@
 # Simulation Modules
 
-Gazebo/ROS 상에서 시나리오를 실제 실행하고 리셋/착륙 흐름을 제어한다.
+Gazebo/ROS 시나리오 실행과 단계별 제어 루프를 담당하는 모듈입니다.
 
-## 최근 업데이트 (2026-03-23)
+마지막 업데이트: 2026-03-30
 
-수집 안정성 강화를 위해 시나리오 루프에 하드 타임아웃을 반영했다.
+## 역할
 
-$$
-t_{collect}\le120\,\text{s per drone}
-$$
+- launch/reset/takeoff/landing 실행
+- 시나리오별 wind command 생성
+- 태그 추종 제어와 touchdown 통계 계산
+- 최종 라벨 요약
 
-또한 풍속/풍가속도는 벡터 성분을 유지해 온톨로지 위험도 계산으로 전달한다.
-
-## 기능 설명
-
-- launch, reset, takeoff, control-loop 실행
-- soft reset(`/reset_world` -> `/reset_simulation`) 우선 시도
-- 착륙 후 안정화 구간에서 최종 라벨 계산용 통계 추출
-
-## 이론 포인트
-
-- 제어 관점: 착륙 직전 추종 안정성과 touchdown 동역학 분리 평가
-- 환경 관점: 풍속/풍향 시계열 및 가속도 기반 난류 성분 반영
-- 안전 판정: 상태/자세/속도/접촉 지표를 조합해 stable/unstable 라벨링
-
-풍속 가속도는 최근 시계열 기울기로 계산한다.
-
-$$
-a_w \approx \frac{dv}{dt}
-$$
-
-풍속/풍향은 벡터로 유지한다.
-
-$$
-v_x = v\cos\theta,\quad v_y = v\sin\theta,\quad |\mathbf{v}|=\sqrt{v_x^2+v_y^2}
-$$
-
-최종 라벨은 다중 안전 조건의 논리곱으로 표현된다.
-
-$$
-\mathrm{stable} = \bigwedge_i c_i,
-\quad
-\mathrm{unstable}=\neg\mathrm{stable}
-$$
-
-## 핵심 변수/용어 표
-
-| 항목 | 의미 | 단위/범위 | 비고 |
-|---|---|---|---|
-| v, theta | 풍속, 풍향 | m/s, deg | 입력 풍장 모델 |
-| v_x, v_y | 풍속 벡터 성분 | m/s | AI 입력까지 유지 |
-| a_w | 풍속 가속도 | m/s^2 | dv/dt 근사 |
-| controlPhase | 제어 단계 | pre_takeoff/takeoff/xy_hold/landing_track | 상태 머신 핵심 |
-| landingSent | 착륙 시작 여부 | bool | true 시 착륙 추적 단계 |
-| softResetOK | 서비스 리셋 성공 여부 | bool | /reset_world, /reset_simulation |
-| final_state | 종료 시 드론 상태 | int | landed/flying 판정과 결합 |
-
-## 대표 파일
+## 주요 파일
 
 - `autosimRunScenario.m`
+- `autosimStartLaunch.m`
 - `autosimResetSimulationForScenario.m`
 - `autosimSoftReset.m`
+- `autosimComputeWindCommand.m`
+- `autosimComputeWindAcceleration.m`
 - `autosimComputeTagTrackingCommand.m`
 - `autosimSummarizeAndLabel.m`
 
-## 확장 가이드
+## 운영 포인트
 
-- reset/takeoff 안정성, hover/landing phase 타이밍, 바람 모델 변경은 이 폴더에서 관리한다.
+- 시나리오 수집은 드론 기준 120초 상한을 따릅니다.
+- reset 실패 시 fallback 경로가 실행됩니다.
+- wind 벡터 성분과 크기를 함께 유지해 후속 ontology/learning 모듈로 전달합니다.

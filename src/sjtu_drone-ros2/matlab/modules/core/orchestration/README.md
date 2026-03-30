@@ -1,69 +1,32 @@
 # Orchestration Modules
 
-실행 진입, 설정, 상태 전환, 저장/종료 절차를 담당한다.
+실행 흐름과 설정 병합, 종료/체크포인트를 담당하는 모듈입니다.
 
-## 최근 업데이트 (2026-03-23)
+마지막 업데이트: 2026-03-30
 
-오케스트레이션 기본 설정에 수집 상한 시간을 명시했다.
+## 역할
 
-$$
-t_{collect}^{max}=120\,\text{s}
-$$
+- 기본 설정 생성 및 외부/런타임 override 반영
+- 단일/병렬 실행 orchestration
+- 결과 finalize, 요약 테이블, 체크포인트 저장
 
-시나리오/실험 설정이 이 값을 초과하더라도 실행 경로에서는 상한을 우선 적용한다.
-
-## 기능 설명
-
-- 기본 설정/외부 오버라이드 적용
-- 실행 중 stop request/interrupt 처리
-- 결과 요약, 체크포인트, 최종 산출물 정리
-
-## 이론 포인트
-
-- 재현성은 설정 고정과 저장 일관성에 의존
-- 장시간 실험에서 안전 종료/복구 가능성이 중요
-
-실험 단위 재현성은 설정 함수 고정으로 표현할 수 있다.
-
-$$
-\mathcal{D}_{run}=F(\theta, s)
-$$
-
-- $\theta$: 고정된 설정 집합
-- $s$: 시나리오/샘플링 정책
-
-체크포인트 기반 복구는 단계별 상태 저장으로 모델링된다.
-
-$$
-S_k = \{R_k, T_k, M_k, H_k\}
-$$
-
-- $R_k$: results
-- $T_k$: trace
-- $M_k$: model
-- $H_k$: learning history
-
-## 핵심 변수/용어 표
-
-| 항목 | 의미 | 단위/범위 | 비고 |
-|---|---|---|---|
-| cfg | 전역 설정 struct | struct | 모든 모듈 입력의 기준 |
-| runStatus | 실행 상태 | completed/interrupted/failed | 최종 산출물 태그 |
-| results | 시나리오 결과 배열 | struct array | summary 원천 데이터 |
-| traceStore | 시계열 로그 테이블 | table | 후분석/플롯 입력 |
-| learningHistory | 학습 이력 | table | 업데이트 추적 |
-| checkpoint | 중간 저장 스냅샷 | mat/csv | 복구용 |
-| lock file | 단일 인스턴스 락 | file | 동시 실행 방지 |
-| overrideInfo | 외부 설정 반영 정보 | struct | 실험 재현성 관리 |
-
-## 대표 파일
+## 주요 파일
 
 - `autosimDefaultConfig.m`
 - `autosimApplyExternalOverride.m`
-- `autosimFinalize.m`
+- `autosimApplyRuntimeOverrides.m`
+- `autosimMainOrchestrate.m`
+- `autosimSingleWorldPipeline.m`
 - `autosimSaveCheckpoint.m`
-- `autosimSummaryTable.m`
+- `autosimFinalize.m`
 
-## 확장 가이드
+## 운영 원칙
 
-- 실험 정책의 전역 스위치/기본값은 이 폴더에서 관리한다.
+- 수집 시간 상한은 120초 기준으로 적용됩니다.
+- runtime override는 환경변수 우선순위를 따릅니다.
+- 병렬 실행 시 워커별 경로와 domain이 분리되어야 합니다.
+
+## 유지보수 포인트
+
+- 새 환경변수 추가 시 `autosimApplyRuntimeOverrides.m`와 호출 스크립트(`matlab/scripts/*.sh`)를 함께 갱신합니다.
+- 종료/정리 정책 변경 시 `autosimFinalize.m`와 cleanup 유틸(`utils`)을 함께 검토합니다.

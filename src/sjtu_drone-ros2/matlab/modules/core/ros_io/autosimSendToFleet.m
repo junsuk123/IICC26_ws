@@ -23,6 +23,9 @@ switch lower(string(channel))
     case "reset"
         primaryPub = rosCtx.pubReset;
         followerField = 'pubResetFollowers';
+    case "posctrl"
+        primaryPub = rosCtx.pubPosCtrl;
+        followerField = 'pubPosCtrlFollowers';
     otherwise
         error('Unknown fleet channel: %s', channel);
 end
@@ -220,6 +223,8 @@ switch lower(string(channel))
         % std_msgs/Empty has no fields to copy.
     case "reset"
         % std_msgs/Empty has no fields to copy.
+    case "posctrl"
+        outMsg.data = logical(inMsg.data);
     otherwise
         % Keep empty message for unknown channels.
 end

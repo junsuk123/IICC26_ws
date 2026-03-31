@@ -3,11 +3,13 @@
 % - Loads all FinalDataset CSV files.
 % - Uses deterministic 70/30 split.
 % - Validates latest compatible model on 30% holdout split.
+% - Supports both "aii_only" (AI-only) and "ontology_ai" (Ontology+AI) models.
 %
 % Optional variables before run:
 %   modelPath (string/char): explicit model file path.
 %   splitSeed (numeric): deterministic split seed.
 %   autoPlot (logical): run AutoSimPaperPlots after validation.
+%   validationModelTypes (string array): model types to validate {"aii_only", "ontology_ai"}.
 
 if ~exist('autosim_keep_workspace', 'var') || ~logical(autosim_keep_workspace)
     clear;
@@ -41,6 +43,9 @@ end
 if ~exist('modelPath', 'var')
     modelPath = "";
 end
+if ~exist('validationModelTypes', 'var') || isempty(validationModelTypes)
+    validationModelTypes = ["aii_only", "ontology_ai"];
+end
 
 [allTbl, sourceFiles, finalRoot] = autosimLoadAllFinalDataset(rootDir); %#ok<ASGLU>
 if isempty(allTbl)
@@ -62,135 +67,191 @@ else
     end
 end
 
-modelPath = autosimValidationResolveModelPath(modelPath, rootDir, cfg.paths.model_dir);
-S = load(char(modelPath), 'model');
-if ~isfield(S, 'model')
-    error('AutoSimValidation:InvalidModelFile', 'Model file does not contain variable "model": %s', char(modelPath));
-end
-model = S.model;
+validationModelTypes = string(validationModelTypes(:));
+allValidationResults = struct();
 
-featureNames = string(cfg.model.feature_names(:));
-if isfield(model, 'feature_names') && ~isempty(model.feature_names)
-    featureNames = string(model.feature_names(:));
-end
-
-X = zeros(height(valTbl), numel(featureNames));
-for i = 1:numel(featureNames)
-    fn = char(featureNames(i));
-    if ismember(fn, valTbl.Properties.VariableNames)
-        col = valTbl.(fn);
-        if isnumeric(col) || islogical(col)
-            X(:, i) = double(col);
-        else
-            X(:, i) = str2double(string(col));
+for iModel = 1:numel(validationModelTypes)
+    modelType = validationModelTypes(iModel);
+    fprintf('\n[AutoSimValidation] ========== Validating Model Type %d/%d: %s ==========\n', ...
+        iModel, numel(validationModelTypes), modelType);
+    
+    % Apply model type configuration
+    cfgModel = autosimGetModelTypeConfig(cfg, modelType);
+    
+    if strlength(modelPath) > 0
+        % Use explicit model path
+        modelPathFull = modelPath;
+    else
+        % Search for model with specified type in filename
+        modelPathFull = autosimValidationResolveModelPath("", rootDir, cfgModel.paths.model_dir, modelType);
+    end
+    
+    if ~exist(char(modelPathFull), 'file')
+        fprintf('[AutoSimValidation] Model (%s) file not found: %s (skipping)\n', modelType, modelPathFull);
+        continue;
+    end
+    
+    S = load(char(modelPathFull), 'model');
+    if ~isfield(S, 'model')
+        error('AutoSimValidation:InvalidModelFile', 'Model file does not contain variable "model": %s', char(modelPathFull));
+    end
+    model = S.model;
+    
+    featureNames = string(cfgModel.model.feature_names(:));
+    if isfield(model, 'feature_names') && ~isempty(model.feature_names)
+        featureNames = string(model.feature_names(:));
+    end
+    
+    X = zeros(height(valTbl), numel(featureNames));
+    for i = 1:numel(featureNames)
+        fn = char(featureNames(i));
+        if ismember(fn, valTbl.Properties.VariableNames)
+            col = valTbl.(fn);
+            if isnumeric(col) || islogical(col)
+                X(:, i) = double(col);
+            else
+                X(:, i) = str2double(string(col));
+            end
         end
     end
-end
-X(~isfinite(X)) = 0.0;
-
-[predLabel, predScore] = autosimPredictGaussianNB(model, X, cfg);
-
-valTbl.pred_decision = autosimNormalizeActionLabel(predLabel);
-valTbl.pred_score = double(predScore(:));
-
-if ~ismember('gt_safe_to_land', valTbl.Properties.VariableNames)
-    if ismember('label', valTbl.Properties.VariableNames)
-        valTbl.gt_safe_to_land = autosimNormalizeActionLabel(valTbl.label);
-    else
-        error('AutoSimValidation:MissingGroundTruth', 'Validation table has no gt_safe_to_land or label field.');
+    X(~isfinite(X)) = 0.0;
+    
+    [predLabel, predScore] = autosimPredictGaussianNB(model, X, cfgModel);
+    
+    valTblModel = valTbl;
+    valTblModel.pred_decision = autosimNormalizeActionLabel(predLabel);
+    valTblModel.pred_score = double(predScore(:));
+    
+    if ~ismember('gt_safe_to_land', valTblModel.Properties.VariableNames)
+        if ismember('label', valTblModel.Properties.VariableNames)
+            valTblModel.gt_safe_to_land = autosimNormalizeActionLabel(valTblModel.label);
+        else
+            error('AutoSimValidation:MissingGroundTruth', 'Validation table has no gt_safe_to_land or label field.');
+        end
     end
+    
+    metrics = autosimEvaluateDecisionMetrics(valTblModel);
+    trajMetrics = autosimValidationEvaluateTrajectoryMetrics(valTblModel);
+    
+    ts = autosimTimestamp();
+    runDir = fullfile(cfgModel.paths.data_root, sprintf('validation_holdout_%s_%s', char(modelType), char(ts)));
+    if ~exist(runDir, 'dir')
+        mkdir(runDir);
+    end
+    
+    datasetCsv = fullfile(runDir, 'autosim_dataset_latest.csv');
+    summaryCsv = fullfile(runDir, 'autosim_validation_summary.csv');
+    splitCsv = fullfile(runDir, 'autosim_validation_split.csv');
+    
+    writetable(valTblModel, datasetCsv);
+    
+    sumTbl = table();
+    sumTbl.created_at = string(datetime('now'));
+    sumTbl.model_type = string(modelType);
+    sumTbl.model_path = string(modelPathFull);
+    sumTbl.n_all = height(allTbl);
+    sumTbl.n_all_raw = allTblRawCount;
+    if isfinite(recentNUsed) && recentNUsed > 0
+        sumTbl.recent_dataset_n = round(recentNUsed);
+    else
+        sumTbl.recent_dataset_n = nan;
+    end
+    sumTbl.n_train = height(trainTbl);
+    sumTbl.n_val = height(valTblModel);
+    sumTbl.seed = splitSeed;
+    sumTbl.accuracy = metrics.accuracy;
+    sumTbl.precision = metrics.precision;
+    sumTbl.safe_recall = metrics.recall;
+    sumTbl.unsafe_reject = metrics.specificity;
+    sumTbl.balanced_accuracy = metrics.balanced_accuracy;
+    sumTbl.f1 = metrics.f1;
+    sumTbl.unsafe_landing_rate = metrics.unsafe_landing_rate;
+    sumTbl.n_excluded_intervention = metrics.n_excluded_intervention;
+    sumTbl.n_excluded_hover = metrics.n_excluded_hover;
+    sumTbl.metric_primary = "trajectory_follow";
+    sumTbl.trajectory_n_valid = trajMetrics.n_valid;
+    sumTbl.trajectory_metric_mode = trajMetrics.mode;
+    sumTbl.trajectory_follow_score = trajMetrics.follow_score;
+    sumTbl.trajectory_xy_rmse_m = trajMetrics.xy_rmse_m;
+    sumTbl.trajectory_z_rmse_m = trajMetrics.z_rmse_m;
+    sumTbl.trajectory_xyz_rmse_m = trajMetrics.xyz_rmse_m;
+    sumTbl.trajectory_xy_mae_m = trajMetrics.xy_mae_m;
+    sumTbl.trajectory_z_mae_m = trajMetrics.z_mae_m;
+    sumTbl.trajectory_success_rate = trajMetrics.success_rate;
+    sumTbl.trajectory_quality_mean = trajMetrics.quality_mean;
+    sumTbl.trajectory_quality_std = trajMetrics.quality_std;
+    if droneMeta.is_multi
+        sumTbl.collection_multi_drone_count = droneMeta.count;
+        sumTbl.collection_mode = "multi_drone";
+    end
+    writetable(sumTbl, summaryCsv);
+    
+    splitTbl = table();
+    splitTbl.created_at = string(datetime('now'));
+    splitTbl.model_type = string(modelType);
+    splitTbl.n_all = height(allTbl);
+    splitTbl.n_all_raw = allTblRawCount;
+    if isfinite(recentNUsed) && recentNUsed > 0
+        splitTbl.recent_dataset_n = round(recentNUsed);
+    else
+        splitTbl.recent_dataset_n = nan;
+    end
+    splitTbl.n_train = height(trainTbl);
+    splitTbl.n_val = height(valTblModel);
+    splitTbl.train_ratio = splitInfo.train_ratio;
+    splitTbl.val_ratio = splitInfo.val_ratio;
+    splitTbl.seed = splitInfo.seed;
+    if logical(validationUseFullWindow)
+        splitTbl.split_mode = "full_recent_window";
+    else
+        splitTbl.split_mode = "stratified_70_30";
+    end
+    splitTbl.source_files = strjoin(sourceFiles, ';');
+    if droneMeta.is_multi
+        splitTbl.collection_multi_drone_count = droneMeta.count;
+        splitTbl.collection_mode = "multi_drone";
+    end
+    writetable(splitTbl, splitCsv);
+    
+    fprintf('[AutoSimValidation] model (%s): %s\n', modelType, char(modelPathFull));
+    if isfinite(recentNUsed) && recentNUsed > 0
+        fprintf('[AutoSimValidation] recent window: last %d rows (raw=%d, used=%d)\n', round(recentNUsed), allTblRawCount, height(allTbl));
+    end
+    fprintf('[AutoSimValidation] all=%d train=%d val=%d (seed=%d, mode=%s)\n', ...
+        height(allTbl), height(trainTbl), height(valTblModel), round(splitSeed), char(string(splitTbl.split_mode(1))));
+    fprintf('[AutoSimValidation] summary (%s): %s\n', modelType, summaryCsv);
+    fprintf('[AutoSimValidation] trajectory score=%.4f xyz_rmse=%.4f xy_rmse=%.4f z_rmse=%.4f success=%.4f mode=%s n=%d\n', ...
+        trajMetrics.follow_score, trajMetrics.xyz_rmse_m, trajMetrics.xy_rmse_m, trajMetrics.z_rmse_m, ...
+        trajMetrics.success_rate, char(trajMetrics.mode), round(trajMetrics.n_valid));
+    fprintf('[AutoSimValidation] (legacy landing) accuracy=%.4f precision=%.4f recall=%.4f specificity=%.4f balanced=%.4f unsafe_landing=%.4f\n', ...
+        metrics.accuracy, metrics.precision, metrics.recall, metrics.specificity, metrics.balanced_accuracy, metrics.unsafe_landing_rate);
+    
+    validationResult = struct();
+    validationResult.modelType = string(modelType);
+    validationResult.runDir = string(runDir);
+    validationResult.datasetCsv = string(datasetCsv);
+    validationResult.summaryCsv = string(summaryCsv);
+    validationResult.splitCsv = string(splitCsv);
+    validationResult.modelPath = string(modelPathFull);
+    validationResult.metrics = metrics;
+    validationResult.trajectory_metrics = trajMetrics;
+    
+    allValidationResults.(char(modelType)) = validationResult;
 end
 
-metrics = autosimEvaluateDecisionMetrics(valTbl);
-
-ts = autosimTimestamp();
-runDir = fullfile(cfg.paths.data_root, ['validation_holdout_' char(ts)]);
-if ~exist(runDir, 'dir')
-    mkdir(runDir);
-end
-
-datasetCsv = fullfile(runDir, 'autosim_dataset_latest.csv');
-summaryCsv = fullfile(runDir, 'autosim_validation_summary.csv');
-splitCsv = fullfile(runDir, 'autosim_validation_split.csv');
-
-writetable(valTbl, datasetCsv);
-
-sumTbl = table();
-sumTbl.created_at = string(datetime('now'));
-sumTbl.model_path = string(modelPath);
-sumTbl.n_all = height(allTbl);
-sumTbl.n_all_raw = allTblRawCount;
-if isfinite(recentNUsed) && recentNUsed > 0
-    sumTbl.recent_dataset_n = round(recentNUsed);
-else
-    sumTbl.recent_dataset_n = nan;
-end
-sumTbl.n_train = height(trainTbl);
-sumTbl.n_val = height(valTbl);
-sumTbl.seed = splitSeed;
-sumTbl.accuracy = metrics.accuracy;
-sumTbl.precision = metrics.precision;
-sumTbl.safe_recall = metrics.recall;
-sumTbl.unsafe_reject = metrics.specificity;
-sumTbl.balanced_accuracy = metrics.balanced_accuracy;
-sumTbl.f1 = metrics.f1;
-sumTbl.unsafe_landing_rate = metrics.unsafe_landing_rate;
-sumTbl.n_excluded_intervention = metrics.n_excluded_intervention;
-sumTbl.n_excluded_hover = metrics.n_excluded_hover;
-if droneMeta.is_multi
-    sumTbl.collection_multi_drone_count = droneMeta.count;
-    sumTbl.collection_mode = "multi_drone";
-end
-writetable(sumTbl, summaryCsv);
-
-splitTbl = table();
-splitTbl.created_at = string(datetime('now'));
-splitTbl.n_all = height(allTbl);
-splitTbl.n_all_raw = allTblRawCount;
-if isfinite(recentNUsed) && recentNUsed > 0
-    splitTbl.recent_dataset_n = round(recentNUsed);
-else
-    splitTbl.recent_dataset_n = nan;
-end
-splitTbl.n_train = height(trainTbl);
-splitTbl.n_val = height(valTbl);
-splitTbl.train_ratio = splitInfo.train_ratio;
-splitTbl.val_ratio = splitInfo.val_ratio;
-splitTbl.seed = splitInfo.seed;
-if logical(validationUseFullWindow)
-    splitTbl.split_mode = "full_recent_window";
-else
-    splitTbl.split_mode = "stratified_70_30";
-end
-splitTbl.source_files = strjoin(sourceFiles, ';');
-if droneMeta.is_multi
-    splitTbl.collection_multi_drone_count = droneMeta.count;
-    splitTbl.collection_mode = "multi_drone";
-end
-writetable(splitTbl, splitCsv);
-
-fprintf('[AutoSimValidation] model: %s\n', char(modelPath));
-if isfinite(recentNUsed) && recentNUsed > 0
-    fprintf('[AutoSimValidation] recent window: last %d rows (raw=%d, used=%d)\n', round(recentNUsed), allTblRawCount, height(allTbl));
-end
-fprintf('[AutoSimValidation] all=%d train=%d val=%d (seed=%d, mode=%s)\n', ...
-    height(allTbl), height(trainTbl), height(valTbl), round(splitSeed), char(string(splitTbl.split_mode(1))));
-fprintf('[AutoSimValidation] summary: %s\n', summaryCsv);
-fprintf('[AutoSimValidation] accuracy=%.4f precision=%.4f recall=%.4f specificity=%.4f balanced=%.4f unsafe_landing=%.4f\n', ...
-    metrics.accuracy, metrics.precision, metrics.recall, metrics.specificity, metrics.balanced_accuracy, metrics.unsafe_landing_rate);
-
-validationResult = struct();
-validationResult.runDir = string(runDir);
-validationResult.datasetCsv = string(datasetCsv);
-validationResult.summaryCsv = string(summaryCsv);
-validationResult.splitCsv = string(splitCsv);
-validationResult.modelPath = string(modelPath);
-assignin('base', 'validationResult', validationResult);
+assignin('base', 'allValidationResults', allValidationResults);
 
 if logical(autoPlot)
-    runDir = char(validationResult.runDir); %#ok<NASGU>
-    outputDir = ""; %#ok<NASGU>
-    run(fullfile(rootDir, 'AutoSimPaperPlots.m'));
+    for iModel = 1:numel(validationModelTypes)
+        modelType = validationModelTypes(iModel);
+        if isfield(allValidationResults, char(modelType))
+            result = allValidationResults.(char(modelType));
+            runDir = char(result.runDir); %#ok<NASGU>
+            outputDir = ""; %#ok<NASGU>
+            fprintf('\n[AutoSimValidation] Generating plots for model type: %s\n', modelType);
+            run(fullfile(rootDir, 'AutoSimPaperPlots.m'));
+        end
+    end
 end
 
 
@@ -299,13 +360,17 @@ end
 end
 
 
-function modelPathOut = autosimValidationResolveModelPath(modelPathIn, rootDir, defaultModelRoot)
+function modelPathOut = autosimValidationResolveModelPath(modelPathIn, rootDir, defaultModelRoot, modelType)
 if strlength(string(modelPathIn)) > 0
     modelPathOut = string(modelPathIn);
     if ~isfile(char(modelPathOut))
         error('AutoSimValidation:ModelPathNotFound', 'Specified model path does not exist: %s', char(modelPathOut));
     end
     return;
+end
+
+if nargin < 4 || isempty(modelType)
+    modelType = "";
 end
 
 roots = string(defaultModelRoot);
@@ -346,8 +411,31 @@ for i = 1:numel(roots)
     end
 end
 
+% Filter by model type if specified
+if strlength(string(modelType)) > 0
+    modelType = lower(string(modelType));
+    modelTypePattern = sprintf('autosim_model_%s_', modelType);
+    filtered = struct('folder', {}, 'name', {}, 'datenum', {});
+    for i = 1:numel(files)
+        if contains(files(i).name, modelTypePattern)
+            if isempty(filtered)
+                filtered = files(i);
+            else
+                filtered(end+1) = files(i); %#ok<AGROW>
+            end
+        end
+    end
+    if ~isempty(filtered)
+        files = filtered;
+    end
+end
+
 if isempty(files)
-    error('AutoSimValidation:NoModel', 'No model file found under discovered model roots.');
+    if strlength(string(modelType)) > 0
+        error('AutoSimValidation:NoModel', 'No model file found for type "%s" under discovered model roots.', modelType);
+    else
+        error('AutoSimValidation:NoModel', 'No model file found under discovered model roots.');
+    end
 end
 
 [~, idx] = max([files.datenum]);
@@ -398,4 +486,155 @@ if ~isempty(T)
 end
 
 meta.is_multi = meta.count >= 2;
+end
+
+
+function tm = autosimValidationEvaluateTrajectoryMetrics(T)
+tm = struct();
+tm.mode = "unavailable";
+tm.n_valid = 0;
+tm.xy_rmse_m = nan;
+tm.z_rmse_m = nan;
+tm.xyz_rmse_m = nan;
+tm.xy_mae_m = nan;
+tm.z_mae_m = nan;
+tm.success_rate = nan;
+tm.follow_score = nan;
+tm.quality_mean = nan;
+tm.quality_std = nan;
+
+if isempty(T)
+    return;
+end
+
+n = height(T);
+xyErr = nan(n, 1);
+zErr = nan(n, 1);
+
+hasTrajX = ismember('trajectory_target_x', T.Properties.VariableNames) && ...
+    ismember('trajectory_target_y', T.Properties.VariableNames) && ...
+    ismember('trajectory_target_z', T.Properties.VariableNames);
+hasPoseX = ismember('final_x', T.Properties.VariableNames) && ...
+    ismember('final_y', T.Properties.VariableNames);
+
+if hasTrajX && hasPoseX
+    xNow = autosimValidationColumnAsDouble(T, 'final_x');
+    yNow = autosimValidationColumnAsDouble(T, 'final_y');
+    xTgt = autosimValidationColumnAsDouble(T, 'trajectory_target_x');
+    yTgt = autosimValidationColumnAsDouble(T, 'trajectory_target_y');
+    xyErr = hypot(xNow - xTgt, yNow - yTgt);
+end
+
+if ismember('trajectory_target_z', T.Properties.VariableNames) && ismember('final_altitude', T.Properties.VariableNames)
+    zNow = autosimValidationColumnAsDouble(T, 'final_altitude');
+    zTgt = autosimValidationColumnAsDouble(T, 'trajectory_target_z');
+    zErr = abs(zNow - zTgt);
+elseif ismember('hover_height_cmd', T.Properties.VariableNames) && ismember('final_altitude', T.Properties.VariableNames)
+    zNow = autosimValidationColumnAsDouble(T, 'final_altitude');
+    zCmd = autosimValidationColumnAsDouble(T, 'hover_height_cmd');
+    zErr = abs(zNow - zCmd);
+end
+
+if all(~isfinite(xyErr)) && ismember('mean_tag_error', T.Properties.VariableNames)
+    xyErr = abs(autosimValidationColumnAsDouble(T, 'mean_tag_error'));
+end
+if all(~isfinite(zErr)) && ismember('stability_std_z', T.Properties.VariableNames)
+    zErr = abs(autosimValidationColumnAsDouble(T, 'stability_std_z'));
+end
+
+xyValid = isfinite(xyErr);
+zValid = isfinite(zErr);
+
+if any(xyValid)
+    tm.xy_rmse_m = sqrt(mean(xyErr(xyValid).^2));
+    tm.xy_mae_m = mean(abs(xyErr(xyValid)));
+end
+if any(zValid)
+    tm.z_rmse_m = sqrt(mean(zErr(zValid).^2));
+    tm.z_mae_m = mean(abs(zErr(zValid)));
+end
+
+xyzValid = xyValid | zValid;
+if any(xyzValid)
+    ex = xyErr;
+    ez = zErr;
+    ex(~isfinite(ex)) = 0.0;
+    ez(~isfinite(ez)) = 0.0;
+    tm.xyz_rmse_m = sqrt(mean((ex(xyzValid).^2 + ez(xyzValid).^2)));
+end
+
+quality = nan(n, 1);
+if ismember('trajectory_quality', T.Properties.VariableNames)
+    quality = autosimValidationColumnAsDouble(T, 'trajectory_quality');
+else
+    qx = 1.0 - autosimValidationNormalizeErr(xyErr, 0.6);
+    qz = 1.0 - autosimValidationNormalizeErr(zErr, 0.4);
+    quality = nanmean([qx, qz], 2);
+end
+quality = min(1.0, max(0.0, quality));
+qValid = isfinite(quality);
+if any(qValid)
+    tm.quality_mean = mean(quality(qValid));
+    tm.quality_std = std(quality(qValid));
+end
+
+successMask = false(n, 1);
+haveAnyErr = isfinite(xyErr) | isfinite(zErr);
+if any(haveAnyErr)
+    xyGate = (~isfinite(xyErr)) | (xyErr <= 0.35);
+    zGate = (~isfinite(zErr)) | (zErr <= 0.20);
+    successMask = haveAnyErr & xyGate & zGate;
+    tm.success_rate = mean(double(successMask(haveAnyErr)));
+end
+
+scoreParts = [ ...
+    1.0 - autosimValidationNormalizeErr(tm.xy_rmse_m, 0.6), ...
+    1.0 - autosimValidationNormalizeErr(tm.z_rmse_m, 0.4), ...
+    tm.quality_mean, ...
+    tm.success_rate ...
+];
+scoreParts = scoreParts(isfinite(scoreParts));
+if ~isempty(scoreParts)
+    tm.follow_score = max(0.0, min(1.0, mean(scoreParts)));
+end
+
+tm.n_valid = sum(double(isfinite(xyErr) | isfinite(zErr) | isfinite(quality)));
+if any(hasTrajX)
+    tm.mode = "trajectory_target_error";
+elseif ismember('mean_tag_error', T.Properties.VariableNames) || ismember('stability_std_z', T.Properties.VariableNames)
+    tm.mode = "proxy_tag_stability";
+else
+    tm.mode = "unavailable";
+end
+end
+
+
+function v = autosimValidationColumnAsDouble(T, col)
+v = nan(height(T), 1);
+if ~ismember(col, T.Properties.VariableNames)
+    return;
+end
+raw = T.(col);
+if isnumeric(raw) || islogical(raw)
+    v = double(raw);
+else
+    v = str2double(string(raw));
+end
+end
+
+
+function nrm = autosimValidationNormalizeErr(errVal, scale)
+if nargin < 2 || ~(isfinite(scale) && scale > 0)
+    scale = 1.0;
+end
+if isscalar(errVal)
+    if ~isfinite(errVal)
+        nrm = nan;
+        return;
+    end
+else
+    errVal = double(errVal);
+end
+nrm = abs(errVal) ./ scale;
+nrm = min(1.0, max(0.0, nrm));
 end

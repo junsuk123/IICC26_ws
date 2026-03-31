@@ -2,6 +2,7 @@ function AutoSimMain()
 % AutoSimMain
 % Main integrated pipeline entrypoint.
 % Always runs: data collection -> training -> validation -> plotting.
+% Supports both "aii_only" (AI-only) and "ontology_ai" (Ontology+AI) models.
 
 % ================= USER SETTINGS (edit here) =================
 mainCfg = struct();
@@ -9,21 +10,24 @@ mainCfg = struct();
 % Use up to recent N rows for training.
 % If total data is insufficient, training rows are reduced automatically
 % after reserving validation_recent_n rows for validation.
-mainCfg.dataset_recent_n = 20000;
+mainCfg.dataset_recent_n = 5000;
 % Validation is fixed to this many recent scenarios.
-mainCfg.validation_recent_n = 10000;
+mainCfg.validation_recent_n = 1000;
+
+% Model types to train and validate: "aii_only" (sensor-only AI) or "ontology_ai" (ontology+AI)
+mainCfg.model_types_to_train = ["aii_only", "ontology_ai"];
+mainCfg.model_types_to_validate = ["aii_only", "ontology_ai"];
+
 % Data collection settings (editable in main).
 mainCfg.collection = struct();
-mainCfg.collection.scenario_count = 5000;
+mainCfg.collection.scenario_count = 500;
 mainCfg.collection.drone_count = 5;
 mainCfg.collection.independent_per_drone = true;
 mainCfg.collection.merge_last_runs = 5;
 mainCfg.collection.launch_use_gui = false;
-mainCfg.collection.launch_use_rviz = true;
+% RViz mode: 'off' (disabled), 'single' (one RViz), 'multi' (one RViz per worker)
+mainCfg.collection.rviz_mode = 'off';
 mainCfg.collection.launch_use_teleop = false;
-mainCfg.collection.domain_base = 60;
-mainCfg.collection.parallel_rviz_mode = 'single';
-mainCfg.collection.allow_parallel_rviz = false;
 mainCfg.collection.multi_drone_spacing_m = 10.0;
 mainCfg.collection.multi_drone_namespace_prefix = 'drone_w';
 mainCfg.collection.multi_drone_spawn_tags = true;
@@ -73,6 +77,9 @@ try
         c = mainCfg.collection;
         fprintf('[AutoSimMain] Stage 1/4: data collection start (scenarios=%d, drones=%d)\n', ...
             round(c.scenario_count), round(c.drone_count));
+        prevNestedFlag = getenv('AUTOSIM_IN_MAIN_PIPELINE');
+        setenv('AUTOSIM_IN_MAIN_PIPELINE', 'true');
+        nestedFlagCleanup = onCleanup(@() setenv('AUTOSIM_IN_MAIN_PIPELINE', prevNestedFlag)); %#ok<NASGU>
         AutoSimCollect(c);
     end
 
@@ -105,21 +112,38 @@ try
         fprintf('[AutoSimMain] Stage 3/4: validation start (fixed recent window, no split)\n');
         autosim_keep_workspace = true; %#ok<NASGU>
         validationUseFullWindow = true; %#ok<NASGU>
-        autoPlot = false; %#ok<NASGU>
         run(fullfile(thisDir, 'AutoSimValidation.m'));
     end
 
     if mainCfg.run_plots
         fprintf('[AutoSimMain] Stage 4/4: plotting start\n');
-        runDir = ""; %#ok<NASGU>
-        outputDir = ""; %#ok<NASGU>
-        if evalin('base', 'exist(''validationResult'',''var'')')
-            vr = evalin('base', 'validationResult');
-            if isstruct(vr) && isfield(vr, 'runDir')
-                runDir = char(string(vr.runDir)); %#ok<NASGU>
+        if evalin('base', 'exist(''allValidationResults'',''var'')')
+            allResults = evalin('base', 'allValidationResults');
+            plotModelTypes = string(mainCfg.model_types_to_validate(:));
+            plottedAny = false;
+            for iPlot = 1:numel(plotModelTypes)
+                mt = plotModelTypes(iPlot);
+                if isstruct(allResults) && isfield(allResults, char(mt))
+                    vr = allResults.(char(mt));
+                    if isstruct(vr) && isfield(vr, 'runDir')
+                        runDir = char(string(vr.runDir)); %#ok<NASGU>
+                        outputDir = ""; %#ok<NASGU>
+                        fprintf('[AutoSimMain] Plotting validation result for model type: %s\n', char(mt));
+                        run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
+                        plottedAny = true;
+                    end
+                end
             end
+            if ~plottedAny
+                runDir = ""; %#ok<NASGU>
+                outputDir = ""; %#ok<NASGU>
+                run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
+            end
+        else
+            runDir = ""; %#ok<NASGU>
+            outputDir = ""; %#ok<NASGU>
+            run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
         end
-        run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
     end
 
     fprintf('[AutoSimMain] Pipeline complete.\n');

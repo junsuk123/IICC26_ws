@@ -167,6 +167,8 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     cfg.topics.takeoff_cmd = [droneNs '/takeoff'];
     cfg.topics.reset_cmd = [droneNs '/reset'];
     cfg.topics.cmd_vel = [droneNs '/cmd_vel'];
+    cfg.topics.trajectory_guidance = [droneNs '/trajectory_guidance'];
+    cfg.topics.trajectory_guidance_marker = [droneNs '/trajectory_guidance_marker'];
 
     ros2env = [ ...
         'cd /home/j/INCSL/IICC26_ws && ' ...

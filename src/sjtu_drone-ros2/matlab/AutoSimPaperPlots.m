@@ -1,11 +1,20 @@
 % AutoSimPaperPlots.m
 % Standalone script for paper-ready figures/tables from AutoSim outputs.
+% Supports comparison of multiple model types: aii_only, ontology_ai
 %
 % Usage:
 % 1) Open this file in MATLAB and Run.
-% 2) Optional: set runDir/outputDir below before running.
+% 2) Optional: set runDir/outputDir/modelTypesToPlot below before running.
 close all;
 defaultRunDir = "";
+modDir = fullfile(fileparts(mfilename('fullpath')), 'modules');
+if exist(modDir, 'dir')
+    addpath(modDir);
+end
+coreDir = fullfile(modDir, 'core');
+if exist(coreDir, 'dir')
+    addpath(genpath(coreDir));
+end
 % Optional overrides.
 % Accept both runDir and run_dir to avoid name-mismatch issues.
 if ~exist('runDir', 'var') || strlength(string(runDir)) == 0
@@ -27,6 +36,11 @@ if ~exist('outputDir', 'var') || strlength(string(outputDir)) == 0
     end
 end
 
+% Model types to plot: ["aii_only"], ["ontology_ai"], or ["aii_only", "ontology_ai"]
+if ~exist('modelTypesToPlot', 'var') || isempty(modelTypesToPlot)
+    modelTypesToPlot = ["ontology_ai"];  % Default to ontology_ai for backward compatibility
+end
+
 rootDir = fileparts(mfilename('fullpath'));
 dataRoot = fullfile(rootDir, 'data');
 plotRoot = fullfile(rootDir, 'plots');
@@ -39,7 +53,8 @@ runDir = char(string(runDir));
 
 if strlength(string(outputDir)) == 0
     [~, runName] = fileparts(runDir);
-    outputDir = fullfile(plotRoot, ['paper_' runName '_' datestr(now, 'yyyymmdd_HHMMSS')]);
+    modelTypesStr = strjoin(string(modelTypesToPlot), '_');
+    outputDir = fullfile(plotRoot, sprintf('paper_%s_models_%s_%s', modelTypesStr, runName, datestr(now, 'yyyymmdd_HHMMSS')));
 end
 
 % Script variables persist in MATLAB base workspace.
@@ -48,7 +63,8 @@ if exist('paperPlotResult', 'var') && isstruct(paperPlotResult) && isfield(paper
     prevOut = string(paperPlotResult.outputDir);
     if strlength(prevOut) > 0 && string(outputDir) == prevOut
         [~, runName] = fileparts(runDir);
-        outputDir = fullfile(plotRoot, ['paper_' runName '_' datestr(now, 'yyyymmdd_HHMMSS')]);
+        modelTypesStr = strjoin(string(modelTypesToPlot), '_');
+        outputDir = fullfile(plotRoot, sprintf('paper_%s_models_%s_%s', modelTypesStr, runName, datestr(now, 'yyyymmdd_HHMMSS')));
     end
 end
 
@@ -57,6 +73,7 @@ ensureDir(outputDir);
 
 fprintf('[AutoSimPaperPlots] runDir=%s\n', runDir);
 fprintf('[AutoSimPaperPlots] outputDir=%s\n', outputDir);
+fprintf('[AutoSimPaperPlots] model types to plot: %s\n', strjoin(string(modelTypesToPlot), ', '));
 
 FONT_AX = 24;
 FONT_LABEL = 24;
@@ -97,66 +114,73 @@ end
 gtSafe = buildGtSafe(datasetTbl);
 predProposed = buildDecision(datasetTbl, 'pred_decision', 'landing_cmd_time');
 
-baseline = buildThresholdBaseline(datasetTbl);
-predBaseline = baseline.predLand;
+aiiBaseline = buildAiiOnlyBaseline(datasetTbl, rootDir);
+predBaseline = aiiBaseline.predLand;
 
-mProposed = evalDecision(gtSafe, predProposed);
-mBaseline = evalDecision(gtSafe, predBaseline);
+mDecisionProposed = evalDecision(gtSafe, predProposed);
+mDecisionBaseline = evalDecision(gtSafe, predBaseline);
+
+mProposed = evalTrajectory(datasetTbl, predProposed);
+mBaseline = evalTrajectory(datasetTbl, predBaseline);
 
 cmpTbl = table( ...
-    string({'Ontology+AI (policy)'; 'Threshold baseline'}), ...
+    string({'Ontology+AI (policy)'; 'AI-Only baseline'}), ...
     [mProposed.nValid; mBaseline.nValid], ...
-    [mProposed.accuracy; mBaseline.accuracy], ...
-    [mProposed.precision; mBaseline.precision], ...
-    [mProposed.recall; mBaseline.recall], ...
-    [mProposed.specificity; mBaseline.specificity], ...
-    [mProposed.balancedAccuracy; mBaseline.balancedAccuracy], ...
-    [mProposed.f1; mBaseline.f1], ...
-    [mProposed.unsafeLandingRate; mBaseline.unsafeLandingRate], ...
-    [mProposed.tp; mBaseline.tp], ...
-    [mProposed.fp; mBaseline.fp], ...
-    [mProposed.fn; mBaseline.fn], ...
-    [mProposed.tn; mBaseline.tn], ...
-    'VariableNames', {'method','n_valid','accuracy','precision','safe_recall','unsafe_reject','balanced_accuracy','f1','unsafe_landing_rate','TP','FP','FN','TN'});
+    [mProposed.nExecuted; mBaseline.nExecuted], ...
+    [mProposed.executionRate; mBaseline.executionRate], ...
+    [mProposed.followScore; mBaseline.followScore], ...
+    [mProposed.successRate; mBaseline.successRate], ...
+    [mProposed.xyzRmse; mBaseline.xyzRmse], ...
+    [mProposed.xyRmse; mBaseline.xyRmse], ...
+    [mProposed.zRmse; mBaseline.zRmse], ...
+    [mProposed.xyMae; mBaseline.xyMae], ...
+    [mProposed.zMae; mBaseline.zMae], ...
+    [mProposed.qualityMean; mBaseline.qualityMean], ...
+    [mProposed.qualityStd; mBaseline.qualityStd], ...
+    [mProposed.mode; mBaseline.mode], ...
+    'VariableNames', {'method','n_valid','n_executed','execution_rate','trajectory_follow_score','trajectory_success_rate', ...
+    'trajectory_xyz_rmse_m','trajectory_xy_rmse_m','trajectory_z_rmse_m','trajectory_xy_mae_m','trajectory_z_mae_m', ...
+    'trajectory_quality_mean','trajectory_quality_std','trajectory_metric_mode'});
 
 writetable(cmpTbl, fullfile(outputDir, 'paper_table_method_comparison.csv'));
-writetable(struct2table(baseline.thresholds), fullfile(outputDir, 'paper_table_thresholds.csv'));
+if isfield(aiiBaseline, 'info') && isstruct(aiiBaseline.info)
+    writetable(struct2table(aiiBaseline.info), fullfile(outputDir, 'paper_table_aii_only_baseline.csv'));
+end
 
 fig1 = figure('Name', 'MethodComparison', 'Color', 'w', 'Position', [100 100 1180 460]);
 tl = tiledlayout(fig1, 1, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 ax1 = nexttile(tl, 1);
-barVals = [mProposed.accuracy, mProposed.f1, mProposed.unsafeLandingRate; ...
-           mBaseline.accuracy, mBaseline.f1, mBaseline.unsafeLandingRate];
+barVals = [mProposed.followScore, mProposed.successRate, mProposed.executionRate; ...
+           mBaseline.followScore, mBaseline.successRate, mBaseline.executionRate];
 bh = bar(ax1, barVals, 0.88);
 bh(1).FaceColor = [0.10 0.45 0.78];
 bh(2).FaceColor = [0.13 0.60 0.33];
 bh(3).FaceColor = [0.78 0.22 0.22];
 xticks(ax1, 1:2);
-xticklabels(ax1, {'Ontology+AI (policy)', 'Threshold'});
+xticklabels(ax1, {'Ontology+AI (policy)', 'AI-Only'});
 ylim(ax1, [0 1]);
 ylabel(ax1, 'score');
-title(ax1, 'Overall Metrics Comparison', 'FontSize', FONT_TITLE);
+title(ax1, 'Trajectory Follow Metrics Comparison', 'FontSize', FONT_TITLE);
 annotateTotalScenario(ax1, nTotalScenario, FONT_AX);
-legend(ax1, {'Accuracy', 'F1', 'Unsafe landing rate'}, ...
+legend(ax1, {'Follow score', 'Trajectory success rate', 'Execution ratio'}, ...
     'Location', 'northoutside', 'Orientation', 'horizontal', 'FontSize', FONT_LEGEND);
 set(ax1, 'FontSize', FONT_AX);
 grid(ax1, 'on');
 
 ax2 = nexttile(tl, 2);
-confVals = [mProposed.tp mProposed.fp mProposed.fn mProposed.tn; ...
-            mBaseline.tp mBaseline.fp mBaseline.fn mBaseline.tn];
-b2 = bar(ax2, confVals, 'stacked', 'BarWidth', 0.8);
-b2(1).FaceColor = [0.20 0.65 0.25];
-b2(2).FaceColor = [0.85 0.30 0.20];
-b2(3).FaceColor = [0.95 0.65 0.15];
-b2(4).FaceColor = [0.25 0.50 0.90];
+b2vals = [mProposed.xyzRmse mProposed.xyRmse mProposed.zRmse; ...
+          mBaseline.xyzRmse mBaseline.xyRmse mBaseline.zRmse];
+b2 = bar(ax2, b2vals, 0.82);
+b2(1).FaceColor = [0.18 0.45 0.85];
+b2(2).FaceColor = [0.15 0.65 0.35];
+b2(3).FaceColor = [0.88 0.48 0.16];
 xticks(ax2, 1:2);
-xticklabels(ax2, {'Ontology+AI (policy)', 'Threshold'});
-ylabel(ax2, 'scenario count');
-title(ax2, 'Decision Outcome Composition', 'FontSize', FONT_TITLE);
+xticklabels(ax2, {'Ontology+AI (policy)', 'AI-Only'});
+ylabel(ax2, 'error [m]');
+title(ax2, 'Trajectory RMSE Comparison', 'FontSize', FONT_TITLE);
 annotateTotalScenario(ax2, nTotalScenario, FONT_AX);
-legend(ax2, {'TP','FP','FN','TN'}, ...
+legend(ax2, {'XYZ RMSE', 'XY RMSE', 'Z RMSE'}, ...
     'Location', 'northoutside', 'Orientation', 'horizontal', 'FontSize', FONT_LEGEND);
 set(ax2, 'FontSize', FONT_AX);
 grid(ax2, 'on');
@@ -168,35 +192,42 @@ sid = getScenarioId(datasetTbl);
 if isempty(sid) || numel(sid) ~= n || any(~isfinite(sid))
     sid = (1:n)';
 end
-trendP = cumulativeTrend(gtSafe, predProposed);
-trendB = cumulativeTrend(gtSafe, predBaseline);
+trendP = cumulativeTrajectoryTrend(datasetTbl, predProposed);
+trendB = cumulativeTrajectoryTrend(datasetTbl, predBaseline);
 
 fig2 = figure('Name', 'CumulativeTrends', 'Color', 'w', 'Position', [120 120 1180 520]);
 tl2 = tiledlayout(fig2, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
 
 ax21 = nexttile(tl2, 1);
-plot(ax21, sid, smoothAdaptive(trendP.accuracy), '-', 'LineWidth', 2.0, 'Color', [0.10 0.45 0.78]);
+plot(ax21, sid, smoothAdaptive(trendP.followScore), '-', 'LineWidth', 2.0, 'Color', [0.10 0.45 0.78]);
 hold(ax21, 'on');
-plot(ax21, sid, smoothAdaptive(trendB.accuracy), '-', 'LineWidth', 1.8, 'Color', [0.30 0.30 0.30]);
+plot(ax21, sid, smoothAdaptive(trendB.followScore), '-', 'LineWidth', 1.8, 'Color', [0.30 0.30 0.30]);
 ylim(ax21, [0 1]);
-ylabel(ax21, 'accuracy');
-title(ax21, 'Cumulative Accuracy Trend', 'FontSize', FONT_TITLE);
+ylabel(ax21, 'follow score');
+title(ax21, 'Cumulative Trajectory Follow Score', 'FontSize', FONT_TITLE);
 annotateTotalScenario(ax21, nTotalScenario, FONT_AX);
-legend(ax21, {'Ontology+AI (policy)','Threshold'}, ...
+legend(ax21, {'Ontology+AI (policy)','AI-Only'}, ...
     'Location', 'southoutside', 'Orientation', 'horizontal', 'FontSize', FONT_LEGEND);
 set(ax21, 'FontSize', FONT_AX);
 grid(ax21, 'on');
 
 ax22 = nexttile(tl2, 2);
-plot(ax22, sid, smoothAdaptive(trendP.unsafeLandingRate), '-', 'LineWidth', 2.0, 'Color', [0.78 0.22 0.22]);
+plot(ax22, sid, smoothAdaptive(trendP.xyzRmse), '-', 'LineWidth', 2.0, 'Color', [0.78 0.22 0.22]);
 hold(ax22, 'on');
-plot(ax22, sid, smoothAdaptive(trendB.unsafeLandingRate), '-', 'LineWidth', 1.8, 'Color', [0.35 0.35 0.35]);
-ylim(ax22, [0 1]);
+plot(ax22, sid, smoothAdaptive(trendB.xyzRmse), '-', 'LineWidth', 1.8, 'Color', [0.35 0.35 0.35]);
+valsRmse = [trendP.xyzRmse(:); trendB.xyzRmse(:)];
+valsRmse = valsRmse(isfinite(valsRmse));
+if isempty(valsRmse)
+    ylim(ax22, [0 1]);
+else
+    yMax = max(valsRmse);
+    ylim(ax22, [0, max(0.1, 1.15 * yMax)]);
+end
 xlabel(ax22, 'scenario');
-ylabel(ax22, 'unsafe landing rate');
-title(ax22, 'Cumulative Unsafe Landing Rate', 'FontSize', FONT_TITLE);
+ylabel(ax22, 'trajectory xyz rmse [m]');
+title(ax22, 'Cumulative Trajectory RMSE', 'FontSize', FONT_TITLE);
 annotateTotalScenario(ax22, nTotalScenario, FONT_AX);
-legend(ax22, {'Ontology+AI (policy)','Threshold'}, ...
+legend(ax22, {'Ontology+AI (policy)','AI-Only'}, ...
     'Location', 'southoutside', 'Orientation', 'horizontal', 'FontSize', FONT_LEGEND);
 set(ax22, 'FontSize', FONT_AX);
 grid(ax22, 'on');
@@ -220,22 +251,15 @@ grid(ax3, 'on');
 legend(ax3, 'Location', 'eastoutside', 'FontSize', FONT_LEGEND);
 set(ax3, 'FontSize', FONT_AX);
 
-if isfield(baseline.thresholds, 'wind_threshold')
-    xline(ax3, baseline.thresholds.wind_threshold, '--', 'Threshold wind', 'Color', [0.35 0.35 0.35], 'LineWidth', 1.1);
-end
-if isfield(baseline.thresholds, 'tag_error_threshold')
-    yline(ax3, baseline.thresholds.tag_error_threshold, '--', 'Threshold visual', 'Color', [0.35 0.35 0.35], 'LineWidth', 1.1);
-end
-
 exportgraphics(fig3, fullfile(outputDir, 'paper_fig3_risk_map.png'), 'Resolution', 220);
 
 fig4 = figure('Name', 'ConfusionMatrices', 'Color', 'w', 'Position', [160 160 980 440]);
 tl4 = tiledlayout(fig4, 1, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 ax41 = nexttile(tl4, 1);
-plotConfusion(ax41, mProposed, 'Ontology+AI (policy)');
+plotConfusion(ax41, mDecisionProposed, 'Ontology+AI (policy | legacy decision)');
 annotateTotalScenario(ax41, nTotalScenario, FONT_AX);
 ax42 = nexttile(tl4, 2);
-plotConfusion(ax42, mBaseline, 'Threshold baseline');
+plotConfusion(ax42, mDecisionBaseline, 'AI-Only baseline (legacy decision)');
 annotateTotalScenario(ax42, nTotalScenario, FONT_AX);
 exportgraphics(fig4, fullfile(outputDir, 'paper_fig4_confusion_matrices.png'), 'Resolution', 220);
 
@@ -256,7 +280,7 @@ end
 
 decisionScoreP = double(predProposed(:));
 decisionScoreB = double(predBaseline(:));
-[windRiskTotal, windMean, windGust] = buildWindRiskSeries(datasetTbl, baseline.thresholds);
+[windRiskTotal, windMean, windGust] = buildWindRiskSeries(datasetTbl, aiiBaseline.risk_ref);
 
 fig6 = figure('Name', 'ScenarioDecisionAndWindRisk', 'Color', 'w', 'Position', [190 190 1200 420]);
 ax6 = axes(fig6);
@@ -414,7 +438,7 @@ pRiskB = plot(ax7, x, riskPlotB, '--^', ...
     'Color', [0.25 0.25 0.25], ...
     'MarkerFaceColor', [0.25 0.25 0.25], ...
     'MarkerSize', 6, ...
-    'DisplayName', 'Unsafe attempt rate (threshold)');
+    'DisplayName', 'Unsafe attempt rate (AI-Only)');
 
 ylabel(ax7, 'Unsafe attempt rate (%)', 'FontSize', FONT_LABEL);
 ylim(ax7, [0 100]);
@@ -445,14 +469,14 @@ end
 
 legend(ax7, [countBars(1) countBars(2) pRisk pRiskB], ...
     {'Attempt ratio in band (%)', 'Hold ratio in band (%)', ...
-     'Unsafe attempt rate FP/(FP+TN)', 'Unsafe attempt rate (threshold)'}, ...
+    'Unsafe attempt rate FP/(FP+TN)', 'Unsafe attempt rate (AI-Only)'}, ...
     'Location', 'northoutside', 'Orientation', 'horizontal', ...
     'FontSize', FONT_LEGEND, 'Box', 'off');
 
 exportgraphics(fig7, fullfile(outputDir, 'paper_fig7_wind_band_breakdown.png'), 'Resolution', 220);
 
 save(fullfile(outputDir, 'paper_metrics_struct.mat'), ...
-    'mProposed', 'mBaseline', 'baseline', 'datasetPath', 'tracePath', 'perfPath', 'dmetPath');
+    'mProposed', 'mBaseline', 'mDecisionProposed', 'mDecisionBaseline', 'aiiBaseline', 'datasetPath', 'tracePath', 'perfPath', 'dmetPath');
 
 infoTxt = fullfile(outputDir, 'paper_summary.txt');
 fid = fopen(infoTxt, 'w');
@@ -464,8 +488,12 @@ if fid > 0
     fprintf(fid, 'decision_metrics: %s\n', dmetPath);
     fprintf(fid, '\n[Ontology+AI policy]\n');
     dumpMetric(fid, mProposed);
-    fprintf(fid, '\n[Threshold baseline]\n');
+    fprintf(fid, '\n[Ontology+AI policy | legacy decision]\n');
+    dumpMetric(fid, mDecisionProposed);
+    fprintf(fid, '\n[AI-Only baseline]\n');
     dumpMetric(fid, mBaseline);
+    fprintf(fid, '\n[AI-Only baseline | legacy decision]\n');
+    dumpMetric(fid, mDecisionBaseline);
     fclose(fid);
 end
 
@@ -477,7 +505,7 @@ paperPlotResult.tracePath = tracePath;
 paperPlotResult.performancePath = perfPath;
 paperPlotResult.decisionMetricsPath = dmetPath;
 paperPlotResult.methodTablePath = fullfile(outputDir, 'paper_table_method_comparison.csv');
-paperPlotResult.thresholdTablePath = fullfile(outputDir, 'paper_table_thresholds.csv');
+paperPlotResult.aiiOnlyTablePath = fullfile(outputDir, 'paper_table_aii_only_baseline.csv');
 
 assignin('base', 'paperPlotResult', paperPlotResult);
 fprintf('[AutoSimPaperPlots] done. outputDir=%s\n', outputDir);
@@ -659,6 +687,189 @@ function predLand = buildDecision(tbl, decisionField, fallbackNumericField)
         v = tbl.(fallbackNumericField);
         predLand = isfinite(v);
     end
+end
+
+
+function b = buildAiiOnlyBaseline(tbl, rootDir)
+    n = height(tbl);
+
+    predLand = false(n, 1);
+    source = "";
+    modelPath = "";
+    featureCount = nan;
+
+    candidateCols = { ...
+        'pred_decision_aii_only', ...
+        'pred_decision_ai_only', ...
+        'pred_aii_only_decision', ...
+        'aii_only_pred_decision'};
+
+    for i = 1:numel(candidateCols)
+        fn = candidateCols{i};
+        if ismember(fn, tbl.Properties.VariableNames)
+            lbl = normalizeActionLabel(tbl.(fn));
+            predLand = (lbl == "AttemptLanding");
+            source = "dataset_column:" + string(fn);
+            break;
+        end
+    end
+
+    if strlength(source) == 0
+        [predLand, modelPath, featureCount] = predictAiiOnlyWithModel(tbl, rootDir);
+        source = "model_inference";
+    end
+
+    wind = pickNumeric(tbl, {'mean_wind_speed','wind_speed_cmd','max_wind_speed'}, nan(n,1));
+    tagErr = pickNumeric(tbl, {'max_tag_error','mean_tag_error','final_tag_error'}, nan(n,1));
+    riskRef = struct();
+    if sum(isfinite(wind)) >= 20
+        riskRef.wind_threshold = prctile(wind(isfinite(wind)), 90);
+    else
+        riskRef.wind_threshold = nan;
+    end
+    if sum(isfinite(tagErr)) >= 20
+        riskRef.tag_error_reference = prctile(tagErr(isfinite(tagErr)), 90);
+    else
+        riskRef.tag_error_reference = nan;
+    end
+
+    b = struct();
+    b.predLand = logical(predLand(:));
+    b.risk_ref = riskRef;
+    b.info = struct( ...
+        'baseline_source', string(source), ...
+        'model_path', string(modelPath), ...
+        'feature_count', featureCount, ...
+        'n_samples', n);
+end
+
+
+function [predLand, modelPath, featureCount] = predictAiiOnlyWithModel(tbl, rootDir)
+    predLand = false(height(tbl), 1);
+    modelPath = "";
+    featureCount = nan;
+
+    cfg = autosimDefaultConfig();
+    cfgModel = autosimGetModelTypeConfig(cfg, "aii_only");
+    modelPath = autosimPaperResolveModelPath("", rootDir, cfgModel.paths.model_dir, "aii_only");
+    if ~exist(char(modelPath), 'file')
+        error('AutoSimPaperPlots:NoAiiOnlyBaseline', ...
+            'AI-only baseline model not found. Train AI-only model first or provide AI-only prediction columns.');
+    end
+
+    S = load(char(modelPath), 'model');
+    if ~isfield(S, 'model')
+        error('AutoSimPaperPlots:InvalidAiiOnlyModel', 'Invalid AI-only model file: %s', char(modelPath));
+    end
+    model = S.model;
+
+    featureNames = string(cfgModel.model.feature_names(:));
+    if isfield(model, 'feature_names') && ~isempty(model.feature_names)
+        featureNames = string(model.feature_names(:));
+    end
+    featureCount = numel(featureNames);
+
+    X = zeros(height(tbl), featureCount);
+    for i = 1:featureCount
+        fn = char(featureNames(i));
+        if ismember(fn, tbl.Properties.VariableNames)
+            col = tbl.(fn);
+            if isnumeric(col) || islogical(col)
+                X(:, i) = double(col);
+            else
+                X(:, i) = str2double(string(col));
+            end
+        end
+    end
+    X(~isfinite(X)) = 0.0;
+
+    [predLabel, ~] = autosimPredictGaussianNB(model, X, cfgModel);
+    predLand = (normalizeActionLabel(predLabel) == "AttemptLanding");
+end
+
+
+function modelPathOut = autosimPaperResolveModelPath(modelPathIn, rootDir, defaultModelRoot, modelType)
+if strlength(string(modelPathIn)) > 0
+    modelPathOut = string(modelPathIn);
+    if ~isfile(char(modelPathOut))
+        error('AutoSimPaperPlots:ModelPathNotFound', ...
+            'Specified model path does not exist: %s', char(modelPathOut));
+    end
+    return;
+end
+
+if nargin < 4 || isempty(modelType)
+    modelType = "";
+end
+
+roots = string(defaultModelRoot);
+parallelRoot = fullfile(rootDir, 'parallel_runs');
+if isfolder(parallelRoot)
+    runDirs = dir(parallelRoot);
+    runDirs = runDirs([runDirs.isdir]);
+    runDirs = runDirs(~ismember({runDirs.name}, {'.', '..'}));
+    if ~isempty(runDirs)
+        [~, ord] = sort([runDirs.datenum], 'descend');
+        for i = 1:numel(ord)
+            cand = fullfile(runDirs(ord(i)).folder, runDirs(ord(i)).name, 'output', 'models');
+            if isfolder(cand)
+                roots(end+1, 1) = string(cand); %#ok<AGROW>
+                break;
+            end
+        end
+    end
+end
+roots = unique(roots, 'stable');
+
+files = struct('folder', {}, 'name', {}, 'datenum', {});
+for i = 1:numel(roots)
+    root = char(roots(i));
+    if ~isfolder(root)
+        continue;
+    end
+    d1 = dir(fullfile(root, '**', 'autosim_model_final_*.mat'));
+    d2 = dir(fullfile(root, '**', 'autosim_model_*.mat'));
+    d = [d1; d2]; %#ok<AGROW>
+    if isempty(d)
+        continue;
+    end
+    if isempty(files)
+        files = d;
+    else
+        files = [files; d]; %#ok<AGROW>
+    end
+end
+
+if strlength(string(modelType)) > 0
+    modelType = lower(string(modelType));
+    modelTypePattern = sprintf('autosim_model_%s_', modelType);
+    filtered = struct('folder', {}, 'name', {}, 'datenum', {});
+    for i = 1:numel(files)
+        if contains(files(i).name, modelTypePattern)
+            if isempty(filtered)
+                filtered = files(i);
+            else
+                filtered(end+1) = files(i); %#ok<AGROW>
+            end
+        end
+    end
+    if ~isempty(filtered)
+        files = filtered;
+    end
+end
+
+if isempty(files)
+    if strlength(string(modelType)) > 0
+        error('AutoSimPaperPlots:NoModel', ...
+            'No model file found for type "%s" under discovered model roots.', modelType);
+    else
+        error('AutoSimPaperPlots:NoModel', ...
+            'No model file found under discovered model roots.');
+    end
+end
+
+[~, idx] = max([files.datenum]);
+modelPathOut = string(fullfile(files(idx).folder, files(idx).name));
 end
 
 
@@ -924,6 +1135,196 @@ function m = evalDecision(gtSafe, predLand)
 end
 
 
+function m = evalTrajectory(tbl, executeMask)
+    if nargin < 2 || isempty(executeMask)
+        executeMask = true(height(tbl), 1);
+    end
+    executeMask = logical(executeMask(:));
+    n = height(tbl);
+    if numel(executeMask) ~= n
+        executeMask = true(n, 1);
+    end
+
+    [xyErr, zErr, quality, mode] = trajectoryErrorSeries(tbl);
+    validMask = (isfinite(xyErr) | isfinite(zErr) | isfinite(quality));
+    useMask = executeMask & validMask;
+
+    m = struct();
+    m.nValid = sum(validMask);
+    m.nExecuted = sum(useMask);
+    m.executionRate = safeDiv(m.nExecuted, max(1, m.nValid));
+    m.mode = mode;
+
+    m.xyRmse = localRmse(xyErr(useMask));
+    m.zRmse = localRmse(zErr(useMask));
+    m.xyMae = localMae(xyErr(useMask));
+    m.zMae = localMae(zErr(useMask));
+    m.qualityMean = localMean(quality(useMask));
+    m.qualityStd = localStd(quality(useMask));
+
+    ex = xyErr(useMask);
+    ez = zErr(useMask);
+    ok = isfinite(ex) | isfinite(ez);
+    ex(~isfinite(ex)) = 0.0;
+    ez(~isfinite(ez)) = 0.0;
+    if any(ok)
+        m.xyzRmse = sqrt(mean(ex(ok).^2 + ez(ok).^2));
+    else
+        m.xyzRmse = nan;
+    end
+
+    if any(useMask)
+        xyGate = (~isfinite(xyErr(useMask))) | (xyErr(useMask) <= 0.35);
+        zGate = (~isfinite(zErr(useMask))) | (zErr(useMask) <= 0.20);
+        m.successRate = mean(double(xyGate & zGate));
+    else
+        m.successRate = nan;
+    end
+
+    scoreParts = [ ...
+        1.0 - normalizeErrScalar(m.xyRmse, 0.6), ...
+        1.0 - normalizeErrScalar(m.zRmse, 0.4), ...
+        m.qualityMean, ...
+        m.successRate, ...
+        m.executionRate ...
+    ];
+    scoreParts = scoreParts(isfinite(scoreParts));
+    if isempty(scoreParts)
+        m.followScore = nan;
+    else
+        m.followScore = min(1.0, max(0.0, mean(scoreParts)));
+    end
+end
+
+
+function t = cumulativeTrajectoryTrend(tbl, executeMask)
+    n = height(tbl);
+    t.followScore = nan(n, 1);
+    t.xyzRmse = nan(n, 1);
+
+    for i = 1:n
+        m = evalTrajectory(tbl(1:i, :), executeMask(1:i));
+        t.followScore(i) = m.followScore;
+        t.xyzRmse(i) = m.xyzRmse;
+    end
+end
+
+
+function [xyErr, zErr, quality, mode] = trajectoryErrorSeries(tbl)
+    n = height(tbl);
+    xyErr = nan(n, 1);
+    zErr = nan(n, 1);
+    quality = nan(n, 1);
+    mode = "unavailable";
+
+    hasTrajTarget = ismember('trajectory_target_x', tbl.Properties.VariableNames) && ...
+        ismember('trajectory_target_y', tbl.Properties.VariableNames) && ...
+        ismember('trajectory_target_z', tbl.Properties.VariableNames);
+    hasFinalXY = ismember('final_x', tbl.Properties.VariableNames) && ismember('final_y', tbl.Properties.VariableNames);
+
+    if hasTrajTarget && hasFinalXY
+        x = pickNumeric(tbl, {'final_x'}, nan(n,1));
+        y = pickNumeric(tbl, {'final_y'}, nan(n,1));
+        tx = pickNumeric(tbl, {'trajectory_target_x'}, nan(n,1));
+        ty = pickNumeric(tbl, {'trajectory_target_y'}, nan(n,1));
+        xyErr = hypot(x - tx, y - ty);
+        mode = "trajectory_target_error";
+    elseif ismember('mean_tag_error', tbl.Properties.VariableNames)
+        xyErr = abs(pickNumeric(tbl, {'mean_tag_error', 'max_tag_error'}, nan(n,1)));
+        mode = "proxy_tag_stability";
+    end
+
+    if ismember('trajectory_target_z', tbl.Properties.VariableNames) && ismember('final_altitude', tbl.Properties.VariableNames)
+        zNow = pickNumeric(tbl, {'final_altitude'}, nan(n,1));
+        zTgt = pickNumeric(tbl, {'trajectory_target_z'}, nan(n,1));
+        zErr = abs(zNow - zTgt);
+        if mode == "unavailable"
+            mode = "trajectory_target_error";
+        end
+    elseif ismember('final_altitude', tbl.Properties.VariableNames) && ismember('hover_height_cmd', tbl.Properties.VariableNames)
+        zNow = pickNumeric(tbl, {'final_altitude'}, nan(n,1));
+        zCmd = pickNumeric(tbl, {'hover_height_cmd'}, nan(n,1));
+        zErr = abs(zNow - zCmd);
+        if mode == "unavailable"
+            mode = "proxy_hover_altitude";
+        end
+    elseif ismember('stability_std_z', tbl.Properties.VariableNames)
+        zErr = abs(pickNumeric(tbl, {'stability_std_z'}, nan(n,1)));
+        if mode == "unavailable"
+            mode = "proxy_tag_stability";
+        end
+    end
+
+    if ismember('trajectory_quality', tbl.Properties.VariableNames)
+        quality = pickNumeric(tbl, {'trajectory_quality'}, nan(n,1));
+    else
+        qx = 1.0 - normalizeErrSeries(xyErr, 0.6);
+        qz = 1.0 - normalizeErrSeries(zErr, 0.4);
+        quality = nanmean([qx qz], 2);
+    end
+    quality = min(1.0, max(0.0, quality));
+end
+
+
+function v = normalizeErrScalar(err, scale)
+    if ~(isfinite(err) && isfinite(scale) && scale > 0)
+        v = nan;
+        return;
+    end
+    v = min(1.0, max(0.0, abs(err) / scale));
+end
+
+
+function out = normalizeErrSeries(err, scale)
+    out = nan(size(err));
+    if ~(isfinite(scale) && scale > 0)
+        return;
+    end
+    mask = isfinite(err);
+    out(mask) = min(1.0, max(0.0, abs(err(mask)) ./ scale));
+end
+
+
+function v = localRmse(x)
+    x = x(isfinite(x));
+    if isempty(x)
+        v = nan;
+    else
+        v = sqrt(mean(x.^2));
+    end
+end
+
+
+function v = localMae(x)
+    x = x(isfinite(x));
+    if isempty(x)
+        v = nan;
+    else
+        v = mean(abs(x));
+    end
+end
+
+
+function v = localMean(x)
+    x = x(isfinite(x));
+    if isempty(x)
+        v = nan;
+    else
+        v = mean(x);
+    end
+end
+
+
+function v = localStd(x)
+    x = x(isfinite(x));
+    if numel(x) < 2
+        v = nan;
+    else
+        v = std(x);
+    end
+end
+
+
 function t = cumulativeTrend(gtSafe, predLand)
     n = numel(gtSafe);
     t.accuracy = nan(n,1);
@@ -1115,6 +1516,23 @@ end
 
 
 function dumpMetric(fid, m)
+    if isfield(m, 'followScore')
+        fprintf(fid, 'n_valid: %d\n', m.nValid);
+        fprintf(fid, 'n_executed: %d\n', m.nExecuted);
+        fprintf(fid, 'execution_rate: %.4f\n', m.executionRate);
+        fprintf(fid, 'trajectory_metric_mode: %s\n', char(string(m.mode)));
+        fprintf(fid, 'trajectory_follow_score: %.4f\n', m.followScore);
+        fprintf(fid, 'trajectory_success_rate: %.4f\n', m.successRate);
+        fprintf(fid, 'trajectory_xyz_rmse_m: %.4f\n', m.xyzRmse);
+        fprintf(fid, 'trajectory_xy_rmse_m: %.4f\n', m.xyRmse);
+        fprintf(fid, 'trajectory_z_rmse_m: %.4f\n', m.zRmse);
+        fprintf(fid, 'trajectory_xy_mae_m: %.4f\n', m.xyMae);
+        fprintf(fid, 'trajectory_z_mae_m: %.4f\n', m.zMae);
+        fprintf(fid, 'trajectory_quality_mean: %.4f\n', m.qualityMean);
+        fprintf(fid, 'trajectory_quality_std: %.4f\n', m.qualityStd);
+        return;
+    end
+
     fprintf(fid, 'n_valid: %d\n', m.nValid);
     fprintf(fid, 'accuracy: %.4f\n', m.accuracy);
     fprintf(fid, 'precision: %.4f\n', m.precision);

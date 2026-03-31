@@ -1,6 +1,6 @@
-function [pidXFollowers, pidYFollowers, tagLostFollowers, lastTagUFollowers, lastTagVFollowers, lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers, followerDiag] = ...
+function [tagLostFollowers, lastTagUFollowers, lastTagVFollowers, lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers, followerDiag] = ...
     autosimUpdateFollowerCommands(cfg, rosCtx, tk, dtCtrl, recvTimeoutSec, cmdPrimaryX, cmdPrimaryY, ...
-    pidXFollowers, pidYFollowers, tagLostFollowers, lastTagUFollowers, lastTagVFollowers, ...
+    tagLostFollowers, lastTagUFollowers, lastTagVFollowers, ...
     lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers)
 % autosimUpdateFollowerCommands
 % Follower drones track their own landing tags instead of mirroring primary cmd_vel.
@@ -116,9 +116,9 @@ for i = 1:nFollowers
     [homeX, homeY, ~] = autosimComputeSpawnPose(followerIdx, multiCount, spacingM);
 
     if isFlyingFollower
-        [cmdXf, cmdYf, pidXFollowers(i), pidYFollowers(i), tagLostFollowers(i)] = autosimComputeTagTrackingCommand( ...
-            cfg, tk, dtCtrl, xNow, yNow, false, nan, nan, tagDetected, uTag, vTag, ...
-            pidXFollowers(i), pidYFollowers(i), tagLostFollowers(i), homeX, homeY);
+        [cmdXf, cmdYf, tagLostFollowers(i)] = autosimComputeTagTrackingCommand( ...
+            cfg, tk, xNow, yNow, false, nan, nan, tagDetected, uTag, vTag, ...
+            tagLostFollowers(i), homeX, homeY);
 
         % If follower has no tag observation, optionally mirror primary XY command.
         if isfield(cfg, 'control') && isfield(cfg.control, 'follower_cmd_fallback_to_primary') && cfg.control.follower_cmd_fallback_to_primary
@@ -128,17 +128,19 @@ for i = 1:nFollowers
             end
         end
     else
-        cmdXf = 0.0;
-        cmdYf = 0.0;
-        pidXFollowers(i) = autosimPidInit();
-        pidYFollowers(i) = autosimPidInit();
+        cmdXf = homeX;
+        cmdYf = homeY;
         tagLostFollowers(i) = nan;
     end
 
     msg = ros2message(rosCtx.pubCmdFollowers{i});
     msg.linear.x = cmdXf;
     msg.linear.y = cmdYf;
-    msg.linear.z = 0.0;
+    if isfinite(zNow)
+        msg.linear.z = zNow;
+    else
+        msg.linear.z = autosimClampNaN(cfg.control.land_cmd_alt_m, 0.2);
+    end
     msg.angular.x = 0.0;
     msg.angular.y = 0.0;
     msg.angular.z = 0.0;

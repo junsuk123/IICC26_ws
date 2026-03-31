@@ -34,8 +34,8 @@ if logical(collectionCfg.independent_per_drone) && round(collectionCfg.drone_cou
         autosimMainOrchestrate(thisDir, 1);
     catch ME
         if autosimCollectIsUserTermination(ME)
-            fprintf('[AutoSimCollect] Stopped by user during parallel monitor.\n');
-            return;
+            error('AutoSim:CollectionInterrupted', ...
+                '[AutoSimCollect] Data collection interrupted by user; aborting downstream stages to avoid stale-data training/validation.');
         end
         rethrow(ME);
     end
@@ -88,6 +88,8 @@ end
 end
 
 function cfg = autosimCollectWithDefaults(cfg)
+isNestedMainPipeline = autosimCollectEnvFlag('AUTOSIM_IN_MAIN_PIPELINE');
+
 if ~isfield(cfg, 'scenario_count')
     cfg.scenario_count = 1000;
 end
@@ -118,6 +120,18 @@ end
 if ~isfield(cfg, 'allow_parallel_rviz')
     cfg.allow_parallel_rviz = false;
 end
+if ~isfield(cfg, 'rviz_mode') || strlength(string(cfg.rviz_mode)) == 0
+    % Legacy compatibility: infer unified rviz_mode from old fields.
+    if logical(cfg.launch_use_rviz)
+        if logical(cfg.allow_parallel_rviz)
+            cfg.rviz_mode = 'multi';
+        else
+            cfg.rviz_mode = 'single';
+        end
+    else
+        cfg.rviz_mode = 'off';
+    end
+end
 if ~isfield(cfg, 'multi_drone_spacing_m')
     cfg.multi_drone_spacing_m = 10.0;
 end
@@ -134,13 +148,18 @@ if ~isfield(cfg, 'primary_drone_index')
     cfg.primary_drone_index = 1;
 end
 if ~isfield(cfg, 'safe_cleanup_on_start')
-    cfg.safe_cleanup_on_start = true;
+    cfg.safe_cleanup_on_start = ~isNestedMainPipeline;
 end
 if ~isfield(cfg, 'safe_cleanup_on_exit')
-    cfg.safe_cleanup_on_exit = true;
+    cfg.safe_cleanup_on_exit = ~isNestedMainPipeline;
 end
 if ~isfield(cfg, 'allow_scale_above_requested')
     cfg.allow_scale_above_requested = false;
+end
+
+function tf = autosimCollectEnvFlag(name)
+raw = strtrim(string(getenv(char(name))));
+tf = any(raw == ["1", "true", "yes", "on"]);
 end
 if ~isfield(cfg, 'enable_progress_plot')
     cfg.enable_progress_plot = true;
@@ -231,17 +250,32 @@ end
 if isfield(cfg, 'launch_use_gui')
     setenv('AUTOSIM_USE_GUI', autosimCollectBoolText(logical(cfg.launch_use_gui)));
 end
-if isfield(cfg, 'launch_use_rviz')
-    setenv('AUTOSIM_USE_RVIZ', autosimCollectBoolText(logical(cfg.launch_use_rviz)));
+% Unified RViz control. Supported values: off | single | multi
+rvizMode = "off";
+if isfield(cfg, 'rviz_mode') && strlength(string(cfg.rviz_mode)) > 0
+    rvizMode = lower(strtrim(string(cfg.rviz_mode)));
+end
+switch rvizMode
+    case "off"
+        setenv('AUTOSIM_USE_RVIZ', 'false');
+        setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
+        setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
+    case "single"
+        setenv('AUTOSIM_USE_RVIZ', 'true');
+        setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
+        setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
+    case "multi"
+        setenv('AUTOSIM_USE_RVIZ', 'true');
+        setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'multi');
+        setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'true');
+    otherwise
+        warning('[AutoSimCollect] Unknown rviz_mode=%s, fallback to off', char(rvizMode));
+        setenv('AUTOSIM_USE_RVIZ', 'false');
+        setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
+        setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
 end
 if isfield(cfg, 'domain_base') && isfinite(cfg.domain_base)
     setenv('DOMAIN_BASE', num2str(round(double(cfg.domain_base))));
-end
-if isfield(cfg, 'parallel_rviz_mode') && strlength(string(cfg.parallel_rviz_mode)) > 0
-    setenv('AUTOSIM_PARALLEL_RVIZ_MODE', char(string(cfg.parallel_rviz_mode)));
-end
-if isfield(cfg, 'allow_parallel_rviz')
-    setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', autosimCollectBoolText(logical(cfg.allow_parallel_rviz)));
 end
 if isfield(cfg, 'launch_use_teleop')
     setenv('AUTOSIM_USE_TELEOP', autosimCollectBoolText(logical(cfg.launch_use_teleop)));

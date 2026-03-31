@@ -54,7 +54,22 @@ function rosCtx = autosimCreateRosContext(cfg)
     rosCtx.pubLand = ros2publisher(node, cfg.topics.land_cmd, 'std_msgs/Empty');
     rosCtx.pubReset = ros2publisher(node, cfg.topics.reset_cmd, 'std_msgs/Empty');
     rosCtx.pubCmd = ros2publisher(node, cfg.topics.cmd_vel, 'geometry_msgs/Twist');
-    rosCtx.pubDroneVelMode = ros2publisher(node, [char(string(cfg.runtime.drone_namespace)) '/dronevel_mode'], 'std_msgs/Bool');
+    rosCtx.pubPosCtrl = ros2publisher(node, [char(string(cfg.runtime.drone_namespace)) '/posctrl'], 'std_msgs/Bool');
+    rosCtx.pubTrajectoryGuidance = [];
+    rosCtx.pubTrajectoryGuidanceMarker = [];
+    if isfield(cfg, 'trajectory') && isfield(cfg.trajectory, 'guidance_topic_enable') && cfg.trajectory.guidance_topic_enable && ...
+            isfield(cfg, 'topics') && isfield(cfg.topics, 'trajectory_guidance') && strlength(string(cfg.topics.trajectory_guidance)) > 0
+        try
+            rosCtx.pubTrajectoryGuidance = ros2publisher(node, cfg.topics.trajectory_guidance, 'std_msgs/Float32MultiArray');
+            if isfield(cfg.topics, 'trajectory_guidance_marker') && strlength(string(cfg.topics.trajectory_guidance_marker)) > 0
+                rosCtx.pubTrajectoryGuidanceMarker = ros2publisher(node, cfg.topics.trajectory_guidance_marker, 'visualization_msgs/Marker');
+            end
+        catch ME
+            rosCtx.pubTrajectoryGuidance = [];
+            rosCtx.pubTrajectoryGuidanceMarker = [];
+            warning('[AUTOSIM ROS] Trajectory guidance publisher disabled: %s', ME.message);
+        end
+    end
 
     rosCtx.follower_namespaces = strings(0, 1);
     rosCtx.subTagFollowers = {};
@@ -64,7 +79,7 @@ function rosCtx = autosimCreateRosContext(cfg)
     rosCtx.pubLandFollowers = {};
     rosCtx.pubResetFollowers = {};
     rosCtx.pubCmdFollowers = {};
-    rosCtx.pubDroneVelModeFollowers = {};
+    rosCtx.pubPosCtrlFollowers = {};
 
     multiCount = 1;
     if isfield(cfg, 'runtime') && isfield(cfg.runtime, 'multi_drone_count')
@@ -101,7 +116,7 @@ function rosCtx = autosimCreateRosContext(cfg)
             rosCtx.pubLandFollowers{end+1, 1} = ros2publisher(node, [ns '/land'], 'std_msgs/Empty'); %#ok<AGROW>
             rosCtx.pubResetFollowers{end+1, 1} = ros2publisher(node, [ns '/reset'], 'std_msgs/Empty'); %#ok<AGROW>
             rosCtx.pubCmdFollowers{end+1, 1} = ros2publisher(node, [ns '/cmd_vel'], 'geometry_msgs/Twist'); %#ok<AGROW>
-            rosCtx.pubDroneVelModeFollowers{end+1, 1} = ros2publisher(node, [ns '/dronevel_mode'], 'std_msgs/Bool'); %#ok<AGROW>
+            rosCtx.pubPosCtrlFollowers{end+1, 1} = ros2publisher(node, [ns '/posctrl'], 'std_msgs/Bool'); %#ok<AGROW>
         end
         fprintf('[AUTOSIM ROS] Created %d follower publishers\n', numel(followers));
     else
@@ -113,12 +128,22 @@ function rosCtx = autosimCreateRosContext(cfg)
     rosCtx.msgLand = ros2message(rosCtx.pubLand);
     rosCtx.msgReset = ros2message(rosCtx.pubReset);
     rosCtx.msgCmd = ros2message(rosCtx.pubCmd);
-    rosCtx.msgDroneVelMode = ros2message(rosCtx.pubDroneVelMode);
-    rosCtx.msgDroneVelMode.data = true;
+    rosCtx.msgPosCtrl = ros2message(rosCtx.pubPosCtrl);
+    rosCtx.msgPosCtrl.data = true;
+    rosCtx.msgTrajectoryGuidance = [];
+    if ~isempty(rosCtx.pubTrajectoryGuidance)
+        rosCtx.msgTrajectoryGuidance = ros2message(rosCtx.pubTrajectoryGuidance);
+    end
+    rosCtx.msgTrajectoryGuidanceMarker = [];
+    if ~isempty(rosCtx.pubTrajectoryGuidanceMarker)
+        rosCtx.msgTrajectoryGuidanceMarker = ros2message(rosCtx.pubTrajectoryGuidanceMarker);
+    end
     rosCtx.cleanupHandles = {rosCtx.msgCmd, rosCtx.msgReset, rosCtx.msgLand, rosCtx.msgTakeoff, rosCtx.msgWind, ...
-        rosCtx.msgDroneVelMode, rosCtx.pubDroneVelModeFollowers{:}, rosCtx.pubCmdFollowers{:}, rosCtx.pubResetFollowers{:}, rosCtx.pubLandFollowers{:}, rosCtx.pubTakeoffFollowers{:}, ...
+        rosCtx.msgPosCtrl, rosCtx.msgTrajectoryGuidance, rosCtx.msgTrajectoryGuidanceMarker, ...
+        rosCtx.pubTrajectoryGuidance, rosCtx.pubTrajectoryGuidanceMarker, ...
+        rosCtx.pubPosCtrlFollowers{:}, rosCtx.pubCmdFollowers{:}, rosCtx.pubResetFollowers{:}, rosCtx.pubLandFollowers{:}, rosCtx.pubTakeoffFollowers{:}, ...
         rosCtx.subPoseFollowers{:}, rosCtx.subStateFollowers{:}, rosCtx.subTagFollowers{:}, ...
-        rosCtx.pubDroneVelMode, rosCtx.pubCmd, rosCtx.pubReset, rosCtx.pubLand, rosCtx.pubTakeoff, rosCtx.pubWind, ...
+        rosCtx.pubPosCtrl, rosCtx.pubCmd, rosCtx.pubReset, rosCtx.pubLand, rosCtx.pubTakeoff, rosCtx.pubWind, ...
         rosCtx.subBumpers, rosCtx.subImu, rosCtx.subWind, rosCtx.subTag, rosCtx.subVel, rosCtx.subPose, rosCtx.subState, rosCtx.node};
 end
 

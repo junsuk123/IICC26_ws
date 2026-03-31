@@ -128,6 +128,18 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /drone/bottom/image_raw
       Value: true
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Trajectory Guidance
+      Namespaces:
+        autosim_guidance: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /drone/trajectory_guidance_marker
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

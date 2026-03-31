@@ -3,7 +3,8 @@ function AutoSimTrain()
 % Data-only training entrypoint using FinalDataset.
 % - Loads all FinalDataset records.
 % - Splits 70/30 (train/validation).
-% - Trains model from train split and saves reports.
+% - Trains model(s) from train split and saves reports.
+% - Supports both "aii_only" (AI-only) and "ontology_ai" (Ontology+AI) models.
 
 % ================= USER SETTINGS (edit here) =================
 trainCfg = struct();
@@ -16,6 +17,10 @@ trainCfg.split_seed = 20260323;
 
 % Output tag appended to saved filenames.
 trainCfg.output_tag = "train_only";
+
+% Model types to train: "aii_only" (sensor-only AI) or "ontology_ai" (ontology+AI)
+% Can train one or both models for comparison
+trainCfg.model_types_to_train = ["aii_only", "ontology_ai"];
 % =============================================================
 
 thisDir = fileparts(mfilename('fullpath'));
@@ -75,14 +80,46 @@ if ~isempty(valTbl)
     writetable(valTbl, valCsv);
 end
 
-[modelPrev, modelInfo] = autosimLoadOrInitModel(cfg); %#ok<NASGU>
-scenarioId = max(1, height(trainTbl));
-[model, learnInfo] = autosim_learning_engine('incremental_train_and_save', cfg, trainTbl, modelPrev, scenarioId);
+% Ensure model_types_to_train is defined
+if ~isfield(trainCfg, 'model_types_to_train') || isempty(trainCfg.model_types_to_train)
+    trainCfg.model_types_to_train = ["aii_only", "ontology_ai"];
+end
+modelTypesToTrain = string(trainCfg.model_types_to_train(:));
 
-summary = autosimTrainBuildSummary(trainTbl, sourceFiles, sourceMode, mergedCsv, learnInfo, cfg, droneMeta, allTblRawCount, recentNUsed);
-summaryCsv = fullfile(cfg.paths.data_root, sprintf('autosim_train_summary_%s_%s.csv', tag, ts));
-writetable(summary, summaryCsv);
+% Train model(s) based on configured types
+trainedModels = struct();
+for iModel = 1:numel(modelTypesToTrain)
+    modelType = modelTypesToTrain(iModel);
+    fprintf('\n[AutoSimTrain] ========== Training Model Type %d/%d: %s ==========\n', ...
+        iModel, numel(modelTypesToTrain), modelType);
+    
+    % Apply model type configuration
+    cfgModel = autosimGetModelTypeConfig(cfg, modelType);
+    
+    [modelPrev, modelInfo] = autosimLoadOrInitModel(cfgModel); %#ok<NASGU>
+    scenarioId = max(1, height(trainTbl));
+    [model, learnInfo] = autosim_learning_engine('incremental_train_and_save', cfgModel, trainTbl, modelPrev, scenarioId);
+    
+    % Save trained model
+    if isfield(learnInfo, 'model_updated') && learnInfo.model_updated
+        finalModelPath = fullfile(cfgModel.paths.model_dir, ...
+            sprintf('autosim_model_%s_%s_%s.mat', char(modelType), tag, ts));
+        save(finalModelPath, 'model');
+        fprintf('[AutoSimTrain] Model (%s) updated and saved: %s\n', modelType, finalModelPath);
+        trainedModels.(char(modelType)) = model;
+    else
+        fprintf('[AutoSimTrain] Model (%s) update skipped: %s\n', modelType, char(string(learnInfo.skip_reason)));
+    end
+    
+    % Build and save training summary for this model type
+    summary = autosimTrainBuildSummary(trainTbl, sourceFiles, sourceMode, mergedCsv, learnInfo, cfgModel, droneMeta, allTblRawCount, recentNUsed);
+    summaryCsv = fullfile(cfgModel.paths.data_root, ...
+        sprintf('autosim_train_summary_%s_%s_%s.csv', char(modelType), tag, ts));
+    writetable(summary, summaryCsv);
+    fprintf('[AutoSimTrain] Training summary (%s): %s\n', modelType, summaryCsv);
+end
 
+% Save split summary (shared by all models)
 splitSummary = table();
 splitSummary.created_at = string(datetime('now'));
 splitSummary.n_all = height(allTbl);
@@ -97,6 +134,7 @@ splitSummary.train_window_requested_n = trainWindowInfo.requested_recent_n;
 splitSummary.train_window_used_n = trainWindowInfo.used_recent_n;
 splitSummary.train_window_shrunk = logical(trainWindowInfo.was_shrunk);
 splitSummary.source_files = strjoin(sourceFiles, ';');
+splitSummary.trained_model_types = strjoin(modelTypesToTrain, ';');
 if droneMeta.is_multi
     splitSummary.collection_multi_drone_count = droneMeta.count;
     splitSummary.collection_mode = "multi_drone";
@@ -106,14 +144,6 @@ writetable(splitSummary, splitSummaryCsv);
 
 trainPlotPng = fullfile(cfg.paths.plot_root, sprintf('autosim_train_overview_%s_%s.png', tag, ts));
 autosimTrainSaveOverviewPlot(trainPlotPng, trainTbl, valTbl, allTblRawCount, trainWindowInfo);
-
-if isfield(learnInfo, 'model_updated') && learnInfo.model_updated
-    finalModelPath = fullfile(cfg.paths.model_dir, sprintf('autosim_model_final_%s_%s.mat', tag, ts));
-    save(finalModelPath, 'model');
-    fprintf('[AutoSimTrain] Model updated and saved: %s\n', finalModelPath);
-else
-    fprintf('[AutoSimTrain] Model update skipped: %s\n', char(string(learnInfo.skip_reason)));
-end
 
 fprintf('[AutoSimTrain] Data source mode: %s\n', sourceMode);
 if isfinite(recentNUsed) && recentNUsed > 0
@@ -127,9 +157,9 @@ end
 fprintf('[AutoSimTrain] All dataset:   %s (rows=%d)\n', mergedCsv, height(allTbl));
 fprintf('[AutoSimTrain] Train dataset: %s (rows=%d)\n', trainCsv, height(trainTbl));
 fprintf('[AutoSimTrain] Val dataset:   %s (rows=%d)\n', valCsv, height(valTbl));
-fprintf('[AutoSimTrain] Training summary: %s\n', summaryCsv);
 fprintf('[AutoSimTrain] Split summary:    %s\n', splitSummaryCsv);
 fprintf('[AutoSimTrain] Training plot:    %s\n', trainPlotPng);
+fprintf('[AutoSimTrain] Model types trained: %s\n', strjoin(modelTypesToTrain, ', '));
 end
 
 function [tbl, sourceFiles, sourceMode] = autosimTrainLoadDataset(thisDir)

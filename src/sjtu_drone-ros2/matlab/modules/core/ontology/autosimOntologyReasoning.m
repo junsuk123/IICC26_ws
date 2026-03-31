@@ -15,6 +15,18 @@ function semantic = autosimOntologyReasoning(onto, cfg)
     d = onto.entities.DroneState;
     t = onto.entities.TagObservation;
     c = onto.entities.LandingContext;
+    pad = struct('is_moving', false, 'offset_u', 0.0, 'offset_v', 0.0, 'velocity_u', 0.0, 'velocity_v', 0.0, 'speed', 0.0, 'motion_risk', 0.0);
+    if isfield(onto.entities, 'LandingPadMotion') && isstruct(onto.entities.LandingPadMotion)
+        pad = onto.entities.LandingPadMotion;
+    end
+    nav = struct('gnss_healthy', true, 'ins_healthy', true, 'gps_dropout_active', false, 'covariance_trace', 0.0, 'instability', 0.0);
+    if isfield(onto.entities, 'NavigationState') && isstruct(onto.entities.NavigationState)
+        nav = onto.entities.NavigationState;
+    end
+    est = struct('uncertainty', 0.0, 'confidence', 1.0);
+    if isfield(onto.entities, 'StateEstimation') && isstruct(onto.entities.StateEstimation)
+        est = onto.entities.StateEstimation;
+    end
 
     windVelocity = autosimClampNaN(w.wind_speed, 0.0);
     windAcceleration = autosimClampNaN(g.dvdt_peak, 0.0);
@@ -70,11 +82,14 @@ function semantic = autosimOntologyReasoning(onto, cfg)
     jitterN = autosimNormalize01(t.jitter_px, 0.0, cfg.ontology.tag_jitter_unsafe_px);
     stabScore = autosimClampNaN(t.stability_score, 0.0);
     detCont = autosimClampNaN(t.detection_continuity, 0.0);
+    estUncertainty = autosimClampNaN(autosimVizField(est, 'uncertainty', 0.0), 0.0);
     visualRuleEnc = autosimClamp( ...
         0.26 * double(t.detected) + 0.22 * (1.0 - jitterN) + 0.20 * stabScore + 0.14 * detCont + 0.10 * (1.0 - tp.visual_dropout) + 0.08 * (1.0 - tp.tag_error_volatility), 0.0, 1.0);
     if ~t.detected
         visualRuleEnc = 0.6 * visualRuleEnc;
     end
+    visualRuleEnc = autosimClamp(visualRuleEnc * (1.0 - 0.25 * estUncertainty), 0.0, 1.0);
+    alignRuleEnc = autosimClamp(alignRuleEnc * (1.0 - 0.20 * estUncertainty), 0.0, 1.0);
 
     attStab = 1.0 - autosimNormalize01(d.abs_attitude, 0.0, deg2rad(cfg.thresholds.final_attitude_max_deg));
     windRiskEnc = windRiskRuleEnc;
@@ -169,21 +184,90 @@ function semantic = autosimOntologyReasoning(onto, cfg)
         semanticRelation = 'conditional';
     end
 
+    relWindControl = autosimClampNaN(autosimVizField(autosimVizField(onto, 'relations', struct()), 'WindAffectsControl', struct('score', 0.0)).score, ...
+        autosimClamp(0.65 * windRiskEnc + 0.35 * tp.control_load, 0.0, 1.0));
+    relVisualAlignment = autosimClampNaN(autosimVizField(autosimVizField(onto, 'relations', struct()), 'VisualSupportsAlignment', struct('score', 0.0)).score, ...
+        autosimClamp(0.5 * visualEnc + 0.5 * alignEnc, 0.0, 1.0));
+    relEstimationConflict = autosimClampNaN(autosimVizField(autosimVizField(onto, 'relations', struct()), 'EstimationConflictsPerception', struct('score', estUncertainty)).score, ...
+        estUncertainty);
+
+    relationScore = autosimClamp( ...
+        autosimClampNaN(cfg.ontology.relation_wind_control_weight, 0.55) * (1.0 - relWindControl) + ...
+        autosimClampNaN(cfg.ontology.relation_visual_alignment_weight, 0.30) * relVisualAlignment + ...
+        autosimClampNaN(cfg.ontology.relation_estimation_conflict_weight, 0.15) * (1.0 - relEstimationConflict), 0.0, 1.0);
+
     landingFeasibility = autosimClamp( ...
-        0.40 * (1.0 - windRiskEnc) + ...
-        0.25 * alignEnc + ...
-        0.20 * visualEnc + ...
-        0.15 * droneStability, 0.0, 1.0);
+        0.34 * (1.0 - windRiskEnc) + ...
+        0.22 * alignEnc + ...
+        0.18 * visualEnc + ...
+        0.12 * droneStability + ...
+        0.14 * relationScore, 0.0, 1.0);
+
+    navInstability = autosimClampNaN(autosimVizField(nav, 'instability', estUncertainty), estUncertainty);
+    if autosimClampNaN(autosimVizField(nav, 'gps_dropout_active', 0.0), 0.0) > 0.5
+        navInstability = autosimClamp(max(navInstability, 0.65), 0.0, 1.0);
+    end
+    if autosimClampNaN(autosimVizField(nav, 'gnss_healthy', 1.0), 1.0) < 0.5
+        navInstability = autosimClamp(max(navInstability, 0.55), 0.0, 1.0);
+    end
+    if autosimClampNaN(autosimVizField(nav, 'ins_healthy', 1.0), 1.0) < 0.5
+        navInstability = autosimClamp(max(navInstability, 0.70), 0.0, 1.0);
+    end
+
+    padMotionRisk = autosimClampNaN(autosimVizField(pad, 'motion_risk', autosimNormalize01(abs(autosimVizField(pad, 'speed', 0.0)), 0.0, 0.28)), 0.0);
+    padMoving = logical(autosimClampNaN(autosimVizField(pad, 'is_moving', double(autosimVizField(pad, 'speed', 0.0) > 1e-4)), 0.0) > 0.5);
+    windAlignmentToPad = autosimClampNaN(autosimVizField(autosimVizField(onto, 'entities', struct()), 'TrajectoryRequest', struct('wind_alignment_to_pad', 0.0)).wind_alignment_to_pad, 0.0);
+    interceptability = autosimClampNaN(autosimVizField(autosimVizField(onto, 'entities', struct()), 'TrajectoryRequest', struct('interceptability', 0.0)).interceptability, 0.0);
+
+    trajCfg = autosimVizField(cfg, 'trajectory', struct());
+    horizonSec = autosimClampNaN(autosimVizField(trajCfg, 'horizon_sec', 2.5), 2.5);
+    upwindCompGain = autosimClampNaN(autosimVizField(trajCfg, 'upwind_comp_gain', 0.45), 0.45);
+    padCompGain = autosimClampNaN(autosimVizField(trajCfg, 'pad_motion_comp_gain', 0.85), 0.85);
+    safeAlt = autosimClampNaN(autosimVizField(trajCfg, 'safe_altitude_m', 1.80), 1.80);
+    interceptAlt = autosimClampNaN(autosimVizField(trajCfg, 'intercept_altitude_m', 1.20), 1.20);
+    navCaution = autosimClampNaN(autosimVizField(trajCfg, 'nav_uncertainty_caution', 0.35), 0.35);
+    navUnsafe = autosimClampNaN(autosimVizField(trajCfg, 'nav_uncertainty_unsafe', 0.70), 0.70);
+
+    windHazardous = (windRiskEnc >= autosimNormalize01(cfg.ontology.wind_unsafe_speed, 0.0, max(1e-6, cfg.wind.speed_max))) || (windRiskComp.r_wind >= 0.80);
+    navUnsafeNow = navInstability >= navUnsafe;
+
+    if navUnsafeNow || windHazardous
+        trajectoryIntent = "stabilize_upwind_hold";
+    elseif interceptability >= 0.55
+        trajectoryIntent = "intercept_moving_pad";
+    else
+        trajectoryIntent = "hold_and_align";
+    end
+
+    windVec = [windVelocityVec(1); windVelocityVec(2)];
+    if norm(windVec) > 1e-6
+        upwindUnit = -windVec / norm(windVec);
+    else
+        upwindUnit = [0.0; 0.0];
+    end
+    padPredU = autosimClampNaN(autosimVizField(pad, 'offset_u', 0.0), 0.0) + horizonSec * padCompGain * autosimClampNaN(autosimVizField(pad, 'velocity_u', 0.0), 0.0);
+    padPredV = autosimClampNaN(autosimVizField(pad, 'offset_v', 0.0), 0.0) + horizonSec * padCompGain * autosimClampNaN(autosimVizField(pad, 'velocity_v', 0.0), 0.0);
+    trajU = padPredU + upwindCompGain * windRiskEnc * upwindUnit(1);
+    trajV = padPredV + upwindCompGain * windRiskEnc * upwindUnit(2);
+    if trajectoryIntent == "stabilize_upwind_hold"
+        trajU = upwindCompGain * upwindUnit(1);
+        trajV = upwindCompGain * upwindUnit(2);
+    end
+    trajAlt = interceptAlt;
+    if navInstability >= navCaution
+        trajAlt = max(safeAlt, interceptAlt);
+    end
+    trajQuality = autosimClamp(0.45 * (1.0 - windRiskEnc) + 0.30 * interceptability + 0.25 * (1.0 - navInstability), 0.0, 1.0);
 
     if landingFeasibility >= cfg.agent.semantic_land_threshold
         semanticIntegration = 'AttemptLanding';
-        finalDecision = 'AttemptLanding';
+        legacyDecision = 'AttemptLanding';
     elseif landingFeasibility <= cfg.agent.semantic_abort_threshold
         semanticIntegration = 'HoldLanding';
-        finalDecision = 'HoldLanding';
+        legacyDecision = 'HoldLanding';
     else
         semanticIntegration = 'HoldLanding';
-        finalDecision = 'HoldLanding';
+        legacyDecision = 'HoldLanding';
     end
 
     semantic = struct();
@@ -197,8 +281,21 @@ function semantic = autosimOntologyReasoning(onto, cfg)
     semantic.visual_pattern = visualPattern;
     semantic.control_difficulty = controlDifficulty;
     semantic.landing_feasibility = landingFeasibility;
-    semantic.final_decision = finalDecision;
-    semantic.isSafeForLanding = strcmp(finalDecision, 'AttemptLanding');
+    semantic.legacy_landing_decision = legacyDecision;
+    semantic.trajectory_intent = trajectoryIntent;
+    semantic.trajectory_quality = trajQuality;
+    semantic.trajectory_target_u = trajU;
+    semantic.trajectory_target_v = trajV;
+    semantic.trajectory_target_altitude = trajAlt;
+    semantic.trajectory_horizon_sec = horizonSec;
+    semantic.pad_is_moving = padMoving;
+    semantic.pad_motion_risk = padMotionRisk;
+    semantic.navigation_instability = navInstability;
+    semantic.wind_is_hazardous = windHazardous;
+    semantic.trajectory_interceptability = interceptability;
+    semantic.wind_alignment_to_pad = windAlignmentToPad;
+    semantic.final_decision = trajectoryIntent;
+    semantic.isSafeForLanding = strcmp(legacyDecision, 'AttemptLanding');
     semantic.wind_velocity = windVelocity;
     semantic.wind_acceleration = windAcceleration;
     semantic.wind_velocity_x = windVelocityVec(1);
@@ -212,11 +309,23 @@ function semantic = autosimOntologyReasoning(onto, cfg)
     semantic.wind_gust_risk = windRiskComp.r_gust;
     semantic.wind_dir_change = windDirChange;
     semantic.wind_dir_change_risk = windRiskComp.r_dir_change;
+    semantic.wind_moment_risk = windRiskComp.r_moment;
     semantic.wind_risk_raw = windRiskComp.r_wind;
     semantic.thrust_margin = windRiskComp.F_cap;
     semantic.wind_risk_enc = windRiskEnc;
     semantic.alignment_enc = alignEnc;
     semantic.visual_enc = visualEnc;
+    semantic.estimation_uncertainty_enc = estUncertainty;
+    semantic.relation_wind_control = relWindControl;
+    semantic.relation_visual_alignment = relVisualAlignment;
+    semantic.relation_estimation_conflict = relEstimationConflict;
+    semantic.relation_pad_motion_intercept = autosimClamp(0.6 * padMotionRisk + 0.4 * windAlignmentToPad, 0.0, 1.0);
+    semantic.relation_wind_trajectory = autosimClamp(max(windRiskComp.r_wind, windAlignmentToPad), 0.0, 1.0);
+    semantic.relation_navigation_tracking = autosimClamp(navInstability, 0.0, 1.0);
+    semantic.semantic_relation = string(semanticRelation);
+    semantic.explainable_baseline_score = autosimClamp(0.50 * landingFeasibility + 0.50 * relationScore, 0.0, 1.0);
+    semantic.explainable_rationale = sprintf('traj=%s q=%.2f rel=%.2f windCtl=%.2f pad=%.2f nav=%.2f', ...
+        char(trajectoryIntent), trajQuality, relationScore, relWindControl, padMotionRisk, navInstability);
 
 end
 
@@ -289,8 +398,18 @@ function risk = autosimComputeWindRiskComponents(windVelocityVec, windAccelerati
     r_gust = autosimClamp(a_w / max(model.a_thr, 1e-6), 0.0, 1.0);
 
     r_dir_change = autosimClamp(dirChangeRisk, 0.0, 1.0);
+    tau_disturb = F_body * model.cp_arm_m;
+    if ~isfinite(tau_disturb)
+        tau_disturb = 0.0;
+    end
+    tau_cap = max(model.tau_min, model.control_reserve_ratio * model.max_total_thrust_n * model.arm_length_m);
+    if ~isfinite(tau_cap)
+        tau_cap = model.tau_min;
+    end
+    r_moment = autosimClamp(tau_disturb / max(tau_cap, 1e-6), 0.0, 1.0);
+
     % Keep each risk independent; aggregate without additive weighting.
-    r_wind = max([r_body, r_gust, r_dir_change]);
+    r_wind = max([r_body, r_gust, r_dir_change, r_moment]);
 
     risk = struct();
     risk.F_wx = F_wx;
@@ -300,6 +419,9 @@ function risk = autosimComputeWindRiskComponents(windVelocityVec, windAccelerati
     risk.r_body = r_body;
     risk.r_gust = r_gust;
     risk.r_dir_change = r_dir_change;
+    risk.r_moment = r_moment;
+    risk.tau_disturb = tau_disturb;
+    risk.tau_cap = tau_cap;
     risk.r_wind = r_wind;
 end
 
@@ -325,6 +447,10 @@ function model = autosimGetWindRiskModel(cfg, rollAbs, pitchAbs)
     model.mass_kg = 1.4;
     model.gravity_mps2 = 9.81;
     model.max_total_thrust_n = 24.0;
+    model.arm_length_m = 0.18;
+    model.cp_arm_m = 0.10;
+    model.control_reserve_ratio = 0.75;
+    model.tau_min = 0.05;
 
     if isstruct(cfg) && isfield(cfg, 'ontology') && isstruct(cfg.ontology) && isfield(cfg.ontology, 'wind_risk_model') && isstruct(cfg.ontology.wind_risk_model)
         orm = cfg.ontology.wind_risk_model;
@@ -368,6 +494,9 @@ function model = autosimGetWindRiskModel(cfg, rollAbs, pitchAbs)
     model.mass_kg = autosimWindLoadField(p, 'mass_kg', model.mass_kg);
     model.gravity_mps2 = autosimWindLoadField(p, 'gravity_mps2', model.gravity_mps2);
     model.max_total_thrust_n = autosimWindLoadField(p, 'max_total_thrust_n', model.max_total_thrust_n);
+    model.arm_length_m = max(1e-6, autosimWindLoadField(p, 'arm_length_m', model.arm_length_m));
+    model.cp_arm_m = max(1e-6, autosimWindLoadField(p, 'center_of_pressure_arm_m', model.cp_arm_m));
+    model.control_reserve_ratio = autosimClamp(autosimWindLoadField(p, 'control_reserve_ratio', model.control_reserve_ratio), 0.05, 1.0);
     model.F_min = max(model.F_min, max(0.0, autosimWindLoadField(p, 'min_thrust_margin_n', model.F_min)));
 
     cosTilt = cos(abs(double(rollAbs))) * cos(abs(double(pitchAbs)));

@@ -80,6 +80,21 @@ function cfg = autosimDefaultConfig()
     cfg.scenario.early_stop_after_landing_sec = 1.5;
     cfg.scenario.hover_height_min_m = 1.5;
     cfg.scenario.hover_height_max_m = 2.5;
+    cfg.scenario.ekf_uncertainty_bias_min = 0.02;
+    cfg.scenario.ekf_uncertainty_bias_max = 0.20;
+    cfg.scenario.gps_dropout_probability = 0.30;
+    cfg.scenario.gps_dropout_start_min_sec = 4.0;
+    cfg.scenario.gps_dropout_start_max_sec = 16.0;
+    cfg.scenario.gps_dropout_duration_min_sec = 3.0;
+    cfg.scenario.gps_dropout_duration_max_sec = 10.0;
+    cfg.scenario.moving_pad_probability = 0.35;
+    cfg.scenario.moving_pad_amp_u_min = 0.03;
+    cfg.scenario.moving_pad_amp_u_max = 0.18;
+    cfg.scenario.moving_pad_amp_v_min = 0.03;
+    cfg.scenario.moving_pad_amp_v_max = 0.18;
+    cfg.scenario.moving_pad_freq_min_hz = 0.05;
+    cfg.scenario.moving_pad_freq_max_hz = 0.28;
+    cfg.scenario.moving_pad_profile = "triangular_velocity_reciprocating";
 
     cfg.wind = struct();
     cfg.wind.enable = true;
@@ -161,7 +176,7 @@ function cfg = autosimDefaultConfig()
     cfg.control = struct();
     cfg.control.takeoff_retry_sec = 1.0;
     cfg.control.takeoff_broadcast_window_sec = 15.0;
-    cfg.control.dronevel_mode_reassert_sec = 1.0;
+    cfg.control.posctrl_reassert_sec = 1.0;
     cfg.control.takeoff_state_values = [1, 2];
     cfg.control.takeoff_rearm_altitude_max_m = 0.8;
     cfg.control.hover_settle_sec = 3.0;
@@ -171,9 +186,6 @@ function cfg = autosimDefaultConfig()
     cfg.control.hover_z_hold_cmd_limit_mps = 0.25;
     cfg.control.hover_z_hold_deadband_m = 0.08;
     cfg.control.xy_kp = 1.75;
-    cfg.control.xy_ki = 0.0;
-    cfg.control.xy_kd = 1.75;
-    cfg.control.xy_i_limit = 1.0;
     cfg.control.xy_cmd_limit = 0.7;
     cfg.control.target_u = 0.0;
     cfg.control.target_v = 0.0;
@@ -198,9 +210,6 @@ function cfg = autosimDefaultConfig()
     cfg.control.search_spiral_start_radius = 0.04;
     cfg.control.pose_hold_enable = true;
     cfg.control.pose_hold_kp = 0.45;
-    cfg.control.pose_hold_ki = 0.00;
-    cfg.control.pose_hold_kd = 0.00;
-    cfg.control.pose_hold_i_limit = 0.40;
     cfg.control.pose_hold_cmd_limit = 0.35;
     cfg.control.land_cmd_alt_m = 0.22;
     cfg.control.land_forced_timeout_sec = 35.0;
@@ -263,6 +272,7 @@ function cfg = autosimDefaultConfig()
     cfg.agent.no_model_max_abs_roll_pitch_deg = 35.0;
     cfg.agent.no_model_max_wind_speed = 10.0;
     cfg.agent.no_model_require_semantic_safe = false;
+    cfg.agent.baseline_mode = "sensor_ai_single"; % "sensor_ai_single" | "ontology_relational" | "threshold"
     cfg.agent.model_min_total_samples_for_use = 10;
     cfg.agent.model_min_class_samples_for_use = 1;
     cfg.agent.model_minority_ratio_for_use = 0.05;
@@ -275,6 +285,26 @@ function cfg = autosimDefaultConfig()
     cfg.agent.ontology_guard_model_override_visual_min = 0.30;
     cfg.agent.ontology_guard_model_override_max_wind_risk = 0.75;
     cfg.agent.ontology_guard_block_conflicting_relation = true;
+
+    cfg.trajectory = struct();
+    cfg.trajectory.enable = true;
+    cfg.trajectory.horizon_sec = 2.5;
+    cfg.trajectory.default_cruise_speed_mps = 0.65;
+    cfg.trajectory.max_step_xy_m = 0.55;
+    cfg.trajectory.max_step_z_m = 0.30;
+    cfg.trajectory.upwind_comp_gain = 0.45;
+    cfg.trajectory.pad_motion_comp_gain = 0.85;
+    cfg.trajectory.ai_follow_requires_model = true;
+    cfg.trajectory.png_fallback_enable = true;
+    cfg.trajectory.guidance_topic_enable = true;
+    cfg.trajectory.nav_uncertainty_caution = 0.35;
+    cfg.trajectory.nav_uncertainty_unsafe = 0.70;
+    cfg.trajectory.safe_altitude_m = 1.80;
+    cfg.trajectory.intercept_altitude_m = 1.20;
+
+    cfg.guidance = struct();
+    cfg.guidance.png_nav_gain = 1.25;
+    cfg.guidance.png_max_step_xy_m = 0.40;
 
     cfg.learning = struct();
     cfg.learning.enable = true;
@@ -421,22 +451,18 @@ function cfg = autosimDefaultConfig()
     cfg.thresholds.mass_scaled_arm_peak_factor = 1.5;
 
     cfg.model = struct();
-    % Ontology-entity input schema for AI model.
-    cfg.model.schema_version = "decision_ontology_v2";
+    % Model type selector: "aii_only" (sensor-only AI) or "ontology_ai" (ontology+AI)
+    % Will be configured via autosimGetModelTypeConfig() after loading default config.
+    cfg.model.DEFAULT_type = "ontology_ai";
+    % Sensor-only baseline schema for single AI decision model.
+    cfg.model.schema_version = "decision_sensor_single_ai_v1";
     cfg.model.feature_names = [ ...
-        "onto_wind_condition", ...
-        "onto_gust", ...
-        "onto_temporal_pattern", ...
-        "onto_drone_state", ...
-        "onto_tag_observation", ...
-        "onto_wind_body_risk", ...
-        "onto_wind_accel_risk", ...
-        "onto_wind_dir_change_risk" ...
+        "mean_wind_speed", "max_wind_speed", "wind_velocity", "wind_acceleration", ...
+        "mean_abs_roll_deg", "mean_abs_pitch_deg", "mean_abs_vz", "max_abs_vz", ...
+        "mean_tag_error", "max_tag_error", "stability_std_z", "stability_std_vz", ...
+        "mean_imu_ang_vel", "max_imu_ang_vel", "mean_imu_lin_acc", "max_imu_lin_acc" ...
     ];
-    cfg.model.input_entities = [ ...
-        "WindCondition", "Gust", "TemporalPattern", ...
-        "DroneState", "TagObservation" ...
-    ];
+    cfg.model.input_entities = ["SensorStats"];
     cfg.model.prior_uniform_blend = 0.55;
 
     cfg.ontology = struct();
@@ -451,6 +477,7 @@ function cfg = autosimDefaultConfig()
     cfg.ontology.gust_burst_window_sec = 0.8;
     cfg.ontology.wind_caution_speed = 0.55 * cfg.wind.speed_max;
     cfg.ontology.wind_unsafe_speed = 0.90 * cfg.wind.speed_max;
+    cfg.ontology.pad_motion_speed_unsafe = 0.28;
     cfg.ontology.wind_risk_model = struct();
     cfg.ontology.wind_risk_model.rho = 1.225;
     cfg.ontology.wind_risk_model.c_x = nan;
@@ -490,11 +517,18 @@ function cfg = autosimDefaultConfig()
     cfg.ontology.tag_error_vol_high = 0.10;
     cfg.ontology.tag_error_drift_warn = 0.015;
     cfg.ontology.tag_error_drift_high = 0.060;
+    cfg.ontology.estimation_uncertainty_warn = 0.35;
+    cfg.ontology.estimation_uncertainty_high = 0.70;
+    cfg.ontology.relation_wind_control_weight = 0.55;
+    cfg.ontology.relation_visual_alignment_weight = 0.30;
+    cfg.ontology.relation_estimation_conflict_weight = 0.15;
     cfg.ontology.semantic_feature_names = [ ...
         "wind_speed", "wind_velocity", "wind_acceleration", "wind_dir_norm", "roll_abs", "pitch_abs", ...
         "tag_u", "tag_v", "jitter", "stability_score", ...
         "wind_risk_enc", "alignment_enc", "visual_enc", ...
-        "wind_body_risk_enc", "wind_gust_risk_enc", "wind_dir_change_risk_enc" ...
+        "wind_body_risk_enc", "wind_gust_risk_enc", "wind_dir_change_risk_enc", ...
+        "estimation_uncertainty_enc", "relation_wind_control_enc", "relation_visual_alignment_enc", "relation_estimation_conflict_enc", ...
+        "pad_motion_risk_enc", "trajectory_interceptability_enc", "wind_alignment_to_pad_enc" ...
     ];
 
     % Ontology-AI fusion: ontology concepts are preserved, but concept scores are
@@ -502,7 +536,7 @@ function cfg = autosimDefaultConfig()
     cfg.ontology_ai = struct();
     cfg.ontology_ai.enable = true;
     cfg.ontology_ai.mode = "temporal_tcn_lite";
-    cfg.ontology_ai.rule_weight = 0.50; % fused = rule_weight*rule + (1-rule_weight)*temporal_ai
+    cfg.ontology_ai.rule_weight = 0.65; % fused = rule_weight*rule + (1-rule_weight)*temporal_ai
 
     % temporal ontology encoder branch weights (features defined in autosimOntologyReasoning)
     cfg.ontology_ai.wind_w = [1.05, 1.20, 1.10, 0.85, 0.75, 0.55, 0.35, 0.40];
@@ -536,6 +570,8 @@ function cfg = autosimDefaultConfig()
     cfg.topics.takeoff_cmd = [droneNs '/takeoff'];
     cfg.topics.reset_cmd = [droneNs '/reset'];
     cfg.topics.cmd_vel = [droneNs '/cmd_vel'];
+    cfg.topics.trajectory_guidance = [droneNs '/trajectory_guidance'];
+    cfg.topics.trajectory_guidance_marker = [droneNs '/trajectory_guidance_marker'];
 
     cfg.ros = struct();
     cfg.ros.enable_imu_subscription = false;

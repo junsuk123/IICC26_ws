@@ -84,6 +84,29 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, outPngPat
         ax2LegendHandles(end+1,1) = hCat;
         ax2LegendLabels{end+1} = char("dir | " + autosimWindLegendLabel(windCats(i))); %#ok<AGROW>
     end
+
+    if ismember('gps_dropout_enabled', summaryTbl.Properties.VariableNames)
+        [liaGps, locGps] = ismember(sid, summaryTbl.scenario_id);
+        gpsMask = false(size(sid));
+        gpsMask(liaGps) = logical(summaryTbl.gps_dropout_enabled(locGps(liaGps)));
+        if any(gpsMask)
+            hGps = scatter(ax2, sid(gpsMask), dirMin + 0.05 * (dirMax - dirMin) * ones(nnz(gpsMask),1), 26, ...
+                '^', 'filled', 'MarkerFaceColor', [0.90 0.20 0.20], 'MarkerEdgeColor', [0.25 0.05 0.05]);
+            ax2LegendHandles(end+1,1) = hGps;
+            ax2LegendLabels{end+1} = 'gps dropout'; %#ok<AGROW>
+        end
+    end
+    if ismember('moving_pad_enabled', summaryTbl.Properties.VariableNames)
+        [liaPad, locPad] = ismember(sid, summaryTbl.scenario_id);
+        padMask = false(size(sid));
+        padMask(liaPad) = logical(summaryTbl.moving_pad_enabled(locPad(liaPad)));
+        if any(padMask)
+            hPad = scatter(ax2, sid(padMask), dirMin + 0.12 * (dirMax - dirMin) * ones(nnz(padMask),1), 26, ...
+                's', 'filled', 'MarkerFaceColor', [0.95 0.70 0.15], 'MarkerEdgeColor', [0.30 0.18 0.03]);
+            ax2LegendHandles(end+1,1) = hPad;
+            ax2LegendLabels{end+1} = 'moving pad'; %#ok<AGROW>
+        end
+    end
     ylabel(ax2, 'wind direction [deg]');
     ylim(ax2, [dirMin dirMax]);
     xlabel(ax2, 'scenario');
@@ -91,12 +114,26 @@ function autosimPlotGtVsPrediction(summaryTbl, traceStore, model, cfg, outPngPat
     grid(ax2, 'on');
     legend(ax2, ax2LegendHandles, ax2LegendLabels, 'Location', 'southoutside', 'Orientation', 'horizontal');
 
-    subtitle(tl, sprintf(['Decision-focused evaluation | valid=%d safe=%d unsafe=%d | ' ...
+    baselineMode = "unknown";
+    if isstruct(cfg) && isfield(cfg, 'agent') && isfield(cfg.agent, 'baseline_mode')
+        baselineMode = string(cfg.agent.baseline_mode);
+    end
+
+    gpsN = 0;
+    if ismember('gps_dropout_enabled', summaryTbl.Properties.VariableNames)
+        gpsN = round(sum(logical(summaryTbl.gps_dropout_enabled)));
+    end
+    padN = 0;
+    if ismember('moving_pad_enabled', summaryTbl.Properties.VariableNames)
+        padN = round(sum(logical(summaryTbl.moving_pad_enabled)));
+    end
+    subtitle(tl, sprintf(['Decision-focused evaluation (%s) | valid=%d safe=%d unsafe=%d | ' ...
         'TP=%d FP=%d FN=%d TN=%d | Acc=%.3f Prec=%.3f SafeRec=%.3f UnsafeReject=%.3f UnsafeLand=%.3f | ' ...
-        'mean wind=%.2f m/s max wind=%.2f m/s'], ...
+        'mean wind=%.2f m/s max wind=%.2f m/s | gpsDrop=%d movePad=%d'], ...
+        char(baselineMode), ...
         dEval.n_valid, dEval.n_safe, dEval.n_unsafe, dEval.tp, dEval.fp, dEval.fn, dEval.tn, ...
         dEval.accuracy, dEval.precision, dEval.recall, dEval.specificity, dEval.unsafe_landing_rate, ...
-        autosimNanMean(windCtx.mean_speed), autosimNanMean(windCtx.max_speed)));
+        autosimNanMean(windCtx.mean_speed), autosimNanMean(windCtx.max_speed), gpsN, padN));
 
     exportgraphics(fig, outPngPath, 'Resolution', 150);
 end

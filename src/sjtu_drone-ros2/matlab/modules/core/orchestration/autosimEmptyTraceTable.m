@@ -59,6 +59,21 @@ function tbl = autosimEmptyTraceTable(scenarioId)
     tbl.gt_safe_to_land = "unstable";
     tbl.decision_outcome = "TN";
     tbl.final_label = "unstable";
+        tbl.estimation_uncertainty = nan;
+        tbl.gps_dropout_active = nan;
+        tbl.moving_pad_offset_u = nan;
+        tbl.moving_pad_offset_v = nan;
+        tbl.moving_pad_vel_u = nan;
+        tbl.moving_pad_vel_v = nan;
+        tbl.trajectory_intent = "hold_and_align";
+        tbl.trajectory_target_u = nan;
+        tbl.trajectory_target_v = nan;
+        tbl.trajectory_target_x = nan;
+        tbl.trajectory_target_y = nan;
+        tbl.trajectory_target_z = nan;
+        tbl.trajectory_quality = nan;
+        tbl.navigation_instability = nan;
+        tbl.wind_hazardous = nan;
 end
 
 

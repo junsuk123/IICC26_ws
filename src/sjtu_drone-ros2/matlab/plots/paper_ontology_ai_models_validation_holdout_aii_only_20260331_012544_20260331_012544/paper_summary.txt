@@ -1,0 +1,57 @@
+run_dir: /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/validation_holdout_aii_only_20260331_012544
+dataset: /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/validation_holdout_aii_only_20260331_012544/autosim_dataset_latest.csv
+trace: 
+performance: 
+decision_metrics: 
+
+[Ontology+AI policy]
+n_valid: 100
+n_executed: 0
+execution_rate: 0.0000
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.0000
+trajectory_success_rate: NaN
+trajectory_xyz_rmse_m: NaN
+trajectory_xy_rmse_m: NaN
+trajectory_z_rmse_m: NaN
+trajectory_xy_mae_m: NaN
+trajectory_z_mae_m: NaN
+trajectory_quality_mean: NaN
+trajectory_quality_std: NaN
+
+[Ontology+AI policy | legacy decision]
+n_valid: 100
+accuracy: 1.0000
+precision: NaN
+safe_recall: NaN
+unsafe_reject: 1.0000
+balanced_accuracy: 1.0000
+f1: NaN
+unsafe_landing_rate: 0.0000
+TP=0 FP=0 FN=0 TN=100
+
+[Threshold baseline]
+n_valid: 100
+n_executed: 0
+execution_rate: 0.0000
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.0000
+trajectory_success_rate: NaN
+trajectory_xyz_rmse_m: NaN
+trajectory_xy_rmse_m: NaN
+trajectory_z_rmse_m: NaN
+trajectory_xy_mae_m: NaN
+trajectory_z_mae_m: NaN
+trajectory_quality_mean: NaN
+trajectory_quality_std: NaN
+
+[Threshold baseline | legacy decision]
+n_valid: 100
+accuracy: 1.0000
+precision: NaN
+safe_recall: NaN
+unsafe_reject: 1.0000
+balanced_accuracy: 1.0000
+f1: NaN
+unsafe_landing_rate: 0.0000
+TP=0 FP=0 FN=0 TN=100

@@ -1,0 +1,3 @@
+method,n_valid,n_executed,execution_rate,trajectory_follow_score,trajectory_success_rate,trajectory_xyz_rmse_m,trajectory_xy_rmse_m,trajectory_z_rmse_m,trajectory_xy_mae_m,trajectory_z_mae_m,trajectory_quality_mean,trajectory_quality_std,trajectory_metric_mode
+Ontology+AI (policy),1000,602,0.602,0.756465355329355,1,0.172923778248943,0.171785406074769,0.023438784726793,0.161302737856823,0.0202247193142913,0.525232748588374,0.409511148240522,proxy_tag_stability
+Threshold baseline,1000,591,0.591,0.816130485542638,1,0.175835721808563,0.174223525140089,0.0237563539226712,0.162280386651785,0.0202803920294624,0.839415854420018,0.053758396968384,proxy_tag_stability

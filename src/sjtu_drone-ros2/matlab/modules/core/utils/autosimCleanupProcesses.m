@@ -1,7 +1,31 @@
 function autosimCleanupProcesses(cfg, launchPid)
+    persistent cleanupInProgress
+    persistent lastCleanupClock
+
     if nargin < 2
         launchPid = -1;
     end
+
+    if isempty(cleanupInProgress)
+        cleanupInProgress = false;
+    end
+    if isempty(lastCleanupClock)
+        lastCleanupClock = -inf;
+    end
+
+    nowClock = now * 86400; % seconds
+    minIntervalSec = 2.0;
+    if cleanupInProgress
+        fprintf('[AUTOSIM] Cleanup already in progress; skipping duplicate call.\n');
+        return;
+    end
+    if (nowClock - lastCleanupClock) < minIntervalSec
+        fprintf('[AUTOSIM] Cleanup called too soon after previous run; skipping duplicate call.\n');
+        return;
+    end
+
+    cleanupInProgress = true;
+    cleanupGuard = onCleanup(@releaseCleanupGuard); %#ok<NASGU>
 
     if isfinite(launchPid) && launchPid > 1
         autosimKillTree(launchPid);
@@ -16,6 +40,13 @@ function autosimCleanupProcesses(cfg, launchPid)
         autosimCleanupInstanceProcesses(cfg);
         autosimRefreshRos2Daemon();
         pause(max(0.2, cfg.process.kill_settle_sec));
+        lastCleanupClock = now * 86400;
+        return;
+    end
+
+    activePids = autosimGetActiveProcessPids();
+    if isempty(activePids) && ~(isfinite(launchPid) && launchPid > 1)
+        lastCleanupClock = now * 86400;
         return;
     end
 
@@ -25,7 +56,7 @@ function autosimCleanupProcesses(cfg, launchPid)
     end
 
     for pass = 1:3
-        system(['bash -i -c "set +m; ' ...
+        system(['bash -c "set +m; ' ...
             'pgrep -f \"[r]os2 launch sjtu_drone_bringup sjtu_drone_bringup.launch.py\" | xargs -r kill -9 || true; ' ...
             'pkill -9 -f \"[r]os2 launch sjtu_drone_bringup\" || true; ' ...
             'pkill -9 -f \"[s]jtu_drone_bringup.launch.py\" || true; ' ...
@@ -62,7 +93,7 @@ function autosimCleanupProcesses(cfg, launchPid)
     autosimWaitForProcessCleanup(verifyTimeout);
 
     % Final hard pass for frequent duplicate-node offenders.
-    system(['bash -i -c "set +m; ' ...
+    system(['bash -c "set +m; ' ...
         'pkill -9 -x joy_node || true; ' ...
         'pkill -9 -x teleop_node || true; ' ...
         'pkill -9 -x static_transform_publisher || true; ' ...
@@ -77,6 +108,11 @@ function autosimCleanupProcesses(cfg, launchPid)
     end
 
     pause(max(0.2, cfg.process.kill_settle_sec));
+    lastCleanupClock = now * 86400;
+
+    function releaseCleanupGuard()
+        cleanupInProgress = false;
+    end
 end
 
 
@@ -119,7 +155,7 @@ function autosimCleanupInstanceProcesses(cfg)
             'tr -d ''[:space:]'' | grep -E ''^[0-9]+$'' | sort -u); do ' ...
             'kill -9 $p >/dev/null 2>&1 || true; done'], pnum); %#ok<AGROW>
     end
-    cmd = sprintf('bash -i -c "%s" 2>/dev/null', strjoin(cmdParts, '; '));
+    cmd = sprintf('bash -c "%s" 2>/dev/null', strjoin(cmdParts, '; '));
     system(cmd);
 
     % Retry once after short settle to catch delayed children.

@@ -44,13 +44,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     pubTakeoff = rosCtx.pubTakeoff;
     pubLand = rosCtx.pubLand;
     pubCmd = rosCtx.pubCmd;
-    pubDroneVelMode = [];
-    if isfield(rosCtx, 'pubDroneVelMode')
-        pubDroneVelMode = rosCtx.pubDroneVelMode;
+    pubTrajectoryGuidance = [];
+    if isfield(rosCtx, 'pubTrajectoryGuidance')
+        pubTrajectoryGuidance = rosCtx.pubTrajectoryGuidance;
     end
-    pubDroneVelModeFollowers = {};
-    if isfield(rosCtx, 'pubDroneVelModeFollowers')
-        pubDroneVelModeFollowers = rosCtx.pubDroneVelModeFollowers;
+    pubTrajectoryGuidanceMarker = [];
+    if isfield(rosCtx, 'pubTrajectoryGuidanceMarker')
+        pubTrajectoryGuidanceMarker = rosCtx.pubTrajectoryGuidanceMarker;
+    end
+    pubPosCtrl = [];
+    if isfield(rosCtx, 'pubPosCtrl')
+        pubPosCtrl = rosCtx.pubPosCtrl;
+    end
+    pubPosCtrlFollowers = {};
+    if isfield(rosCtx, 'pubPosCtrlFollowers')
+        pubPosCtrlFollowers = rosCtx.pubPosCtrlFollowers;
     end
     followerCount = 0;
     if isfield(rosCtx, 'pubCmdFollowers')
@@ -67,9 +75,17 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     msgTakeoff = rosCtx.msgTakeoff;
     msgLand = rosCtx.msgLand;
     msgCmd = rosCtx.msgCmd;
-    msgDroneVelMode = [];
-    if isfield(rosCtx, 'msgDroneVelMode')
-        msgDroneVelMode = rosCtx.msgDroneVelMode;
+    msgTrajectoryGuidance = [];
+    if isfield(rosCtx, 'msgTrajectoryGuidance')
+        msgTrajectoryGuidance = rosCtx.msgTrajectoryGuidance;
+    end
+    msgTrajectoryGuidanceMarker = [];
+    if isfield(rosCtx, 'msgTrajectoryGuidanceMarker')
+        msgTrajectoryGuidanceMarker = rosCtx.msgTrajectoryGuidanceMarker;
+    end
+    msgPosCtrl = [];
+    if isfield(rosCtx, 'msgPosCtrl')
+        msgPosCtrl = rosCtx.msgPosCtrl;
     end
 
     sampleN = 200;
@@ -118,6 +134,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     cmdXLog = nan(sampleN,1);
     cmdYLog = nan(sampleN,1);
     cmdZLog = nan(sampleN,1);
+    ekfUncertaintyLog = nan(sampleN,1);
+    gpsDropoutActiveLog = zeros(sampleN,1);
+    movingPadOffsetULog = nan(sampleN,1);
+    movingPadOffsetVLog = nan(sampleN,1);
+    movingPadVelULog = nan(sampleN,1);
+    movingPadVelVLog = nan(sampleN,1);
+    trajectoryIntentTxt = strings(sampleN,1);
+    trajectoryTargetULog = nan(sampleN,1);
+    trajectoryTargetVLog = nan(sampleN,1);
+    trajectoryTargetXLog = nan(sampleN,1);
+    trajectoryTargetYLog = nan(sampleN,1);
+    trajectoryTargetZLog = nan(sampleN,1);
+    trajectoryQualityLog = nan(sampleN,1);
+    navInstabilityLog = nan(sampleN,1);
+    windHazardousLog = zeros(sampleN,1);
     followerExpectedLog = zeros(sampleN,1);
     followerPoseReadyLog = zeros(sampleN,1);
     followerStateReadyLog = zeros(sampleN,1);
@@ -144,15 +175,10 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     tagDetHist = nan(histN, 1);
     tagDetHistCount = 0;
 
-    pidX = autosimPidInit();
-    pidY = autosimPidInit();
-    pidPoseX = autosimPidInit();
-    pidPoseY = autosimPidInit();
-
     lastTakeoffT = -inf;
     takeoffCmdCount = 0;
     takeoffBroadcastUntil = nan;
-    lastDroneVelModeT = -inf;
+    lastPosCtrlT = -inf;
     lastWindT = -inf;
     lastDecisionT = -inf;
     lastCtrlT = 0.0;
@@ -178,8 +204,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     randomBiasY = 0.0;
     tagLostSearchStartT = nan;
 
-    pidXFollowers = repmat(autosimPidInit(), max(1, followerCount), 1);
-    pidYFollowers = repmat(autosimPidInit(), max(1, followerCount), 1);
     tagLostFollowers = nan(max(1, followerCount), 1);
     lastTagUFollowers = nan(max(1, followerCount), 1);
     lastTagVFollowers = nan(max(1, followerCount), 1);
@@ -212,6 +236,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     probeLandingTriggered = false;
     probeLandingReason = "none";
     probePolicySelected = isfield(scenarioCfg, 'probe_landing_selected') && logical(scenarioCfg.probe_landing_selected);
+    ekfUncertaintyBias = autosimClampNaN(autosimFieldOrDefault(scenarioCfg, 'ekf_uncertainty_bias', 0.05), 0.0);
+    gpsDropoutEnable = logical(autosimFieldOrDefault(scenarioCfg, 'gps_dropout_enable', false));
+    gpsDropoutStartSec = autosimClampNaN(autosimFieldOrDefault(scenarioCfg, 'gps_dropout_start_sec', inf), inf);
+    gpsDropoutDurationSec = max(0.0, autosimClampNaN(autosimFieldOrDefault(scenarioCfg, 'gps_dropout_duration_sec', 0.0), 0.0));
+    gpsDropoutEndSec = gpsDropoutStartSec + gpsDropoutDurationSec;
+    movingPadEnable = logical(autosimFieldOrDefault(scenarioCfg, 'moving_pad_enable', false));
+    movingPadAmpU = abs(autosimClampNaN(autosimFieldOrDefault(scenarioCfg, 'moving_pad_amp_u', 0.0), 0.0));
+    movingPadAmpV = abs(autosimClampNaN(autosimFieldOrDefault(scenarioCfg, 'moving_pad_amp_v', 0.0), 0.0));
+    movingPadFreqHz = abs(autosimClampNaN(autosimFieldOrDefault(scenarioCfg, 'moving_pad_freq_hz', 0.0), 0.0));
     requireLandingOutcomeEvaluation = false;
     scenarioTimeoutHit = false;
     collectionTimeoutHit = false;
@@ -335,6 +368,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             cmdXLog = [cmdXLog; nan(growN,1)]; %#ok<AGROW>
             cmdYLog = [cmdYLog; nan(growN,1)]; %#ok<AGROW>
             cmdZLog = [cmdZLog; nan(growN,1)]; %#ok<AGROW>
+            ekfUncertaintyLog = [ekfUncertaintyLog; nan(growN,1)]; %#ok<AGROW>
+            gpsDropoutActiveLog = [gpsDropoutActiveLog; zeros(growN,1)]; %#ok<AGROW>
+            movingPadOffsetULog = [movingPadOffsetULog; nan(growN,1)]; %#ok<AGROW>
+            movingPadOffsetVLog = [movingPadOffsetVLog; nan(growN,1)]; %#ok<AGROW>
+            movingPadVelULog = [movingPadVelULog; nan(growN,1)]; %#ok<AGROW>
+            movingPadVelVLog = [movingPadVelVLog; nan(growN,1)]; %#ok<AGROW>
+            trajectoryIntentTxt = [trajectoryIntentTxt; strings(growN,1)]; %#ok<AGROW>
+            trajectoryTargetULog = [trajectoryTargetULog; nan(growN,1)]; %#ok<AGROW>
+            trajectoryTargetVLog = [trajectoryTargetVLog; nan(growN,1)]; %#ok<AGROW>
+            trajectoryTargetXLog = [trajectoryTargetXLog; nan(growN,1)]; %#ok<AGROW>
+            trajectoryTargetYLog = [trajectoryTargetYLog; nan(growN,1)]; %#ok<AGROW>
+            trajectoryTargetZLog = [trajectoryTargetZLog; nan(growN,1)]; %#ok<AGROW>
+            trajectoryQualityLog = [trajectoryQualityLog; nan(growN,1)]; %#ok<AGROW>
+            navInstabilityLog = [navInstabilityLog; nan(growN,1)]; %#ok<AGROW>
+            windHazardousLog = [windHazardousLog; zeros(growN,1)]; %#ok<AGROW>
             followerExpectedLog = [followerExpectedLog; zeros(growN,1)]; %#ok<AGROW>
             followerPoseReadyLog = [followerPoseReadyLog; zeros(growN,1)]; %#ok<AGROW>
             followerStateReadyLog = [followerStateReadyLog; zeros(growN,1)]; %#ok<AGROW>
@@ -435,6 +483,42 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         [predOk, uPred, vPred] = autosimPredictTagCenter(tagHist, tagHistCount, uTag, vTag, tk, lastTagDetectT, ...
             cfg.control.tag_predict_horizon_sec, cfg.control.tag_predict_timeout_sec, cfg.scenario.sample_period_sec, cfg.control.tag_min_predict_samples);
+
+        gpsDropoutActiveNow = gpsDropoutEnable && isfinite(gpsDropoutStartSec) && isfinite(gpsDropoutEndSec) && ...
+            (tk >= gpsDropoutStartSec) && (tk <= gpsDropoutEndSec);
+        gpsDropoutActiveLog(k) = double(gpsDropoutActiveNow);
+
+        padOffsetU = 0.0;
+        padOffsetV = 0.0;
+        padVelU = 0.0;
+        padVelV = 0.0;
+        padMovingNow = false;
+        if movingPadEnable
+            [padOffsetU, padOffsetV, padVelU, padVelV, padMovingNow] = autosimComputeMovingPadMotion(tk, scenarioCfg);
+            if tagDetected && isfinite(uTag) && isfinite(vTag)
+                uTag = uTag + padOffsetU;
+                vTag = vTag + padOffsetV;
+                tagErr(k) = sqrt(uTag*uTag + vTag*vTag);
+            end
+            if predOk && isfinite(uPred) && isfinite(vPred)
+                uPred = uPred + padOffsetU;
+                vPred = vPred + padOffsetV;
+            end
+        end
+        movingPadOffsetULog(k) = padOffsetU;
+        movingPadOffsetVLog(k) = padOffsetV;
+        movingPadVelULog(k) = padVelU;
+        movingPadVelVLog(k) = padVelV;
+
+        poseAgeNow = tk - lastPoseRxT;
+        velAgeNow = tk - lastVelRxT;
+        tagAgeNow = tk - lastTagRxT;
+        estUncertaintyNow = 0.10 + ekfUncertaintyBias + ...
+            0.30 * double(~isfinite(lastPoseRxT) || poseAgeNow > 0.5) + ...
+            0.20 * double(~isfinite(lastVelRxT) || velAgeNow > 0.5) + ...
+            0.15 * double(~isfinite(lastTagRxT) || tagAgeNow > 0.6) + ...
+            0.25 * double(gpsDropoutActiveNow);
+        ekfUncertaintyLog(k) = autosimClamp(estUncertaintyNow, 0.0, 1.0);
 
         if windPollEnabled && windPollDisableOnStartupStale && ~isfinite(lastWindRxT) && (tk >= windPollDisableAfterSec)
             windPollEnabled = false;
@@ -579,20 +663,20 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             takeoffBroadcastWindowSec = max(0.0, double(cfg.control.takeoff_broadcast_window_sec));
         end
 
-        droneVelModeReassertSec = 1.0;
-        if isfield(cfg.control, 'dronevel_mode_reassert_sec') && isfinite(cfg.control.dronevel_mode_reassert_sec)
-            droneVelModeReassertSec = max(0.2, double(cfg.control.dronevel_mode_reassert_sec));
+        posCtrlReassertSec = 1.0;
+        if isfield(cfg.control, 'posctrl_reassert_sec') && isfinite(cfg.control.posctrl_reassert_sec)
+            posCtrlReassertSec = max(0.2, double(cfg.control.posctrl_reassert_sec));
         end
 
-        if ~isempty(pubDroneVelMode) && ~isempty(msgDroneVelMode) && ((tk - lastDroneVelModeT) >= droneVelModeReassertSec)
+        if ~isempty(pubPosCtrl) && ~isempty(msgPosCtrl) && ((tk - lastPosCtrlT) >= posCtrlReassertSec)
             try
-                send(pubDroneVelMode, msgDroneVelMode);
-                for di = 1:numel(pubDroneVelModeFollowers)
-                    send(pubDroneVelModeFollowers{di}, msgDroneVelMode);
+                send(pubPosCtrl, msgPosCtrl);
+                for di = 1:numel(pubPosCtrlFollowers)
+                    send(pubPosCtrlFollowers{di}, msgPosCtrl);
                 end
-                lastDroneVelModeT = tk;
+                lastPosCtrlT = tk;
             catch
-                % Keep control loop running even if velocity-mode assertion temporarily fails.
+                % Keep control loop running even if posctrl assertion temporarily fails.
             end
         end
 
@@ -673,9 +757,13 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             end
         end
 
-        cmdX = 0.0;
-        cmdY = 0.0;
-        cmdZ = 0.0;
+        cmdX = autosimClampNaN(xNow, primaryHomeX);
+        cmdY = autosimClampNaN(yNow, primaryHomeY);
+        cmdZ = autosimClampNaN(zNow, autosimClampNaN(cfg.control.land_cmd_alt_m, 0.2));
+        trajGuidanceSourceCode = 0.0;
+        trajPublishTargetX = cmdX;
+        trajPublishTargetY = cmdY;
+        trajPublishTargetZ = cmdZ;
 
         if landingSent && controlPhase ~= "landing_track"
             controlPhase = "landing_track";
@@ -718,10 +806,6 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         hoverStartT = nan;
                         decisionEvalStartT = nan;
                         hoverCenterHoldStartT = nan;
-                        pidX = autosimPidInit();
-                        pidY = autosimPidInit();
-                        pidPoseX = autosimPidInit();
-                        pidPoseY = autosimPidInit();
                     end
 
                 case 'hover_settle'
@@ -766,55 +850,42 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         hoverStartT = nan;
                         decisionEvalStartT = nan;
                         hoverCenterHoldStartT = nan;
-                        pidX = autosimPidInit();
-                        pidY = autosimPidInit();
-                        pidPoseX = autosimPidInit();
-                        pidPoseY = autosimPidInit();
                         tagLostSearchStartT = nan;
                     else
                         hasVisualObs = (predOk && isfinite(uPred) && isfinite(vPred)) || (tagDetected && isfinite(uTag) && isfinite(vTag));
                         if padGlobalUseInXYHold && padGlobalValid && ~hasVisualObs
-                            pidX = autosimPidInit();
-                            pidY = autosimPidInit();
                             tagLostSearchStartT = nan;
-                            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, dtCtrl, xNow, yNow, padGlobalMeanX, padGlobalMeanY, pidPoseX, pidPoseY);
+                            [cmdX, cmdY] = autosimComputePoseTrackingCommand(cfg, xNow, yNow, padGlobalMeanX, padGlobalMeanY);
                         else
-                            pidPoseX = autosimPidInit();
-                            pidPoseY = autosimPidInit();
-                            [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
-                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT, primaryHomeX, primaryHomeY);
+                            [cmdX, cmdY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
+                                cfg, tk, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, tagLostSearchStartT, primaryHomeX, primaryHomeY);
                         end
 
-                        % Keep altitude close to scenario hover target to avoid prolonged climb drift.
+                        % In posctrl mode, cmd_vel.linear.z carries absolute altitude target.
                         if isfield(cfg.control, 'hover_z_hold_enable') && cfg.control.hover_z_hold_enable && ...
                                 isfield(scenarioCfg, 'hover_height_m') && isfinite(scenarioCfg.hover_height_m) && ...
                                 isfinite(z(k))
-                            zErr = double(scenarioCfg.hover_height_m) - z(k);
+                            zTarget = double(scenarioCfg.hover_height_m);
+                            zErr = zTarget - z(k);
                             zDeadband = 0.08;
                             if isfield(cfg.control, 'hover_z_hold_deadband_m') && isfinite(cfg.control.hover_z_hold_deadband_m)
                                 zDeadband = max(0.0, double(cfg.control.hover_z_hold_deadband_m));
                             end
                             if abs(zErr) <= zDeadband
-                                cmdZ = 0.0;
+                                cmdZ = z(k);
                             else
-                                zKp = 0.9;
-                                if isfield(cfg.control, 'hover_z_hold_kp') && isfinite(cfg.control.hover_z_hold_kp)
-                                    zKp = max(0.0, double(cfg.control.hover_z_hold_kp));
-                                end
-                                zCmdLim = 0.25;
-                                if isfield(cfg.control, 'hover_z_hold_cmd_limit_mps') && isfinite(cfg.control.hover_z_hold_cmd_limit_mps)
-                                    zCmdLim = max(0.05, double(cfg.control.hover_z_hold_cmd_limit_mps));
-                                end
-                                cmdZ = autosimClamp(zKp * zErr, -zCmdLim, zCmdLim);
+                                cmdZ = zTarget;
                             end
+                        elseif isfinite(zNow)
+                            cmdZ = zNow;
                         end
                     end
 
                 case 'landing_track'
                     if ~isFlying
-                        cmdX = 0.0;
-                        cmdY = 0.0;
-                        cmdZ = 0.0;
+                        cmdX = autosimClampNaN(xNow, primaryHomeX);
+                        cmdY = autosimClampNaN(yNow, primaryHomeY);
+                        cmdZ = autosimClampNaN(zNow, 0.0);
                     else
                         useLandingLockXY = isfield(cfg.control, 'landing_lock_enable') && cfg.control.landing_lock_enable && ...
                             isfield(cfg.control, 'landing_lock_xy_follow_enable') && cfg.control.landing_lock_xy_follow_enable && ...
@@ -823,20 +894,14 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         usePadGlobalXY = padGlobalUseInLandingTrack && padGlobalValid;
 
                         if useLandingLockXY
-                            pidX = autosimPidInit();
-                            pidY = autosimPidInit();
                             tagLostSearchStartT = nan;
-                            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, dtCtrl, xNow, yNow, landingPadLockX, landingPadLockY, pidPoseX, pidPoseY);
+                            [cmdX, cmdY] = autosimComputePoseTrackingCommand(cfg, xNow, yNow, landingPadLockX, landingPadLockY);
                         elseif usePadGlobalXY
-                            pidX = autosimPidInit();
-                            pidY = autosimPidInit();
                             tagLostSearchStartT = nan;
-                            [cmdX, cmdY, pidPoseX, pidPoseY] = autosimComputePoseTrackingPidCommand(cfg, dtCtrl, xNow, yNow, padGlobalMeanX, padGlobalMeanY, pidPoseX, pidPoseY);
+                            [cmdX, cmdY] = autosimComputePoseTrackingCommand(cfg, xNow, yNow, padGlobalMeanX, padGlobalMeanY);
                         else
-                            pidPoseX = autosimPidInit();
-                            pidPoseY = autosimPidInit();
-                            [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
-                                cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT, primaryHomeX, primaryHomeY);
+                            [cmdX, cmdY, tagLostSearchStartT] = autosimComputeTagTrackingCommand( ...
+                                cfg, tk, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, tagLostSearchStartT, primaryHomeX, primaryHomeY);
                         end
 
                         if isfield(cfg.control, 'landing_use_z_tracking') && cfg.control.landing_use_z_tracking
@@ -844,23 +909,19 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                                 zRef = landingStartZ - cfg.control.landing_descent_rate_mps * max(0.0, tk - landingSentT);
                                 zRef = max(cfg.control.landing_min_target_alt_m, zRef);
                                 landingTargetZ = zRef;
-                                zErr = landingTargetZ - zNow;
-                                cmdZ = autosimClamp(cfg.control.landing_z_kp * zErr, ...
-                                    -abs(cfg.control.landing_z_cmd_limit_mps), abs(cfg.control.landing_z_cmd_limit_mps));
-
-                                nearGround = zNow <= cfg.control.landing_near_ground_alt_m;
-                                if nearGround
-                                    cmdZ = max(cmdZ, -abs(cfg.control.landing_descent_rate_near_ground_mps));
-                                else
-                                    cmdZ = max(cmdZ, -abs(cfg.control.landing_descent_rate_mps));
-                                end
+                                cmdZ = landingTargetZ;
                             end
                         else
-                            if isfinite(zNow) && (zNow <= cfg.control.landing_near_ground_alt_m)
-                                cmdZ = -abs(cfg.control.landing_descent_rate_near_ground_mps);
-                            else
-                                cmdZ = -abs(cfg.control.landing_descent_rate_mps);
+                            if ~isfinite(landingTargetZ)
+                                landingTargetZ = autosimClampNaN(zNow, autosimClampNaN(cfg.control.land_cmd_alt_m, 0.2));
                             end
+                            if isfinite(zNow) && (zNow <= cfg.control.landing_near_ground_alt_m)
+                                descentRate = abs(cfg.control.landing_descent_rate_near_ground_mps);
+                            else
+                                descentRate = abs(cfg.control.landing_descent_rate_mps);
+                            end
+                            landingTargetZ = max(cfg.control.landing_min_target_alt_m, landingTargetZ - descentRate * dtCtrl);
+                            cmdZ = landingTargetZ;
                         end
                     end
         end
@@ -912,7 +973,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 'roll_hist', deg2rad(autosimTail(rollDeg(activeIdx), temporalHistN)), ...
                 'pitch_hist', deg2rad(autosimTail(pitchDeg(activeIdx), temporalHistN)), ...
                 'vz_hist', autosimTail(vz(activeIdx), temporalHistN), ...
-                'velocity', [0.0; 0.0; vzEvalNow]);
+                'velocity', [0.0; 0.0; vzEvalNow], ...
+                'estimation_uncertainty', autosimClampNaN(autosimNanLast(ekfUncertaintyLog(1:k)), 0.0), ...
+                'gps_dropout_active', autosimClampNaN(autosimNanLast(gpsDropoutActiveLog(1:k)), 0.0));
             tagObs = struct( ...
                 'detected', tagDetected, ...
                 'u_norm', uTag, ...
@@ -926,7 +989,19 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 'detected_hist', autosimTail(tagDetHist(1:tagDetHistCount), temporalHistN), ...
                 'centered', tagCentered);
 
-            ontoState = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg);
+            padObs = struct( ...
+                'is_moving', double(padMovingNow), ...
+                'offset_u', padOffsetU, ...
+                'offset_v', padOffsetV, ...
+                'velocity_u', padVelU, ...
+                'velocity_v', padVelV);
+            navObs = struct( ...
+                'gnss_healthy', double(~gpsDropoutActiveNow), ...
+                'ins_healthy', 1.0, ...
+                'gps_dropout_active', double(gpsDropoutActiveNow), ...
+                'covariance_trace', autosimClampNaN(ekfUncertaintyLog(k), 0.0));
+
+            ontoState = autosimBuildOntologyState(windObs, droneObs, tagObs, cfg, padObs, navObs);
             semantic = autosimOntologyReasoning(ontoState, cfg);
             semVec = autosimBuildSemanticFeatures(windObs, droneObs, tagObs, semantic, cfg);
 
@@ -960,6 +1035,62 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             end
             if isfield(semantic, 'thrust_margin')
                 thrustMargin(k) = double(semantic.thrust_margin);
+            end
+            trajectoryIntentTxt(k) = string(autosimVizField(semantic, 'trajectory_intent', "hold_and_align"));
+            trajectoryTargetULog(k) = autosimClampNaN(autosimVizField(semantic, 'trajectory_target_u', 0.0), 0.0);
+            trajectoryTargetVLog(k) = autosimClampNaN(autosimVizField(semantic, 'trajectory_target_v', 0.0), 0.0);
+            trajectoryTargetZLog(k) = autosimClampNaN(autosimVizField(semantic, 'trajectory_target_altitude', zEvalNow), zEvalNow);
+            trajectoryQualityLog(k) = autosimClampNaN(autosimVizField(semantic, 'trajectory_quality', 0.0), 0.0);
+            navInstabilityLog(k) = autosimClampNaN(autosimVizField(semantic, 'navigation_instability', 0.0), 0.0);
+            windHazardousLog(k) = double(logical(autosimVizField(semantic, 'wind_is_hazardous', false)));
+
+            trajTargetXNow = xEvalNow + cfg.control.xy_map_sign_x_from_v * padGlobalScaleX * trajectoryTargetVLog(k);
+            trajTargetYNow = yEvalNow + cfg.control.xy_map_sign_y_from_u * padGlobalScaleY * trajectoryTargetULog(k);
+            trajectoryTargetXLog(k) = trajTargetXNow;
+            trajectoryTargetYLog(k) = trajTargetYNow;
+            trajPublishTargetX = trajTargetXNow;
+            trajPublishTargetY = trajTargetYNow;
+            trajPublishTargetZ = trajectoryTargetZLog(k);
+
+            trajEnable = isfield(cfg, 'trajectory') && isfield(cfg.trajectory, 'enable') && cfg.trajectory.enable;
+            requireModelForAiTrajectory = true;
+            if isfield(cfg.trajectory, 'ai_follow_requires_model')
+                requireModelForAiTrajectory = logical(cfg.trajectory.ai_follow_requires_model);
+            end
+            useAiTrajectory = trajEnable && ((~requireModelForAiTrajectory) || hasTrainedModel);
+            usePngFallback = trajEnable && (~useAiTrajectory) && isfield(cfg.trajectory, 'png_fallback_enable') && cfg.trajectory.png_fallback_enable;
+
+            if useAiTrajectory && isfinite(trajTargetXNow) && isfinite(trajTargetYNow) && ...
+                    ((controlPhase == "xy_hold") || (controlPhase == "landing_track"))
+                [trajCmdX, trajCmdY] = autosimComputePoseTrackingCommand(cfg, xNow, yNow, trajTargetXNow, trajTargetYNow);
+                blendAlpha = 0.45;
+                if isfield(cfg.trajectory, 'pad_motion_comp_gain') && isfinite(cfg.trajectory.pad_motion_comp_gain)
+                    blendAlpha = autosimClamp(cfg.trajectory.pad_motion_comp_gain, 0.0, 1.0);
+                end
+                cmdX = (1.0 - blendAlpha) * cmdX + blendAlpha * trajCmdX;
+                cmdY = (1.0 - blendAlpha) * cmdY + blendAlpha * trajCmdY;
+                if isfinite(trajectoryTargetZLog(k)) && isfinite(zNow)
+                    cmdZ = (1.0 - blendAlpha) * cmdZ + blendAlpha * trajectoryTargetZLog(k);
+                end
+                trajGuidanceSourceCode = 1.0;
+            elseif usePngFallback && ((controlPhase == "xy_hold") || (controlPhase == "landing_track"))
+                refX = trajTargetXNow;
+                refY = trajTargetYNow;
+                if landingPadLockValid && isfinite(landingPadLockX) && isfinite(landingPadLockY)
+                    refX = landingPadLockX;
+                    refY = landingPadLockY;
+                elseif padGlobalValid && isfinite(padGlobalMeanX) && isfinite(padGlobalMeanY)
+                    refX = padGlobalMeanX;
+                    refY = padGlobalMeanY;
+                end
+                [pngCmdX, pngCmdY] = autosimComputePoseTrackingCommand(cfg, xNow, yNow, refX, refY, "png");
+                cmdX = pngCmdX;
+                cmdY = pngCmdY;
+                if isfinite(trajectoryTargetZLog(k))
+                    cmdZ = trajectoryTargetZLog(k);
+                end
+                trajectoryIntentTxt(k) = "png_guidance_fallback";
+                trajGuidanceSourceCode = 2.0;
             end
             semFeat(k, :) = semVec;
             analysisDataSeen = true;
@@ -1038,13 +1169,15 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 tagErr(featIdx), windSpeed(featIdx), contact(featIdx), imuAngVel(featIdx), imuLinAcc(featIdx), ...
                 contactForce(featIdx), armForceFL(featIdx), armForceFR(featIdx), armForceRL(featIdx), armForceRR(featIdx), semVec, cfg, ...
                 windObs.wind_velocity, windObs.wind_acceleration);
+            baselineMode = string(autosimFieldOrDefault(cfg.agent, 'baseline_mode', "sensor_ai_single"));
+            sensorSingleAiBaseline = baselineMode == "sensor_ai_single";
             featureSchema = cfg.model.feature_names;
             if isfield(model, 'feature_names') && ~isempty(model.feature_names)
                 featureSchema = model.feature_names;
             end
             requestedSemanticOnlyMode = isfield(cfg.agent, 'semantic_only_mode') && cfg.agent.semantic_only_mode;
             modelGateEnabled = cfg.agent.enable_model_decision && hasTrainedModel;
-            semanticOnlyMode = requestedSemanticOnlyMode && ~modelGateEnabled;
+            semanticOnlyMode = requestedSemanticOnlyMode && ~modelGateEnabled && ~sensorSingleAiBaseline;
             semanticStableProb = autosimClampNaN(semantic.landing_feasibility, 0.0);
             decisionStableProb = semanticStableProb;
             if modelGateEnabled
@@ -1055,39 +1188,50 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     predStableProb(k) = 1.0 - predScore;
                 end
 
-                fusionWeight = autosimClampNaN(cfg.agent.model_semantic_fusion_weight, 0.65);
-                if isfield(cfg.agent, 'adaptive_fusion_by_ontology') && cfg.agent.adaptive_fusion_by_ontology
-                    semBoost = 0.0;
-                    if (~logical(semantic.isSafeForLanding))
-                        semBoost = max(semBoost, autosimClampNaN(cfg.agent.fusion_semantic_boost_on_conflict, 0.20));
-                    elseif autosimClampNaN(semantic.wind_risk_enc, 0.0) >= 0.65
-                        semBoost = max(semBoost, autosimClampNaN(cfg.agent.fusion_semantic_boost_on_caution, 0.10));
+                if sensorSingleAiBaseline
+                    decisionStableProb = autosimClamp(predStableProb(k), 0.0, 1.0);
+                else
+                    fusionWeight = autosimClampNaN(cfg.agent.model_semantic_fusion_weight, 0.65);
+                    if isfield(cfg.agent, 'adaptive_fusion_by_ontology') && cfg.agent.adaptive_fusion_by_ontology
+                        semBoost = 0.0;
+                        if (~logical(semantic.isSafeForLanding))
+                            semBoost = max(semBoost, autosimClampNaN(cfg.agent.fusion_semantic_boost_on_conflict, 0.20));
+                        elseif autosimClampNaN(semantic.wind_risk_enc, 0.0) >= 0.65
+                            semBoost = max(semBoost, autosimClampNaN(cfg.agent.fusion_semantic_boost_on_caution, 0.10));
+                        end
+                        fusionWeight = fusionWeight - semBoost;
                     end
-                    fusionWeight = fusionWeight - semBoost;
-                end
-                fusionWeight = autosimClamp(fusionWeight, 0.0, 1.0);
-                decisionStableProb = fusionWeight * predStableProb(k) + (1.0 - fusionWeight) * semanticStableProb;
+                    fusionWeight = autosimClamp(fusionWeight, 0.0, 1.0);
+                    decisionStableProb = fusionWeight * predStableProb(k) + (1.0 - fusionWeight) * semanticStableProb;
 
-                semanticAssistEnable = isfield(cfg.agent, 'semantic_assist_enable') && cfg.agent.semantic_assist_enable;
-                semanticAssistLandMin = autosimClampNaN(cfg.agent.semantic_assist_land_min, 0.78);
-                semanticAssistAbortMax = autosimClampNaN(cfg.agent.semantic_assist_abort_max, 0.28);
-                if semanticAssistEnable
-                    if logical(semantic.isSafeForLanding) && (semanticStableProb >= semanticAssistLandMin)
-                        decisionStableProb = max(decisionStableProb, semanticStableProb);
-                    elseif (~logical(semantic.isSafeForLanding)) && (semanticStableProb <= semanticAssistAbortMax)
-                        decisionStableProb = min(decisionStableProb, semanticStableProb);
+                    semanticAssistEnable = isfield(cfg.agent, 'semantic_assist_enable') && cfg.agent.semantic_assist_enable;
+                    semanticAssistLandMin = autosimClampNaN(cfg.agent.semantic_assist_land_min, 0.78);
+                    semanticAssistAbortMax = autosimClampNaN(cfg.agent.semantic_assist_abort_max, 0.28);
+                    if semanticAssistEnable
+                        if logical(semantic.isSafeForLanding) && (semanticStableProb >= semanticAssistLandMin)
+                            decisionStableProb = max(decisionStableProb, semanticStableProb);
+                        elseif (~logical(semantic.isSafeForLanding)) && (semanticStableProb <= semanticAssistAbortMax)
+                            decisionStableProb = min(decisionStableProb, semanticStableProb);
+                        end
                     end
                 end
                 decisionStableProb = autosimClamp(decisionStableProb, 0.0, 1.0);
             else
-                predStableProb(k) = autosimClampNaN(semantic.landing_feasibility, 0.0);
-                if predStableProb(k) >= autosimClampNaN(cfg.agent.semantic_land_threshold, 0.70)
-                    predLabel = "AttemptLanding";
-                else
+                if sensorSingleAiBaseline
+                    predStableProb(k) = nan;
                     predLabel = "HoldLanding";
+                    predScore = 0.0;
+                    decisionStableProb = 0.0;
+                else
+                    predStableProb(k) = autosimClampNaN(semantic.landing_feasibility, 0.0);
+                    if predStableProb(k) >= autosimClampNaN(cfg.agent.semantic_land_threshold, 0.70)
+                        predLabel = "AttemptLanding";
+                    else
+                        predLabel = "HoldLanding";
+                    end
+                    predScore = predStableProb(k);
+                    decisionStableProb = predStableProb(k);
                 end
-                predScore = predStableProb(k);
-                decisionStableProb = predStableProb(k);
             end
 
             probeBoost = 0.0;
@@ -1111,7 +1255,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 (~modelSaysStable) && (~modelSaysUnstable);
 
             ontologyGuardForModel = true;
-            if isfield(cfg.agent, 'ontology_guard_enable') && cfg.agent.ontology_guard_enable
+            if (~sensorSingleAiBaseline) && isfield(cfg.agent, 'ontology_guard_enable') && cfg.agent.ontology_guard_enable
                 visualEncNow = autosimClampNaN(semantic.visual_enc, 0.0);
                 windRiskEncNow = autosimClampNaN(semantic.wind_risk_enc, 1.0);
                 contextScoreNow = autosimClampNaN(semantic.landing_feasibility, 0.0);
@@ -1181,7 +1325,25 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             [xyStd, xySpeedRms] = autosimCalcXYMotionMetrics(xWin, yWin, cfg.scenario.sample_period_sec);
             xyRadiusNow = sqrt(xEvalNow*xEvalNow + yEvalNow*yEvalNow);
 
+            useRelationalBaseline = baselineMode == "ontology_relational";
+
+            relationalBaselineScore = autosimClamp( ...
+                0.45 * autosimClampNaN(semantic.landing_feasibility, 0.0) + ...
+                0.25 * (1.0 - autosimClampNaN(autosimVizField(semantic, 'relation_wind_control', 0.0), 0.0)) + ...
+                0.20 * autosimClampNaN(autosimVizField(semantic, 'relation_visual_alignment', 0.0), 0.0) + ...
+                0.10 * (1.0 - autosimClampNaN(autosimVizField(semantic, 'relation_estimation_conflict', 0.0), 0.0)), 0.0, 1.0);
+
+            canLandByRelationalBaseline = hoverEvalReady && (~modelGateEnabled) && (~semanticOnlyMode) && cfg.agent.no_model_fallback_enable && useRelationalBaseline && ...
+                (~sensorSingleAiBaseline) && ...
+                (activeSampleN >= cfg.agent.no_model_min_samples_before_land) && ...
+                isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
+                isfinite(zEvalNow) && (zEvalNow >= cfg.agent.min_altitude_before_land) && ...
+                (relationalBaselineScore >= adaptiveSemanticLandThreshold) && ...
+                ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
+
             canLandByNoModelThreshold = hoverEvalReady && (~modelGateEnabled) && (~semanticOnlyMode) && cfg.agent.no_model_fallback_enable && ...
+                (~sensorSingleAiBaseline) && ...
+                (~useRelationalBaseline) && ...
                 (activeSampleN >= cfg.agent.no_model_min_samples_before_land) && ...
                 isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.no_model_max_tag_error) && ...
                 isfinite(zEvalNow) && (zEvalNow >= cfg.agent.min_altitude_before_land) && ...
@@ -1198,6 +1360,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 ((tk - lastDecisionT) >= cfg.agent.decision_cooldown_sec);
 
             canLandByUncertainModelFallback = hoverEvalReady && hasTrainedModel && modelGateEnabled && modelIsUncertain && ...
+                (~sensorSingleAiBaseline) && ...
                 isfield(cfg.agent, 'model_uncertain_fallback_enable') && cfg.agent.model_uncertain_fallback_enable && ...
                 ontologyGuardForModel && ...
                 (activeSampleN >= cfg.agent.no_model_min_samples_before_land) && ...
@@ -1217,7 +1380,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             probeUnsafeSignal = scenarioCfg.hard_negative_hint || scenarioCfg.boundary_hint || modelSaysUnstable || ...
                 (isfield(cfg.probe, 'allow_uncertain_signal') && cfg.probe.allow_uncertain_signal && modelIsUncertain) || ...
                 (~logical(semanticSafe(k)));
-            probePolicyHold = (~canLandBySemantic) && (~canLandByModel) && (~canLandByNoModelThreshold) && (~canLandByUncertainModelFallback);
+            probePolicyHold = (~canLandBySemantic) && (~canLandByModel) && (~canLandByRelationalBaseline) && (~canLandByNoModelThreshold) && (~canLandByUncertainModelFallback);
             canLandByProbe = hoverEvalReady && probePolicySelected && randomLandingPlanned && ~landingSent && ...
                 isfinite(randomLandingStartT) && (tk >= randomLandingStartT) && ...
                 isfinite(tagErr(k)) && (tagErr(k) <= cfg.probe.max_tag_error) && ...
@@ -1245,6 +1408,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             if caseBlockPolicyLanding
                 canLandBySemantic = false;
                 canLandByModel = false;
+                canLandByRelationalBaseline = false;
                 canLandByNoModelThreshold = false;
                 canLandByUncertainModelFallback = false;
                 canLandByProbe = false;
@@ -1269,7 +1433,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                         (semantic.landing_feasibility >= adaptiveSemanticLandThreshold) && logical(semanticSafe(k)) && ...
                         isfinite(tagErr(k)) && (tagErr(k) <= cfg.agent.max_tag_error_before_land) && ...
                         isfinite(zEvalNow) && (zEvalNow >= cfg.agent.min_altitude_before_land);
-                    timeoutSafeFallback = canLandByNoModelThreshold || canLandByUncertainModelFallback;
+                    timeoutSafeFallback = canLandByRelationalBaseline || canLandByNoModelThreshold || canLandByUncertainModelFallback;
 
                     if timeoutSafeModel || timeoutSafeSemantic || timeoutSafeFallback
                         landingSent = true;
@@ -1313,7 +1477,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
             guardLandingAllowed = ~cfg.agent.block_landing_if_unstable || ~modelSaysUnstable;
 
-            landingTriggeredNow = ~landingSent && (canLandBySemantic || canLandByModel || canLandByNoModelThreshold || ...
+            landingTriggeredNow = ~landingSent && (canLandBySemantic || canLandByModel || canLandByRelationalBaseline || canLandByNoModelThreshold || ...
                 canLandByUncertainModelFallback || canLandByProbe || canLandByForcedTimeout);
             if landingTriggeredNow && ~landingPadLockValid && isfinite(xEvalNow) && isfinite(yEvalNow)
                 if padGlobalValid && padGlobalUseInLandingTrack
@@ -1360,6 +1524,23 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 actionSource = "policy_model";
                 lastDecisionT = tk;
                 decisionTxt(k) = "start_landing_track_by_model";
+                controlPhase = "landing_track";
+            elseif ~landingSent && guardLandingAllowed && canLandByRelationalBaseline
+                landingSent = true;
+                landingSentT = tk;
+                landingStartZ = zEvalNow;
+                if ~isfinite(landingStartZ)
+                    landingStartZ = zNow;
+                end
+                if ~isfinite(landingStartZ)
+                    landingStartZ = max(cfg.control.land_cmd_alt_m, cfg.control.landing_near_ground_alt_m + 0.2);
+                end
+                landingTargetZ = landingStartZ;
+                landingDecisionMode = "AttemptLanding";
+                executedAction = "AttemptLanding";
+                actionSource = "policy_ontology_relational_baseline";
+                lastDecisionT = tk;
+                decisionTxt(k) = "start_landing_track_by_relational_baseline";
                 controlPhase = "landing_track";
             elseif ~landingSent && guardLandingAllowed && canLandByNoModelThreshold
                 landingSent = true;
@@ -1444,7 +1625,7 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
             phaseTxt(k) = controlPhase;
 
-            if landingSent || canLandBySemantic || canLandByModel || canLandByNoModelThreshold || canLandByUncertainModelFallback || canLandByForcedTimeout
+            if landingSent || canLandBySemantic || canLandByModel || canLandByRelationalBaseline || canLandByNoModelThreshold || canLandByUncertainModelFallback || canLandByForcedTimeout
                 inferTxt = "ATTEMPT_LANDING";
             else
                 inferTxt = "HOLD_LANDING";
@@ -1478,6 +1659,20 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                     'tagJitterPx', tagJitterPx, ...
                     'tagStabilityScore', tagStabilityScore, ...
                     'detectionContinuity', detCont, ...
+                    'estimationUncertainty', autosimClampNaN(ekfUncertaintyLog(k), 0.0), ...
+                    'gpsDropoutActive', gpsDropoutActiveLog(k), ...
+                    'movingPadOffsetU', movingPadOffsetULog(k), ...
+                    'movingPadOffsetV', movingPadOffsetVLog(k), ...
+                    'movingPadVelU', movingPadVelULog(k), ...
+                    'movingPadVelV', movingPadVelVLog(k), ...
+                    'trajectoryIntent', trajectoryIntentTxt(k), ...
+                    'trajectoryTargetU', trajectoryTargetULog(k), ...
+                    'trajectoryTargetV', trajectoryTargetVLog(k), ...
+                    'trajectoryTargetX', trajectoryTargetXLog(k), ...
+                    'trajectoryTargetY', trajectoryTargetYLog(k), ...
+                    'trajectoryTargetZ', trajectoryTargetZLog(k), ...
+                    'trajectoryQuality', trajectoryQualityLog(k), ...
+                    'navigationInstability', navInstabilityLog(k), ...
                     'cmdX', cmdX, ...
                     'cmdY', cmdY, ...
                     'cmdZ', cmdZ, ...
@@ -1511,15 +1706,62 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
             send(pubCmd, msgCmd);
         end
 
+        if ~isempty(pubTrajectoryGuidance) && ~isempty(msgTrajectoryGuidance)
+            msgTrajectoryGuidance.data = single([ ...
+                tk, ...
+                autosimClampNaN(xNow, 0.0), autosimClampNaN(yNow, 0.0), autosimClampNaN(zNow, 0.0), ...
+                autosimClampNaN(trajPublishTargetX, autosimClampNaN(xNow, 0.0)), ...
+                autosimClampNaN(trajPublishTargetY, autosimClampNaN(yNow, 0.0)), ...
+                autosimClampNaN(trajPublishTargetZ, autosimClampNaN(zNow, 0.0)), ...
+                autosimClampNaN(cmdX, 0.0), autosimClampNaN(cmdY, 0.0), autosimClampNaN(cmdZ, 0.0), ...
+                autosimClampNaN(trajGuidanceSourceCode, 0.0), ...
+                autosimClampNaN(trajectoryQualityLog(k), 0.0), ...
+                double(logical(padMovingNow)) ...
+            ]);
+            send(pubTrajectoryGuidance, msgTrajectoryGuidance);
+        end
+
+        if ~isempty(pubTrajectoryGuidanceMarker) && ~isempty(msgTrajectoryGuidanceMarker)
+            px = autosimClampNaN(xNow, 0.0);
+            py = autosimClampNaN(yNow, 0.0);
+            pz = autosimClampNaN(zNow, 0.0);
+            tx = autosimClampNaN(trajPublishTargetX, px);
+            ty = autosimClampNaN(trajPublishTargetY, py);
+            tz = autosimClampNaN(trajPublishTargetZ, pz);
+
+            msgTrajectoryGuidanceMarker.header.frame_id = 'world';
+            msgTrajectoryGuidanceMarker.ns = 'autosim_guidance';
+            msgTrajectoryGuidanceMarker.id = int32(1);
+            msgTrajectoryGuidanceMarker.type = int32(4); % LINE_STRIP
+            msgTrajectoryGuidanceMarker.action = int32(0); % ADD/MODIFY
+            msgTrajectoryGuidanceMarker.pose.orientation.w = 1.0;
+            msgTrajectoryGuidanceMarker.scale.x = 0.05;
+            msgTrajectoryGuidanceMarker.color.r = 0.10;
+            msgTrajectoryGuidanceMarker.color.g = 0.90;
+            msgTrajectoryGuidanceMarker.color.b = 0.35;
+            msgTrajectoryGuidanceMarker.color.a = 1.0;
+
+            ptNow = ros2message('geometry_msgs/Point');
+            ptNow.x = px;
+            ptNow.y = py;
+            ptNow.z = pz;
+            ptTarget = ros2message('geometry_msgs/Point');
+            ptTarget.x = tx;
+            ptTarget.y = ty;
+            ptTarget.z = tz;
+            msgTrajectoryGuidanceMarker.points = [ptNow, ptTarget];
+            send(pubTrajectoryGuidanceMarker, msgTrajectoryGuidanceMarker);
+        end
+
         cmdXLog(k) = cmdX;
         cmdYLog(k) = cmdY;
         cmdZLog(k) = cmdZ;
         followerExpectedLog(k) = followerCount;
 
         if followerCount > 0
-            [pidXFollowers, pidYFollowers, tagLostFollowers, lastTagUFollowers, lastTagVFollowers, lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers, followerDiag] = ...
+            [tagLostFollowers, lastTagUFollowers, lastTagVFollowers, lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers, followerDiag] = ...
                 autosimUpdateFollowerCommands(cfg, rosCtx, tk, dtCtrl, recvTimeoutSec, cmdX, cmdY, ...
-                pidXFollowers, pidYFollowers, tagLostFollowers, lastTagUFollowers, lastTagVFollowers, ...
+                tagLostFollowers, lastTagUFollowers, lastTagVFollowers, ...
                 lastTagDetectFollowers, haveLastTagFollowers, tagRxCountFollowers, stateFollowers);
 
             followerExpectedLog(k) = followerDiag.expected_count;
@@ -1537,9 +1779,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
 
         if (~landingSent) && isFlying && (controlPhase == "xy_hold")
             fastLoopUsePadGlobal = padGlobalEnable && isfield(cfg.control, 'pad_global_tracking_use_in_fast_loop') && cfg.control.pad_global_tracking_use_in_fast_loop;
-            [pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount] = ...
+            [tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount] = ...
                 autosimRunFastTagControlBurst(cfg, rosCtx, pubCmd, msgCmd, t0, tk, max(0.0, cfg.scenario.sample_period_sec - (toc(t0) - iterStartT)), ...
-                xNow, yNow, pidX, pidY, pidPoseX, pidPoseY, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount, ...
+                xNow, yNow, zNow, tagLostSearchStartT, lastTagU, lastTagV, lastTagDetectT, haveLastTag, lastTagRxT, tagRxCount, ...
                 randomLandingPlanned, randomLandingStartT, randomLandingEndT, randomBiasX, randomBiasY, ...
                 fastLoopUsePadGlobal, padGlobalValid, padGlobalMeanX, padGlobalMeanY);
         end
@@ -1606,6 +1848,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     cmdXLog = cmdXLog(1:kLast);
     cmdYLog = cmdYLog(1:kLast);
     cmdZLog = cmdZLog(1:kLast);
+    ekfUncertaintyLog = ekfUncertaintyLog(1:kLast);
+    gpsDropoutActiveLog = gpsDropoutActiveLog(1:kLast);
+    movingPadOffsetULog = movingPadOffsetULog(1:kLast);
+    movingPadOffsetVLog = movingPadOffsetVLog(1:kLast);
+    movingPadVelULog = movingPadVelULog(1:kLast);
+    movingPadVelVLog = movingPadVelVLog(1:kLast);
+    trajectoryIntentTxt = trajectoryIntentTxt(1:kLast);
+    trajectoryTargetULog = trajectoryTargetULog(1:kLast);
+    trajectoryTargetVLog = trajectoryTargetVLog(1:kLast);
+    trajectoryTargetXLog = trajectoryTargetXLog(1:kLast);
+    trajectoryTargetYLog = trajectoryTargetYLog(1:kLast);
+    trajectoryTargetZLog = trajectoryTargetZLog(1:kLast);
+    trajectoryQualityLog = trajectoryQualityLog(1:kLast);
+    navInstabilityLog = navInstabilityLog(1:kLast);
+    windHazardousLog = windHazardousLog(1:kLast);
     followerExpectedLog = followerExpectedLog(1:kLast);
     followerPoseReadyLog = followerPoseReadyLog(1:kLast);
     followerStateReadyLog = followerStateReadyLog(1:kLast);
@@ -1664,6 +1921,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     cmdXLog = cmdXLog(keepIdx);
     cmdYLog = cmdYLog(keepIdx);
     cmdZLog = cmdZLog(keepIdx);
+    ekfUncertaintyLog = ekfUncertaintyLog(keepIdx);
+    gpsDropoutActiveLog = gpsDropoutActiveLog(keepIdx);
+    movingPadOffsetULog = movingPadOffsetULog(keepIdx);
+    movingPadOffsetVLog = movingPadOffsetVLog(keepIdx);
+    movingPadVelULog = movingPadVelULog(keepIdx);
+    movingPadVelVLog = movingPadVelVLog(keepIdx);
+    trajectoryIntentTxt = trajectoryIntentTxt(keepIdx);
+    trajectoryTargetULog = trajectoryTargetULog(keepIdx);
+    trajectoryTargetVLog = trajectoryTargetVLog(keepIdx);
+    trajectoryTargetXLog = trajectoryTargetXLog(keepIdx);
+    trajectoryTargetYLog = trajectoryTargetYLog(keepIdx);
+    trajectoryTargetZLog = trajectoryTargetZLog(keepIdx);
+    trajectoryQualityLog = trajectoryQualityLog(keepIdx);
+    navInstabilityLog = navInstabilityLog(keepIdx);
+    windHazardousLog = windHazardousLog(keepIdx);
     followerExpectedLog = followerExpectedLog(keepIdx);
     followerPoseReadyLog = followerPoseReadyLog(keepIdx);
     followerStateReadyLog = followerStateReadyLog(keepIdx);
@@ -1671,9 +1943,9 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     followerFlyingLog = followerFlyingLog(keepIdx);
     followerCmdRmsLog = followerCmdRmsLog(keepIdx);
 
-    msgCmd.linear.x = 0.0;
-    msgCmd.linear.y = 0.0;
-    msgCmd.linear.z = 0.0;
+    msgCmd.linear.x = autosimClampNaN(autosimNanLast(xPos), primaryHomeX);
+    msgCmd.linear.y = autosimClampNaN(autosimNanLast(yPos), primaryHomeY);
+    msgCmd.linear.z = autosimClampNaN(autosimNanLast(z), autosimClampNaN(cfg.control.land_cmd_alt_m, 0.2));
     msgCmd.angular.x = 0.0;
     msgCmd.angular.y = 0.0;
     msgCmd.angular.z = 0.0;
@@ -1803,6 +2075,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
         cmdXLog(end+1,1) = 0.0; %#ok<AGROW>
         cmdYLog(end+1,1) = 0.0; %#ok<AGROW>
         cmdZLog(end+1,1) = 0.0; %#ok<AGROW>
+        ekfUncertaintyLog(end+1,1) = autosimClampNaN(autosimNanLast(ekfUncertaintyLog), 0.0); %#ok<AGROW>
+        gpsDropoutActiveLog(end+1,1) = double(gpsDropoutEnable); %#ok<AGROW>
+        movingPadOffsetULog(end+1,1) = 0.0; %#ok<AGROW>
+        movingPadOffsetVLog(end+1,1) = 0.0; %#ok<AGROW>
+        movingPadVelULog(end+1,1) = 0.0; %#ok<AGROW>
+        movingPadVelVLog(end+1,1) = 0.0; %#ok<AGROW>
+        trajectoryIntentTxt(end+1,1) = "post_observe"; %#ok<AGROW>
+        trajectoryTargetULog(end+1,1) = 0.0; %#ok<AGROW>
+        trajectoryTargetVLog(end+1,1) = 0.0; %#ok<AGROW>
+        trajectoryTargetXLog(end+1,1) = autosimNanLast(xPos); %#ok<AGROW>
+        trajectoryTargetYLog(end+1,1) = autosimNanLast(yPos); %#ok<AGROW>
+        trajectoryTargetZLog(end+1,1) = autosimNanLast(z); %#ok<AGROW>
+        trajectoryQualityLog(end+1,1) = autosimClampNaN(autosimNanLast(trajectoryQualityLog), 0.0); %#ok<AGROW>
+        navInstabilityLog(end+1,1) = autosimClampNaN(autosimNanLast(navInstabilityLog), 0.0); %#ok<AGROW>
+        windHazardousLog(end+1,1) = double(autosimClampNaN(autosimNanLast(windHazardousLog), 0.0) > 0.5); %#ok<AGROW>
         followerExpectedLog(end+1,1) = max(0, followerCount); %#ok<AGROW>
         followerPoseReadyLog(end+1,1) = 0; %#ok<AGROW>
         followerStateReadyLog(end+1,1) = 0; %#ok<AGROW>
@@ -1858,6 +2145,20 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
                 'tagJitterPx', nan, ...
                 'tagStabilityScore', nan, ...
                 'detectionContinuity', nan, ...
+                'estimationUncertainty', autosimClampNaN(autosimNanLast(ekfUncertaintyLog), 0.0), ...
+                'gpsDropoutActive', autosimClampNaN(autosimNanLast(gpsDropoutActiveLog), 0.0), ...
+                'movingPadOffsetU', autosimClampNaN(autosimNanLast(movingPadOffsetULog), 0.0), ...
+                'movingPadOffsetV', autosimClampNaN(autosimNanLast(movingPadOffsetVLog), 0.0), ...
+                'movingPadVelU', autosimClampNaN(autosimNanLast(movingPadVelULog), 0.0), ...
+                'movingPadVelV', autosimClampNaN(autosimNanLast(movingPadVelVLog), 0.0), ...
+                'trajectoryIntent', string(autosimLastNonEmptyString(trajectoryIntentTxt, "hold_and_align")), ...
+                'trajectoryTargetU', autosimClampNaN(autosimNanLast(trajectoryTargetULog), 0.0), ...
+                'trajectoryTargetV', autosimClampNaN(autosimNanLast(trajectoryTargetVLog), 0.0), ...
+                'trajectoryTargetX', autosimClampNaN(autosimNanLast(trajectoryTargetXLog), 0.0), ...
+                'trajectoryTargetY', autosimClampNaN(autosimNanLast(trajectoryTargetYLog), 0.0), ...
+                'trajectoryTargetZ', autosimClampNaN(autosimNanLast(trajectoryTargetZLog), 0.0), ...
+                'trajectoryQuality', autosimClampNaN(autosimNanLast(trajectoryQualityLog), 0.0), ...
+                'navigationInstability', autosimClampNaN(autosimNanLast(navInstabilityLog), 0.0), ...
                 'cmdX', autosimNanLast(cmdXLog), ...
                 'cmdY', autosimNanLast(cmdYLog), ...
                 'cmdZ', autosimNanLast(cmdZLog), ...
@@ -1909,6 +2210,30 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     res.mean_wind_gust_risk = autosimNanMean(windGustRisk);
     res.mean_wind_dir_change_risk = autosimNanMean(windDirChangeRisk);
     res.mean_wind_risk_raw = autosimNanMean(windRiskRaw);
+    res.wind_risk_enc = autosimClampNaN(autosimVizField(semantic, 'wind_risk_enc', nan), nan);
+    res.alignment_enc = autosimClampNaN(autosimVizField(semantic, 'alignment_enc', nan), nan);
+    res.visual_enc = autosimClampNaN(autosimVizField(semantic, 'visual_enc', nan), nan);
+    res.relation_wind_control = autosimClampNaN(autosimVizField(semantic, 'relation_wind_control', nan), nan);
+    res.relation_visual_alignment = autosimClampNaN(autosimVizField(semantic, 'relation_visual_alignment', nan), nan);
+    res.relation_estimation_conflict = autosimClampNaN(autosimVizField(semantic, 'relation_estimation_conflict', nan), nan);
+    res.wind_moment_risk = autosimClampNaN(autosimVizField(semantic, 'wind_moment_risk', nan), nan);
+    res.mean_estimation_uncertainty = autosimNanMean(ekfUncertaintyLog);
+    res.gps_dropout_enabled = logical(gpsDropoutEnable);
+    res.gps_dropout_start_sec = autosimClampNaN(gpsDropoutStartSec, nan);
+    res.gps_dropout_duration_sec = autosimClampNaN(gpsDropoutDurationSec, nan);
+    res.moving_pad_enabled = logical(movingPadEnable);
+    res.moving_pad_amp_u = autosimClampNaN(movingPadAmpU, nan);
+    res.moving_pad_amp_v = autosimClampNaN(movingPadAmpV, nan);
+    res.moving_pad_freq_hz = autosimClampNaN(movingPadFreqHz, nan);
+    res.trajectory_intent = autosimLastNonEmptyString(trajectoryIntentTxt, "hold_and_align");
+    res.trajectory_target_u = autosimNanMean(trajectoryTargetULog);
+    res.trajectory_target_v = autosimNanMean(trajectoryTargetVLog);
+    res.trajectory_target_x = autosimNanMean(trajectoryTargetXLog);
+    res.trajectory_target_y = autosimNanMean(trajectoryTargetYLog);
+    res.trajectory_target_z = autosimNanMean(trajectoryTargetZLog);
+    res.trajectory_quality = autosimNanMean(trajectoryQualityLog);
+    res.navigation_instability = autosimNanMean(navInstabilityLog);
+    res.wind_hazardous_ratio = autosimNanMean(windHazardousLog);
     thrFinite = thrustMargin(isfinite(thrustMargin));
     if isempty(thrFinite)
         res.min_thrust_margin_n = nan;
@@ -1974,6 +2299,21 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     traceTbl.cmd_x = autosimPadLen(cmdXLog, n);
     traceTbl.cmd_y = autosimPadLen(cmdYLog, n);
     traceTbl.cmd_z = autosimPadLen(cmdZLog, n);
+    traceTbl.estimation_uncertainty = autosimPadLen(ekfUncertaintyLog, n);
+    traceTbl.gps_dropout_active = autosimPadLen(gpsDropoutActiveLog, n);
+    traceTbl.moving_pad_offset_u = autosimPadLen(movingPadOffsetULog, n);
+    traceTbl.moving_pad_offset_v = autosimPadLen(movingPadOffsetVLog, n);
+    traceTbl.moving_pad_vel_u = autosimPadLen(movingPadVelULog, n);
+    traceTbl.moving_pad_vel_v = autosimPadLen(movingPadVelVLog, n);
+    traceTbl.trajectory_intent = autosimPadLenString(trajectoryIntentTxt, n);
+    traceTbl.trajectory_target_u = autosimPadLen(trajectoryTargetULog, n);
+    traceTbl.trajectory_target_v = autosimPadLen(trajectoryTargetVLog, n);
+    traceTbl.trajectory_target_x = autosimPadLen(trajectoryTargetXLog, n);
+    traceTbl.trajectory_target_y = autosimPadLen(trajectoryTargetYLog, n);
+    traceTbl.trajectory_target_z = autosimPadLen(trajectoryTargetZLog, n);
+    traceTbl.trajectory_quality = autosimPadLen(trajectoryQualityLog, n);
+    traceTbl.navigation_instability = autosimPadLen(navInstabilityLog, n);
+    traceTbl.wind_hazardous = autosimPadLen(windHazardousLog, n);
     traceTbl.follower_expected = autosimPadLen(followerExpectedLog, n);
     traceTbl.follower_pose_ready = autosimPadLen(followerPoseReadyLog, n);
     traceTbl.follower_state_ready = autosimPadLen(followerStateReadyLog, n);
@@ -1994,6 +2334,14 @@ function [res, traceTbl] = autosimRunScenario(cfg, scenarioCfg, scenarioId, mode
     traceTbl.gt_safe_to_land = repmat(string(res.gt_safe_to_land), n, 1);
     traceTbl.decision_outcome = repmat(string(res.decision_outcome), n, 1);
     traceTbl.final_label = repmat(string(res.label), n, 1);
+end
+
+function v = autosimFieldOrDefault(s, name, fallback)
+    if isstruct(s) && isfield(s, name)
+        v = s.(name);
+        return;
+    end
+    v = fallback;
 end
 
 

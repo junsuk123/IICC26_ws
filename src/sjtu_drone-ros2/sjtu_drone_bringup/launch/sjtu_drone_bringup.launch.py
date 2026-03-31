@@ -41,6 +41,15 @@ def _namespace_from_prefix(prefix: str, index: int) -> str:
     return f'/{p}{index:02d}'
 
 
+def _resolve_drone_namespaces(context):
+    drone_ns = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
+    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
+    multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
+    if multi_drone_count <= 1:
+        return [drone_ns]
+    return [_namespace_from_prefix(multi_drone_prefix, i + 1) for i in range(multi_drone_count)]
+
+
 def _resolve_multi_ns_topic(template: str, ns: str, fallback: str, multi_mode: bool) -> str:
     raw = (template or '').strip()
     if not raw:
@@ -55,7 +64,7 @@ def _resolve_multi_ns_topic(template: str, ns: str, fallback: str, multi_mode: b
 
 
 def get_teleop_controller(context, *_, **__) -> Node:
-    controller = context.launch_configurations["controller"]
+    controller = LaunchConfiguration('controller').perform(context)
     namespace = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
     multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
     multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
@@ -91,12 +100,7 @@ def rviz_node_generator(context, rviz_path):
     if LaunchConfiguration('use_rviz').perform(context) != 'true':
         return []
 
-    drone_ns = _normalize_namespace(LaunchConfiguration('drone_namespace').perform(context))
-    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
-    multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
-    drone_namespaces = [drone_ns]
-    if multi_drone_count > 1:
-        drone_namespaces = [_namespace_from_prefix(multi_drone_prefix, i + 1) for i in range(multi_drone_count)]
+    drone_namespaces = _resolve_drone_namespaces(context)
 
     fixed_frame_value = LaunchConfiguration('fixed_frame').perform(context)
 
@@ -161,6 +165,24 @@ def rviz_node_generator(context, rviz_path):
             '      Update Interval: 0\n'
             '      Value: true\n'
         )
+
+    def _build_trajectory_marker_display(ns: str) -> str:
+        clean = ns.strip('/').replace('/', '_')
+        topic = f'{ns}/trajectory_guidance_marker'
+        return (
+            '    - Class: rviz_default_plugins/Marker\n'
+            '      Enabled: true\n'
+            f'      Name: Trajectory Guidance {clean}\n'
+            '      Namespaces:\n'
+            '        autosim_guidance: true\n'
+            '      Topic:\n'
+            '        Depth: 5\n'
+            '        Durability Policy: Volatile\n'
+            '        History Policy: Keep Last\n'
+            '        Reliability Policy: Reliable\n'
+            f'        Value: {topic}\n'
+            '      Value: true\n'
+        )
     
     try:
         # Read the base RViz config
@@ -168,13 +190,21 @@ def rviz_node_generator(context, rviz_path):
             rviz_config = f.read()
 
         # Keep base displays for the first namespace and append additional entries for others.
-        rviz_config = rviz_config.replace('Value: /drone/landing_tag_state_image', f'Value: {drone_namespaces[0]}/landing_tag_state_image')
-        rviz_config = rviz_config.replace('Value: /drone/front/image_raw', f'Value: {drone_namespaces[0]}/front/image_raw')
-        rviz_config = rviz_config.replace('Value: /drone/bottom/image_raw', f'Value: {drone_namespaces[0]}/bottom/image_raw')
+        first_ns = drone_namespaces[0]
+        base_topic_rewrites = {
+            'Value: /drone/landing_tag_state_image': f'Value: {first_ns}/landing_tag_state_image',
+            'Value: /drone/front/image_raw': f'Value: {first_ns}/front/image_raw',
+            'Value: /drone/bottom/image_raw': f'Value: {first_ns}/bottom/image_raw',
+            'Value: /drone/trajectory_guidance_marker': f'Value: {first_ns}/trajectory_guidance_marker',
+        }
+        for old_topic, new_topic in base_topic_rewrites.items():
+            rviz_config = rviz_config.replace(old_topic, new_topic)
 
         extra_blocks = ''
         for ns in drone_namespaces:
             extra_blocks += _build_robot_model_display(ns)
+        for ns in drone_namespaces[1:]:
+            extra_blocks += _build_trajectory_marker_display(ns)
         for ns in drone_namespaces[1:]:
             extra_blocks += _build_image_display(ns)
             extra_blocks += _build_camera_display(ns, 'Front Camera', 'front/image_raw')
@@ -219,12 +249,7 @@ def get_apriltag_nodes(context, *_, **__):
         print("[bringup] apriltag_detector package not found. Skipping AprilTag detector launch.")
         return []
 
-    drone_ns = _normalize_namespace(LaunchConfiguration("drone_namespace").perform(context))
-    multi_drone_count = int(LaunchConfiguration('multi_drone_count').perform(context))
-    multi_drone_prefix = LaunchConfiguration('multi_drone_namespace_prefix').perform(context)
-    drone_namespaces = [drone_ns]
-    if multi_drone_count > 1:
-        drone_namespaces = [_namespace_from_prefix(multi_drone_prefix, i + 1) for i in range(multi_drone_count)]
+    drone_namespaces = _resolve_drone_namespaces(context)
 
     camera_ns_arg = LaunchConfiguration("apriltag_camera").perform(context)
     image_topic = LaunchConfiguration("apriltag_image").perform(context)
@@ -315,6 +340,29 @@ def get_apriltag_nodes(context, *_, **__):
             )
         else:
             print(f"[bringup] apriltag_state_bridge executable not found at {bridge_exe}. Skipping bridge node.")
+
+    return actions
+
+
+def get_trajectory_guidance_marker_bridges(context, *_, **__):
+    drone_namespaces = _resolve_drone_namespaces(context)
+
+    actions = []
+    for idx, ns in enumerate(drone_namespaces, start=1):
+        actions.append(
+            Node(
+                package='sjtu_drone_bringup',
+                executable='trajectory_guidance_marker_bridge',
+                name=f'trajectory_guidance_marker_bridge_{idx:02d}',
+                output='screen',
+                parameters=[{
+                    'input_topic': f'{ns}/trajectory_guidance',
+                    'output_topic': f'{ns}/trajectory_guidance_marker',
+                    'frame_id': 'world',
+                    'line_width': 0.05,
+                }],
+            )
+        )
 
     return actions
 
@@ -526,6 +574,10 @@ def generate_launch_description():
 
         OpaqueFunction(
             function=get_apriltag_nodes,
+        ),
+
+        OpaqueFunction(
+            function=get_trajectory_guidance_marker_bridges,
         ),
 
     ])

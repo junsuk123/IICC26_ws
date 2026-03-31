@@ -1,0 +1,57 @@
+run_dir: /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/validation_holdout_aii_only_20260331_095011
+dataset: /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/validation_holdout_aii_only_20260331_095011/autosim_dataset_latest.csv
+trace: 
+performance: 
+decision_metrics: 
+
+[Ontology+AI policy]
+n_valid: 1000
+n_executed: 602
+execution_rate: 0.6020
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.7565
+trajectory_success_rate: 1.0000
+trajectory_xyz_rmse_m: 0.1729
+trajectory_xy_rmse_m: 0.1718
+trajectory_z_rmse_m: 0.0234
+trajectory_xy_mae_m: 0.1613
+trajectory_z_mae_m: 0.0202
+trajectory_quality_mean: 0.5252
+trajectory_quality_std: 0.4095
+
+[Ontology+AI policy | legacy decision]
+n_valid: 1000
+accuracy: 0.3530
+precision: 0.1495
+safe_recall: 0.4000
+unsafe_reject: 0.3394
+balanced_accuracy: 0.3697
+f1: 0.2177
+unsafe_landing_rate: 0.6606
+TP=90 FP=512 FN=135 TN=263
+
+[Threshold baseline]
+n_valid: 1000
+n_executed: 591
+execution_rate: 0.5910
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.8161
+trajectory_success_rate: 1.0000
+trajectory_xyz_rmse_m: 0.1758
+trajectory_xy_rmse_m: 0.1742
+trajectory_z_rmse_m: 0.0238
+trajectory_xy_mae_m: 0.1623
+trajectory_z_mae_m: 0.0203
+trajectory_quality_mean: 0.8394
+trajectory_quality_std: 0.0538
+
+[Threshold baseline | legacy decision]
+n_valid: 1000
+accuracy: 0.5040
+precision: 0.2707
+safe_recall: 0.7111
+unsafe_reject: 0.4439
+balanced_accuracy: 0.5775
+f1: 0.3922
+unsafe_landing_rate: 0.5561
+TP=160 FP=431 FN=65 TN=344

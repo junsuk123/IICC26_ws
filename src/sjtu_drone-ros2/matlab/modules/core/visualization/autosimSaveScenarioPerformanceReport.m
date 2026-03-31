@@ -38,6 +38,21 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
         end
     end
 
+    perfTbl.mean_estimation_uncertainty = nan(n,1);
+    if ismember('mean_estimation_uncertainty', summaryTbl.Properties.VariableNames)
+        perfTbl.mean_estimation_uncertainty = double(summaryTbl.mean_estimation_uncertainty);
+    end
+
+    perfTbl.gps_dropout_enabled = zeros(n,1);
+    if ismember('gps_dropout_enabled', summaryTbl.Properties.VariableNames)
+        perfTbl.gps_dropout_enabled = double(logical(summaryTbl.gps_dropout_enabled));
+    end
+
+    perfTbl.moving_pad_enabled = zeros(n,1);
+    if ismember('moving_pad_enabled', summaryTbl.Properties.VariableNames)
+        perfTbl.moving_pad_enabled = double(logical(summaryTbl.moving_pad_enabled));
+    end
+
     writetable(perfTbl, perfCsvPath);
 
     dOverall = autosimEvaluateDecisionMetrics(dTbl);
@@ -78,7 +93,31 @@ function autosimSaveScenarioPerformanceReport(summaryTbl, traceStore, perfCsvPat
     title(ax2, sprintf('Overall Decision Metrics (valid=%d, unsafe=%d)', dOverall.n_valid, dOverall.n_unsafe));
     grid(ax2, 'on');
 
+    baselineMode = "unknown";
+    if ismember('baseline_mode', summaryTbl.Properties.VariableNames)
+        bm = summaryTbl.baseline_mode;
+        if ~isempty(bm)
+            baselineMode = string(bm(1));
+        end
+    end
+    subtitle(tl, sprintf('baseline=%s | gpsDrop=%d | movePad=%d | meanEstUnc=%.3f | meanConf=%.3f', ...
+        char(baselineMode), ...
+        round(sum(perfTbl.gps_dropout_enabled > 0.5)), ...
+        round(sum(perfTbl.moving_pad_enabled > 0.5)), ...
+        autosimFiniteMean(perfTbl.mean_estimation_uncertainty), ...
+        autosimFiniteMean(perfTbl.mean_confidence)));
+
     exportgraphics(fig, perfPngPath, 'Resolution', 150);
+end
+
+function m = autosimFiniteMean(v)
+    v = double(v);
+    v = v(isfinite(v));
+    if isempty(v)
+        m = nan;
+        return;
+    end
+    m = mean(v);
 end
 
 

@@ -13,9 +13,6 @@ required = [ ...
 ];
 
 vars = string(T.Properties.VariableNames);
-if all(ismember(required, vars))
-    return;
-end
 
 n = height(T);
 windMaxRef = autosimSafeCfgScalar(cfg, {'wind', 'speed_max'}, 3.0);
@@ -84,14 +81,31 @@ ontoTemporalPattern = autosimClip01(0.60 * ontoGust + 0.40 * nStability);
 ontoDroneState = autosimClip01(1.0 - (0.55 * nAtt + 0.45 * nVz));
 ontoTagObservation = autosimClip01(0.60 * visual + 0.40 * (1.0 - nTag));
 
-T.onto_wind_condition = ontoWindCondition;
-T.onto_gust = ontoGust;
-T.onto_temporal_pattern = ontoTemporalPattern;
-T.onto_drone_state = ontoDroneState;
-T.onto_tag_observation = ontoTagObservation;
-T.onto_wind_body_risk = autosimClip01(windBody);
-T.onto_wind_accel_risk = autosimClip01(windAccel);
-T.onto_wind_dir_change_risk = autosimClip01(windDirChange);
+T.onto_wind_condition = autosimMerge01Column(T, 'onto_wind_condition', ontoWindCondition);
+T.onto_gust = autosimMerge01Column(T, 'onto_gust', ontoGust);
+T.onto_temporal_pattern = autosimMerge01Column(T, 'onto_temporal_pattern', ontoTemporalPattern);
+T.onto_drone_state = autosimMerge01Column(T, 'onto_drone_state', ontoDroneState);
+T.onto_tag_observation = autosimMerge01Column(T, 'onto_tag_observation', ontoTagObservation);
+T.onto_wind_body_risk = autosimMerge01Column(T, 'onto_wind_body_risk', autosimClip01(windBody));
+T.onto_wind_accel_risk = autosimMerge01Column(T, 'onto_wind_accel_risk', autosimClip01(windAccel));
+T.onto_wind_dir_change_risk = autosimMerge01Column(T, 'onto_wind_dir_change_risk', autosimClip01(windDirChange));
+end
+
+function y = autosimMerge01Column(T, name, computed)
+y = autosimClip01(computed);
+if ~ismember(name, T.Properties.VariableNames)
+    return;
+end
+
+col = T.(name);
+if isnumeric(col) || islogical(col)
+    existing = double(col);
+else
+    existing = str2double(string(col));
+end
+valid = isfinite(existing) & (existing >= 0.0) & (existing <= 1.0);
+y(valid) = existing(valid);
+y = autosimClip01(y);
 end
 
 function v = autosimTblCol(T, name, fallback)

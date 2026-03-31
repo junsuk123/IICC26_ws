@@ -13,15 +13,15 @@ function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
     tl = tiledlayout(fig, 2, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     axSensor = nexttile(tl, 1);
-    sensorBar = bar(axSensor, zeros(8,1), 0.65, 'FaceColor', [0.16 0.46 0.74]);
+    sensorBar = bar(axSensor, zeros(9,1), 0.65, 'FaceColor', [0.16 0.46 0.74]);
     ylim(axSensor, [0 1]);
-    xticks(axSensor, 1:8);
-    xticklabels(axSensor, {'wind','roll','pitch','altitude','vz','tag err','jitter','tag stable'});
+    xticks(axSensor, 1:9);
+    xticklabels(axSensor, {'wind','roll','pitch','altitude','vz','tag err','jitter','tag stable','est unc'});
     ylabel(axSensor, 'normalized');
     title(axSensor, 'Sensor Snapshot', 'Interpreter', 'none');
     grid(axSensor, 'on');
-    sensorLabels = gobjects(8,1);
-    for i = 1:8
+    sensorLabels = gobjects(9,1);
+    for i = 1:9
         sensorLabels(i) = text(axSensor, i, 0.03, '', 'HorizontalAlignment', 'center', ...
             'VerticalAlignment', 'bottom', 'Rotation', 90, 'FontSize', 7, 'Color', [0.15 0.15 0.15], ...
             'Interpreter', 'none');
@@ -31,7 +31,7 @@ function viz = autosimInitScenarioRealtimePlot(cfg, scenarioId, scenarioCfg)
     conceptBar = bar(axConcept, zeros(5,1), 0.65, 'FaceColor', [0.20 0.62 0.38]);
     ylim(axConcept, [0 1]);
     xticks(axConcept, 1:5);
-    xticklabels(axConcept, {'wind flow','alignment','visual lock','control','feasibility'});
+    xticklabels(axConcept, {'wind-control','vis-align','est-conflict','safe relation','feasibility'});
     ylabel(axConcept, 'score');
     title(axConcept, 'Ontology Meaning', 'Interpreter', 'none');
     grid(axConcept, 'on');

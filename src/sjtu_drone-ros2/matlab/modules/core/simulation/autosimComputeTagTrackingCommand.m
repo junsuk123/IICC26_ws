@@ -1,6 +1,6 @@
-function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTrackingCommand(cfg, tk, dtCtrl, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, pidX, pidY, tagLostSearchStartT, poseHoldTargetX, poseHoldTargetY)
-    cmdX = 0.0;
-    cmdY = 0.0;
+function [targetX, targetY, tagLostSearchStartT] = autosimComputeTagTrackingCommand(cfg, tk, xNow, yNow, predOk, uPred, vPred, tagDetected, uTag, vTag, tagLostSearchStartT, poseHoldTargetX, poseHoldTargetY)
+    targetX = autosimClampNaN(xNow, 0.0);
+    targetY = autosimClampNaN(yNow, 0.0);
 
     if nargin < 15 || ~isfinite(poseHoldTargetX)
         poseHoldTargetX = 0.0;
@@ -28,25 +28,31 @@ function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTracki
         errU = cfg.control.target_u - uCtrl;
         errV = cfg.control.target_v - vCtrl;
 
-        [ux, pidX] = autosimPidStep(errV, dtCtrl, pidX, cfg.control.xy_kp, cfg.control.xy_ki, cfg.control.xy_kd, cfg.control.xy_i_limit, cfg.control.xy_cmd_limit);
-        [uy, pidY] = autosimPidStep(errU, dtCtrl, pidY, cfg.control.xy_kp, cfg.control.xy_ki, cfg.control.xy_kd, cfg.control.xy_i_limit, cfg.control.xy_cmd_limit);
+        deltaX = autosimClamp(cfg.control.xy_kp * errV, -abs(cfg.control.xy_cmd_limit), abs(cfg.control.xy_cmd_limit));
+        deltaY = autosimClamp(cfg.control.xy_kp * errU, -abs(cfg.control.xy_cmd_limit), abs(cfg.control.xy_cmd_limit));
 
-        cmdX = cfg.control.xy_map_sign_x_from_v * ux;
-        cmdY = cfg.control.xy_map_sign_y_from_u * uy;
+        deltaX = cfg.control.xy_map_sign_x_from_v * deltaX;
+        deltaY = cfg.control.xy_map_sign_y_from_u * deltaY;
 
         if sqrt(errU * errU + errV * errV) <= cfg.control.tag_center_deadband
-            cmdX = 0.0;
-            cmdY = 0.0;
+            deltaX = 0.0;
+            deltaY = 0.0;
+        end
+
+        if isfinite(xNow)
+            targetX = xNow + deltaX;
+        else
+            targetX = poseHoldTargetX + deltaX;
+        end
+        if isfinite(yNow)
+            targetY = yNow + deltaY;
+        else
+            targetY = poseHoldTargetY + deltaY;
         end
     else
-        pidX = autosimPidInit();
-        pidY = autosimPidInit();
-
         if cfg.control.pose_hold_enable && isfinite(xNow) && isfinite(yNow)
-            errX = poseHoldTargetX - xNow;
-            errY = poseHoldTargetY - yNow;
-            cmdX = autosimClamp(cfg.control.pose_hold_kp * errX, -abs(cfg.control.pose_hold_cmd_limit), abs(cfg.control.pose_hold_cmd_limit));
-            cmdY = autosimClamp(cfg.control.pose_hold_kp * errY, -abs(cfg.control.pose_hold_cmd_limit), abs(cfg.control.pose_hold_cmd_limit));
+            targetX = poseHoldTargetX;
+            targetY = poseHoldTargetY;
         elseif cfg.control.search_enable_spiral
             if ~isfinite(tagLostSearchStartT)
                 tagLostSearchStartT = tk;
@@ -56,8 +62,21 @@ function [cmdX, cmdY, pidX, pidY, tagLostSearchStartT] = autosimComputeTagTracki
             rSearch = cfg.control.search_spiral_start_radius + cfg.control.search_spiral_growth_per_sec * tSearch;
             rSearch = min(rSearch, cfg.control.search_spiral_cmd_max);
             th = cfg.control.search_spiral_omega_rad_sec * tSearch;
-            cmdX = autosimClamp(rSearch * cos(th), -abs(cfg.control.search_spiral_cmd_max), abs(cfg.control.search_spiral_cmd_max));
-            cmdY = autosimClamp(rSearch * sin(th), -abs(cfg.control.search_spiral_cmd_max), abs(cfg.control.search_spiral_cmd_max));
+            spiralX = autosimClamp(rSearch * cos(th), -abs(cfg.control.search_spiral_cmd_max), abs(cfg.control.search_spiral_cmd_max));
+            spiralY = autosimClamp(rSearch * sin(th), -abs(cfg.control.search_spiral_cmd_max), abs(cfg.control.search_spiral_cmd_max));
+            if isfinite(xNow)
+                targetX = xNow + spiralX;
+            else
+                targetX = poseHoldTargetX + spiralX;
+            end
+            if isfinite(yNow)
+                targetY = yNow + spiralY;
+            else
+                targetY = poseHoldTargetY + spiralY;
+            end
+        else
+            targetX = poseHoldTargetX;
+            targetY = poseHoldTargetY;
         end
     end
 end

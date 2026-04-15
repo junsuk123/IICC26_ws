@@ -63,12 +63,22 @@ function feat = autosimBuildOnlineFeatureVector(z, vz, speedAbs, rollDeg, pitchD
 
     if ~isempty(semVec) && ~isempty(cfg) && isfield(cfg, 'ontology') && isfield(cfg.ontology, 'semantic_feature_names')
         semNames = string(cfg.ontology.semantic_feature_names);
-        feat.wind_risk_enc = autosimSemGet(semVec, semNames, "wind_risk_enc", 0.0);
-        feat.alignment_enc = autosimSemGet(semVec, semNames, "alignment_enc", 0.0);
-        feat.visual_enc = autosimSemGet(semVec, semNames, "visual_enc", 0.0);
-        feat.wind_body_risk_enc = autosimSemGet(semVec, semNames, "wind_body_risk_enc", feat.wind_risk_enc);
-        feat.wind_gust_risk_enc = autosimSemGet(semVec, semNames, "wind_gust_risk_enc", 0.0);
-        feat.wind_dir_change_risk_enc = autosimSemGet(semVec, semNames, "wind_dir_change_risk_enc", 0.0);
+        feat.r_body = autosimSemGet(semVec, semNames, "r_body", autosimSemGet(semVec, semNames, "wind_body_risk_enc", 0.0));
+        feat.r_gust = autosimSemGet(semVec, semNames, "r_gust", autosimSemGet(semVec, semNames, "wind_gust_risk_enc", 0.0));
+        feat.s_tilt = autosimSemGet(semVec, semNames, "s_tilt", 0.0);
+        feat.s_descent = autosimSemGet(semVec, semNames, "s_descent", 0.0);
+        feat.s_lateral = autosimSemGet(semVec, semNames, "s_lateral", 0.0);
+        feat.s_visual = autosimSemGet(semVec, semNames, "s_visual", autosimSemGet(semVec, semNames, "visual_enc", 0.0));
+        feat.s_align = autosimSemGet(semVec, semNames, "s_align", autosimSemGet(semVec, semNames, "alignment_enc", 0.0));
+        feat.s_context = autosimSemGet(semVec, semNames, "s_context", 0.0);
+
+        % Legacy aliases for downstream compatibility.
+        feat.wind_risk_enc = max(feat.r_body, feat.r_gust);
+        feat.alignment_enc = feat.s_align;
+        feat.visual_enc = feat.s_visual;
+        feat.wind_body_risk_enc = feat.r_body;
+        feat.wind_gust_risk_enc = feat.r_gust;
+        feat.wind_dir_change_risk_enc = 0.0;
     end
 
     ontoFeat = autosimBuildOntologyInputFromFeatureStruct(feat, cfg);

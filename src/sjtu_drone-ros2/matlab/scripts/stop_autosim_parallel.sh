@@ -70,6 +70,11 @@ fi
 kill_tree() {
   local parent="$1"
   local children=""
+
+  if is_protected_pid "$parent"; then
+    return 0
+  fi
+
   children="$(pgrep -P "$parent" || true)"
 
   if [[ -n "$children" ]]; then
@@ -98,7 +103,9 @@ kill_pattern_graceful() {
 
   echo "[AUTOSIM] Stopping $label..."
   while read -r pid; do
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+    if [[ -n "$pid" ]] && ! is_protected_pid "$pid"; then
+      kill "$pid" 2>/dev/null || true
+    fi
   done <<< "$pids"
 
   for _ in {1..10}; do
@@ -110,8 +117,35 @@ kill_pattern_graceful() {
   done
 
   while read -r pid; do
-    [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null || true
+    if [[ -n "$pid" ]] && ! is_protected_pid "$pid"; then
+      kill -9 "$pid" 2>/dev/null || true
+    fi
   done <<< "$remain"
+}
+
+is_protected_pid() {
+  local pid="$1"
+  if [[ -z "$pid" || ! "$pid" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+
+  local cur="$$"
+  if [[ "$pid" == "$cur" ]]; then
+    return 0
+  fi
+
+  # Protect this script's ancestor chain (typically includes MATLAB caller).
+  for _ in {1..16}; do
+    cur="$(ps -o ppid= -p "$cur" 2>/dev/null | tr -d '[:space:]')"
+    if [[ -z "$cur" || ! "$cur" =~ ^[0-9]+$ || "$cur" == "0" || "$cur" == "1" ]]; then
+      break
+    fi
+    if [[ "$pid" == "$cur" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 collect_pattern_matches() {

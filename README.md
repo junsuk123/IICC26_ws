@@ -90,6 +90,31 @@ $$
 \end{cases}
 $$
 
+### Ontology 입력 특징 벡터 (8D)
+
+GaussianNB 입력은 아래 8차원으로 고정됩니다.
+
+$$
+\mathbf{x}=\left[r_{body},\ r_{gust},\ s_{tilt},\ s_{descent},\ s_{lateral},\ s_{visual},\ s_{align},\ s_{context}\right] \in [0,1]^8
+$$
+
+- `r_body`: 정상 풍하중(Drag 기반) 위험도
+- `r_gust`: 돌풍(크기 + 방향 변화) 위험도
+- `s_tilt`: 기체 기울기 안정도(roll/pitch 기반)
+- `s_descent`: 수직강하 안정도(vz 기반)
+- `s_lateral`: 수평운동 안정도(횡방향 속도/변동 기반)
+- `s_visual`: 시각 안정도(검출 연속성, 지터, 안정점수 기반)
+- `s_align`: 착륙 타깃 중심 정렬도
+- `s_context`: 도메인 상호작용 위험도
+
+`s_context`는 단순 평균이 아니라 교차항으로 계산됩니다.
+
+$$
+s_{context}=\min\left(1,\ \alpha\,r_{gust}(1-s_{visual})+\beta\,r_{body}(1-s_{align})\right)
+$$
+
+초기값은 $\alpha=\beta=0.5$이며, 돌풍-시각 불안정 결합 및 정상풍-정렬불량 결합 리스크를 반영합니다.
+
 ## 5) 온톨로지 규칙 체계 (직관적 + 상세)
 
 이 섹션은 실제 운용 관점에서 "왜 hold를 냈는지"를 사람이 추적 가능하도록 설명합니다.

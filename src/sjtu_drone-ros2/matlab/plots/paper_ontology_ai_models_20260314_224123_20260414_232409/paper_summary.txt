@@ -1,0 +1,57 @@
+run_dir: /home/j/SynologyDrive/INCSL/devel/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260314_224123
+dataset: /home/j/SynologyDrive/INCSL/devel/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260314_224123/autosim_dataset_latest.csv
+trace: /home/j/SynologyDrive/INCSL/devel/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260314_224123/autosim_trace_latest.csv
+performance: /home/j/SynologyDrive/INCSL/devel/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260314_224123/autosim_performance_20260314_230815_completed.csv
+decision_metrics: /home/j/SynologyDrive/INCSL/devel/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/20260314_224123/autosim_decision_metrics_20260314_230815_completed.csv
+
+[Ontology Threshold Policy]
+n_valid: 30
+n_executed: 26
+execution_rate: 0.8667
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.3510
+trajectory_success_rate: 0.0000
+trajectory_xyz_rmse_m: 0.6832
+trajectory_xy_rmse_m: 0.2467
+trajectory_z_rmse_m: 0.6371
+trajectory_xy_mae_m: 0.2405
+trajectory_z_mae_m: 0.6369
+trajectory_quality_mean: 0.2996
+trajectory_quality_std: 0.0466
+
+[Ontology Threshold Policy | legacy decision]
+n_valid: 30
+accuracy: 0.9333
+precision: 0.9231
+safe_recall: 1.0000
+unsafe_reject: 0.6667
+balanced_accuracy: 0.8333
+f1: 0.9600
+unsafe_landing_rate: 0.3333
+TP=24 FP=2 FN=0 TN=4
+
+[AI-Only baseline]
+n_valid: 30
+n_executed: 0
+execution_rate: 0.0000
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.0000
+trajectory_success_rate: NaN
+trajectory_xyz_rmse_m: NaN
+trajectory_xy_rmse_m: NaN
+trajectory_z_rmse_m: NaN
+trajectory_xy_mae_m: NaN
+trajectory_z_mae_m: NaN
+trajectory_quality_mean: NaN
+trajectory_quality_std: NaN
+
+[AI-Only baseline | legacy decision]
+n_valid: 30
+accuracy: 0.2000
+precision: NaN
+safe_recall: 0.0000
+unsafe_reject: 1.0000
+balanced_accuracy: 0.5000
+f1: NaN
+unsafe_landing_rate: 0.0000
+TP=0 FP=0 FN=24 TN=6

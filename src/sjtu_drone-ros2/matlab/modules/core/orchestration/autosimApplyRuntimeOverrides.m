@@ -96,9 +96,17 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
         cfg.persistence.trace_csv = fullfile(cfg.paths.data_dir, 'autosim_trace_latest.csv');
     end
 
-    % In multi-worker runs, keep Gazebo headless and disable RViz by default.
-    defaultUseGui = true;
+    % Respect MATLAB launch config by default, but keep global defaults headless.
+    defaultUseGui = false;
     defaultUseRviz = true;
+    if isfield(cfg, 'launch') && isstruct(cfg.launch)
+        if isfield(cfg.launch, 'use_gui')
+            defaultUseGui = logical(cfg.launch.use_gui);
+        end
+        if isfield(cfg.launch, 'use_rviz')
+            defaultUseRviz = logical(cfg.launch.use_rviz);
+        end
+    end
     if workerCount > 1
         defaultUseGui = false;
         defaultUseRviz = false;
@@ -106,7 +114,11 @@ function [cfg, info] = autosimApplyRuntimeOverrides(cfg)
     if ~isfield(cfg, 'launch') || ~isstruct(cfg.launch)
         cfg.launch = struct();
     end
+    forceHeadless = autosimEnvBool('AUTOSIM_FORCE_HEADLESS', false);
     cfg.launch.use_gui = autosimEnvBool('AUTOSIM_USE_GUI', defaultUseGui);
+    if forceHeadless
+        cfg.launch.use_gui = false;
+    end
     cfg.launch.use_rviz = autosimEnvBool('AUTOSIM_USE_RVIZ', defaultUseRviz);
     if workerCount > 1 && cfg.launch.use_rviz
         allowParallelRviz = autosimEnvBool('AUTOSIM_ALLOW_PARALLEL_RVIZ', false);

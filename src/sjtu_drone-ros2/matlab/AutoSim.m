@@ -91,6 +91,17 @@ traceStore = table();
 learningHistory = table();
 plotState = autosimInitPlots(cfg);
 model = autosimCreatePlaceholderModel(cfg, 'pre_init');
+queueRequested = autosimEnvBool('AUTOSIM_SCENARIO_QUEUE_ENABLED', false);
+queueRequired = autosimEnvBool('AUTOSIM_SCENARIO_QUEUE_REQUIRED', false);
+useScenarioQueue = queueRequested && exist('autosimClaimNextScenario', 'file') == 2;
+if queueRequested && ~useScenarioQueue
+    if queueRequired
+        error('AutoSim:ScenarioQueueUnavailable', ...
+            'Scenario queue is required but autosimClaimNextScenario helper is unavailable.');
+    end
+    fprintf('[AUTOSIM] Scenario queue requested but helper is unavailable; falling back to sequential scenarios.\n');
+end
+completedScenarioCount = 0;
 
 try
     [model, modelInfo] = autosimLoadOrInitModel(cfg);
@@ -100,12 +111,64 @@ try
     launchActive = false;
     rosCtx = autosimCreateRosContext(cfg);
 
-    for scenarioId = 1:cfg.scenario.count
+    while true
         if autosimIsStopRequested()
             runStatus = "interrupted";
             fprintf('[AUTOSIM] Stop requested before scenario start: %s\n', autosimGetStopReason());
             break;
         end
+
+        if useScenarioQueue
+            [scenarioId, queueInfo] = autosimClaimNextScenario(cfg);
+            queueReason = "";
+            if isfield(queueInfo, 'reason') && strlength(string(queueInfo.reason)) > 0
+                queueReason = string(queueInfo.reason);
+            end
+            if isempty(scenarioId)
+                if queueReason == "queue_empty"
+                    fprintf('[AUTOSIM] Scenario queue empty.\n');
+                    break;
+                elseif queueReason == "queue_disabled"
+                    if queueRequired
+                        error('AutoSim:ScenarioQueueDisabled', ...
+                            'Scenario queue became disabled while queue-required mode is active.');
+                    end
+                    useScenarioQueue = false;
+                    fprintf('[AUTOSIM] Scenario queue disabled; switching to sequential scenarios.\n');
+                    scenarioId = completedScenarioCount + 1;
+                    if scenarioId > cfg.scenario.count
+                        break;
+                    end
+                else
+                    if queueRequired
+                        if strlength(queueReason) > 0
+                            error('AutoSim:ScenarioQueueUnavailable', ...
+                                'Scenario queue unavailable (%s) while queue-required mode is active.', char(queueReason));
+                        else
+                            error('AutoSim:ScenarioQueueUnavailable', ...
+                                'Scenario queue unavailable while queue-required mode is active.');
+                        end
+                    end
+                    useScenarioQueue = false;
+                    if strlength(queueReason) > 0
+                        fprintf('[AUTOSIM] Scenario queue unavailable (%s); switching to sequential scenarios.\n', char(queueReason));
+                    else
+                        fprintf('[AUTOSIM] Scenario queue unavailable; switching to sequential scenarios.\n');
+                    end
+                    scenarioId = completedScenarioCount + 1;
+                    if scenarioId > cfg.scenario.count
+                        break;
+                    end
+                end
+            end
+        else
+            scenarioId = completedScenarioCount + 1;
+            if scenarioId > cfg.scenario.count
+                break;
+            end
+        end
+
+        completedScenarioCount = completedScenarioCount + 1;
 
         fprintf('\n[AUTOSIM] Scenario %d/%d\n', scenarioId, cfg.scenario.count);
 
@@ -189,7 +252,7 @@ try
         plotState = autosimUpdatePlots(plotState, resultsStruct, learningHistory);
 
         autosimSaveCheckpoint(cfg, resultsStruct, traceStore, learningHistory, model, runStatus, "scenario_end");
-        autosimPrintStats(resultsStruct, scenarioId, cfg.scenario.count, learnInfo);
+        autosimPrintStats(resultsStruct, completedScenarioCount, cfg.scenario.count, learnInfo);
 
         if cfg.process.stop_after_each_scenario && (~isfield(cfg.process, 'reuse_simulation_with_reset') || ~cfg.process.reuse_simulation_with_reset)
             autosimCleanupProcesses(cfg, launchInfo.pid);
@@ -244,4 +307,13 @@ if isfinite(v)
 else
     out = 'n/a';
 end
+end
+
+function tf = autosimEnvBool(name, defaultValue)
+raw = strtrim(lower(getenv(name)));
+if isempty(raw)
+    tf = logical(defaultValue);
+    return;
+end
+tf = any(strcmp(raw, {'1', 'true', 'yes', 'y', 'on'}));
 end

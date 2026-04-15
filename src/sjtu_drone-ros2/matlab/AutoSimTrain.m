@@ -88,6 +88,7 @@ modelTypesToTrain = string(trainCfg.model_types_to_train(:));
 
 % Train model(s) based on configured types
 trainedModels = struct();
+trainedModelPaths = struct();
 for iModel = 1:numel(modelTypesToTrain)
     modelType = modelTypesToTrain(iModel);
     fprintf('\n[AutoSimTrain] ========== Training Model Type %d/%d: %s ==========\n', ...
@@ -96,26 +97,57 @@ for iModel = 1:numel(modelTypesToTrain)
     % Apply model type configuration
     cfgModel = autosimGetModelTypeConfig(cfg, modelType);
     
-    [modelPrev, modelInfo] = autosimLoadOrInitModel(cfgModel); %#ok<NASGU>
+    [modelPrev, modelInfo] = autosimLoadOrInitModel(cfgModel);
     scenarioId = max(1, height(trainTbl));
     [model, learnInfo] = autosim_learning_engine('incremental_train_and_save', cfgModel, trainTbl, modelPrev, scenarioId);
+
+    modelSourcePath = "";
+    if isstruct(modelInfo) && isfield(modelInfo, 'source')
+        modelSourcePath = string(modelInfo.source);
+        if strlength(modelSourcePath) > 0 && ~isfile(char(modelSourcePath))
+            modelSourcePath = "";
+        end
+    end
     
     % Save trained model
+    finalModelPath = "";
     if isfield(learnInfo, 'model_updated') && learnInfo.model_updated
         finalModelPath = fullfile(cfgModel.paths.model_dir, ...
             sprintf('autosim_model_%s_%s_%s.mat', char(modelType), tag, ts));
         save(finalModelPath, 'model');
         fprintf('[AutoSimTrain] Model (%s) updated and saved: %s\n', modelType, finalModelPath);
         trainedModels.(char(modelType)) = model;
+    elseif strlength(modelSourcePath) > 0
+        finalModelPath = modelSourcePath;
+        fprintf('[AutoSimTrain] Model (%s) update skipped; reusing existing model: %s\n', modelType, finalModelPath);
     else
         fprintf('[AutoSimTrain] Model (%s) update skipped: %s\n', modelType, char(string(learnInfo.skip_reason)));
+    end
+
+    if strlength(finalModelPath) > 0
+        trainedModelPaths.(char(modelType)) = string(finalModelPath);
     end
     
     % Build and save training summary for this model type
     summary = autosimTrainBuildSummary(trainTbl, sourceFiles, sourceMode, mergedCsv, learnInfo, cfgModel, droneMeta, allTblRawCount, recentNUsed);
+    modelDecisionThreshold = nan;
+    modelDecisionThresholdSource = "";
+    if isstruct(model) && isfield(model, 'decision_threshold') && isfinite(model.decision_threshold)
+        modelDecisionThreshold = double(model.decision_threshold);
+    end
+    if isstruct(model) && isfield(model, 'decision_threshold_source')
+        modelDecisionThresholdSource = string(model.decision_threshold_source);
+    end
+    summary.decision_threshold = modelDecisionThreshold;
+    summary.decision_threshold_source = modelDecisionThresholdSource;
     summaryCsv = fullfile(cfgModel.paths.data_root, ...
         sprintf('autosim_train_summary_%s_%s_%s.csv', char(modelType), tag, ts));
     writetable(summary, summaryCsv);
+    if isfinite(modelDecisionThreshold)
+        fprintf('[AutoSimTrain] Decision threshold (%s): %.4f [%s]\n', modelType, modelDecisionThreshold, modelDecisionThresholdSource);
+    else
+        fprintf('[AutoSimTrain] Decision threshold (%s): (not available)\n', modelType);
+    end
     fprintf('[AutoSimTrain] Training summary (%s): %s\n', modelType, summaryCsv);
 end
 
@@ -160,6 +192,9 @@ fprintf('[AutoSimTrain] Val dataset:   %s (rows=%d)\n', valCsv, height(valTbl));
 fprintf('[AutoSimTrain] Split summary:    %s\n', splitSummaryCsv);
 fprintf('[AutoSimTrain] Training plot:    %s\n', trainPlotPng);
 fprintf('[AutoSimTrain] Model types trained: %s\n', strjoin(modelTypesToTrain, ', '));
+
+assignin('base', 'trainedModelPaths', trainedModelPaths);
+assignin('base', 'trainedModels', trainedModels);
 end
 
 function [tbl, sourceFiles, sourceMode] = autosimTrainLoadDataset(thisDir)

@@ -111,7 +111,11 @@ function autosimCleanupProcesses(cfg, launchPid)
     lastCleanupClock = now * 86400;
 
     function releaseCleanupGuard()
-        cleanupInProgress = false;
+        try
+            cleanupInProgress = false;
+        catch
+            % Ignore teardown-time scope destruction of persistent state.
+        end
     end
 end
 

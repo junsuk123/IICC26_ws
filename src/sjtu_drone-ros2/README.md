@@ -77,6 +77,9 @@ OBSERVE_DOMAIN=90 matlab/scripts/run_autosim_domain_bridge.sh matlab/parallel_ru
 matlab/scripts/stop_autosim_domain_bridge.sh matlab/parallel_runs/<session_root>
 ```
 
+이 모드는 워커별 `tf`, `landing_tag_state_image`, `landing_tag_state`를 관찰용 ROS domain으로 모아서, 단일 RViz 창에서 드론 모델, 랜딩 패드 마커, 태그 인지 이미지를 같이 보여줍니다.
+기본값으로 RViz도 같이 뜨며, 끄려면 `AUTOSIM_BRIDGE_LAUNCH_RVIZ=false`를 지정하세요.
+
 ## 문서
 
 - MATLAB 실행 가이드: `matlab/README.md`

@@ -15,9 +15,11 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(gazebo_ros REQUIRED)
-find_package(gazebo_plugins REQUIRED)
-find_package(gazebo_dev REQUIRED)
+find_package(gz-cmake3 REQUIRED)
+gz_find_package(gz-sim8 REQUIRED)
+find_package(gazebo_ros QUIET)
+find_package(gazebo_plugins QUIET)
+find_package(gazebo_dev QUIET)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -27,7 +29,9 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(sjtu_drone_interfaces REQUIRED)
 
-link_directories(${GAZEBO_LIBRARY_DIRS} ${Boost_LIBRARIES} ${PROTOBUF_LIBRARIES} ${OGRE_LIBRARY_DIRS})
+if(gazebo_ros_FOUND AND gazebo_plugins_FOUND AND gazebo_dev_FOUND)
+  link_directories(${GAZEBO_LIBRARY_DIRS} ${Boost_LIBRARIES} ${PROTOBUF_LIBRARIES} ${OGRE_LIBRARY_DIRS})
+endif()
 include_directories(${OpenCV_INCLUDE_DIR}
                     ${Boost_INCLUDE_DIR}
                     ${catkin_INCLUDE_DIRS}
@@ -39,6 +43,7 @@ include_directories(${OpenCV_INCLUDE_DIR}
 
 
 ################## 2. A simple model controller for the quadrotor #############
+if(gazebo_ros_FOUND AND gazebo_plugins_FOUND AND gazebo_dev_FOUND)
 add_library( plugin_drone SHARED
 src/plugin_drone.cpp
 src/plugin_drone_private.cpp
@@ -83,6 +88,9 @@ install(
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
+else()
+  message(WARNING "Classic Gazebo dependencies not found. Skipping plugin_drone build.")
+endif()
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -96,11 +104,13 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
-set_target_properties(plugin_drone
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY
-    ${PROJECT_SOURCE_DIR}/plugins
-)
+if(TARGET plugin_drone)
+  set_target_properties(plugin_drone
+      PROPERTIES
+      LIBRARY_OUTPUT_DIRECTORY
+      ${PROJECT_SOURCE_DIR}/plugins
+  )
+endif()
 
 ################## 3. Wind world plugin for applying wind forces #################
 add_library( wind_plugin SHARED
@@ -115,9 +125,12 @@ target_include_directories(wind_plugin PUBLIC
 
 ament_target_dependencies(wind_plugin
   "rclcpp"
-  "gazebo_ros"
   "std_msgs"
   "sjtu_drone_interfaces"
+)
+
+target_link_libraries(wind_plugin
+  gz-sim8::gz-sim8
 )
 
 set_target_properties(wind_plugin
@@ -136,12 +149,16 @@ install(
 ament_export_include_directories(
   include
 )
-ament_export_libraries(
-  plugin_drone
-)
-ament_export_targets(
-  export_${PROJECT_NAME}
-)
+if(TARGET plugin_drone)
+  ament_export_libraries(
+    plugin_drone
+  )
+endif()
+if(TARGET plugin_drone)
+  ament_export_targets(
+    export_${PROJECT_NAME}
+  )
+endif()
 
 install(
   DIRECTORY models urdf worlds

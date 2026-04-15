@@ -6,6 +6,7 @@ function [predLabel, predScore] = autosimPredictGaussianNB(model, X, cfg)
     if autosimIsModuleEnabled(cfg, 'ai_engine')
         try
             [predLabel, predScore] = autosim_ai_engine('predict_gnb', model, X);
+            predLabel = apply_decision_threshold(predScore, model, cfg);
             return;
         catch
         end
@@ -56,6 +57,23 @@ function [predLabel, predScore] = autosimPredictGaussianNB(model, X, cfg)
     if useGpu
         predScore = gather(predScore);
     end
+    predLabel = apply_decision_threshold(predScore, model, cfg);
+end
+
+function predLabel = apply_decision_threshold(predScore, model, cfg)
+threshold = 0.50;
+if isstruct(cfg) && isfield(cfg, 'agent') && isfield(cfg.agent, 'prob_land_threshold') && isfinite(cfg.agent.prob_land_threshold)
+    threshold = cfg.agent.prob_land_threshold;
+end
+if isstruct(model) && isfield(model, 'decision_threshold') && isfinite(model.decision_threshold)
+    threshold = model.decision_threshold;
+end
+threshold = max(0.01, min(0.99, threshold));
+
+score = double(predScore(:));
+score(~isfinite(score)) = 0.0;
+predLabel = repmat("HoldLanding", numel(score), 1);
+predLabel(score >= threshold) = "AttemptLanding";
 end
 
 function [Xout, modelOut, useGpu] = autosimMaybeToGpuForPredict(Xin, modelIn, cfg)

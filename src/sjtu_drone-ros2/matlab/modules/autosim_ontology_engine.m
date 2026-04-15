@@ -9,6 +9,8 @@ switch lower(string(action))
         varargout{1} = reason(varargin{1}, varargin{2});
     case "build_features"
         varargout{1} = build_features(varargin{1}, varargin{2}, varargin{3}, varargin{4}, varargin{5});
+    case "compute_feature_vector"
+        varargout{1} = compute_feature_vector(varargin{1}, varargin{2});
     otherwise
         error("autosim_ontology_engine:unknownAction", "Unknown action: %s", string(action));
 end
@@ -32,6 +34,13 @@ if numel(onto.vz) >= 3
 else
     onto.vz = 0.0;
 end
+velVec = asv(droneObs, 'velocity', [0;0;onto.vz]);
+if numel(velVec) >= 2
+    onto.lateral_speed = hypot(velVec(1), velVec(2));
+else
+    onto.lateral_speed = abs(asv(droneObs, 'lateral_speed', 0.0));
+end
+onto.lateral_speed_hist = asv(droneObs, 'lateral_speed_hist', nan);
 onto.tag_detected = logical(asv(tagObs, 'detected', false));
 onto.tag_u = asv(tagObs, 'u_norm', nan);
 onto.tag_v = asv(tagObs, 'v_norm', nan);
@@ -180,6 +189,43 @@ else
     semantic.alignment_enc = 0.1;
 end
 
+% 8D ontology-driven semantic feature vector components.
+semantic.r_body = clamp(windRiskComp.r_body, 0.0, 1.0);
+semantic.r_gust = clamp(windRiskComp.r_gust, 0.0, 1.0);
+
+tiltMag = hypot(rollAbs, pitchAbs);
+tiltRef = max(deg2rad(asv(cfg.ontology, 'control_attitude_high_deg', 18.0)), 1e-6);
+semantic.s_tilt = 1.0 - clamp(tiltMag / tiltRef, 0.0, 1.0);
+
+vzRef = max(asv(asv(cfg, 'agent', struct()), 'no_model_max_abs_vz', 0.9), 1e-6);
+descentRisk = clamp(abs(onto.vz) / vzRef, 0.0, 1.0);
+semantic.s_descent = 1.0 - descentRisk;
+
+lateralNow = abs(asv(onto, 'lateral_speed', 0.0));
+lateralStd = nanstd_safe(asv(onto, 'lateral_speed_hist', nan));
+speedRef = max(0.6 * asv(asv(cfg, 'thresholds', struct()), 'final_speed_max_mps', 0.9), 1e-6);
+lateralRisk = clamp(0.7 * (lateralNow / speedRef) + 0.3 * (lateralStd / speedRef), 0.0, 1.0);
+semantic.s_lateral = 1.0 - lateralRisk;
+
+jitterUnsafe = max(asv(cfg.ontology, 'tag_jitter_unsafe_px', 30.0), 1e-6);
+jitterNorm = clamp(asv(onto, 'tag_jitter_px', jitterUnsafe) / jitterUnsafe, 0.0, 1.0);
+detect = double(asv(onto, 'tag_detected', false));
+cont = clamp(asv(onto, 'detection_continuity', 0.0), 0.0, 1.0);
+stab = clamp(asv(onto, 'tag_stability_score', 0.0), 0.0, 1.0);
+semantic.s_visual = clamp(0.35 * detect + 0.30 * cont + 0.20 * stab + 0.15 * (1.0 - jitterNorm), 0.0, 1.0);
+
+tagErrRef = max(asv(asv(cfg, 'agent', struct()), 'max_tag_error_before_land', 0.9), 1e-6);
+if isfinite(err)
+    alignRisk = clamp(err / tagErrRef, 0.0, 1.0);
+    semantic.s_align = 1.0 - alignRisk;
+else
+    semantic.s_align = 0.0;
+end
+
+alpha = clamp(asv(cfg.ontology, 'context_alpha', 0.5), 0.0, 1.0);
+beta = clamp(asv(cfg.ontology, 'context_beta', 0.5), 0.0, 1.0);
+semantic.s_context = min(1.0, alpha * semantic.r_gust * (1.0 - semantic.s_visual) + beta * semantic.r_body * (1.0 - semantic.s_align));
+
 semantic.landing_feasibility = clamp(0.45 * (1.0 - semantic.wind_risk_enc) + 0.30 * semantic.alignment_enc + 0.25 * semantic.visual_enc, 0.0, 1.0);
 semantic.isSafeForLanding = semantic.landing_feasibility >= 0.55;
 if semantic.isSafeForLanding
@@ -192,48 +238,49 @@ semantic.environment_state = semantic.wind_risk;
 end
 
 function vec = build_features(windObs, droneObs, tagObs, semantic, cfg)
+required = ["r_body", "r_gust", "s_tilt", "s_descent", "s_lateral", "s_visual", "s_align", "s_context"];
+if ~isstruct(semantic) || ~all(isfield(semantic, cellstr(required)))
+    onto = build_state(windObs, droneObs, tagObs, cfg);
+    semantic = reason(onto, cfg);
+end
 names = string(cfg.ontology.semantic_feature_names);
 vec = nan(1, numel(names));
 for i = 1:numel(names)
     key = names(i);
     switch key
-        case "wind_speed"
-            vec(i) = asv(windObs, 'wind_speed', 0.0);
-        case "wind_velocity"
-            vec(i) = asv(windObs, 'wind_velocity_mag', vector_mag(asv(windObs, 'wind_velocity', asv(windObs, 'wind_speed', 0.0))));
-        case "wind_acceleration"
-            vec(i) = asv(windObs, 'wind_acceleration_mag', vector_mag(asv(windObs, 'wind_acceleration', 0.0)));
-        case "wind_dir_norm"
-            vec(i) = abs(asv(windObs, 'wind_direction', 0.0)) / 180.0;
-        case "roll_abs"
-            vec(i) = abs(asv(droneObs, 'roll', 0.0));
-        case "pitch_abs"
-            vec(i) = abs(asv(droneObs, 'pitch', 0.0));
-        case "tag_u"
-            vec(i) = asv(tagObs, 'u_norm', 0.0);
-        case "tag_v"
-            vec(i) = asv(tagObs, 'v_norm', 0.0);
-        case "jitter"
-            vec(i) = asv(tagObs, 'jitter_px', 0.0);
-        case "stability_score"
-            vec(i) = asv(tagObs, 'stability_score', 0.0);
-        case "wind_risk_enc"
-            vec(i) = asv(semantic, 'wind_risk_enc', 0.0);
-        case "alignment_enc"
-            vec(i) = asv(semantic, 'alignment_enc', 0.0);
-        case "visual_enc"
-            vec(i) = asv(semantic, 'visual_enc', 0.0);
-        case "wind_body_risk_enc"
-            vec(i) = asv(semantic, 'wind_body_risk', asv(semantic, 'wind_risk_raw', 0.0));
-        case "wind_gust_risk_enc"
-            vec(i) = asv(semantic, 'wind_gust_risk', 0.0);
-        case "wind_dir_change_risk_enc"
-            vec(i) = asv(semantic, 'wind_dir_change_risk', 0.0);
+        case "r_body"
+            vec(i) = asv(semantic, 'r_body', asv(semantic, 'wind_body_risk', asv(semantic, 'wind_risk_raw', 0.0)));
+        case "r_gust"
+            vec(i) = asv(semantic, 'r_gust', asv(semantic, 'wind_gust_risk', 0.0));
+        case "s_tilt"
+            vec(i) = asv(semantic, 's_tilt', 0.0);
+        case "s_descent"
+            vec(i) = asv(semantic, 's_descent', 0.0);
+        case "s_lateral"
+            vec(i) = asv(semantic, 's_lateral', 0.0);
+        case "s_visual"
+            vec(i) = asv(semantic, 's_visual', asv(semantic, 'visual_enc', 0.0));
+        case "s_align"
+            vec(i) = asv(semantic, 's_align', asv(semantic, 'alignment_enc', 0.0));
+        case "s_context"
+            vec(i) = asv(semantic, 's_context', 0.0);
         otherwise
             vec(i) = 0.0;
     end
 end
+vec = clamp(vec, 0.0, 1.0);
 vec(~isfinite(vec)) = 0.0;
+end
+
+function vec = compute_feature_vector(sensor_data, cfg)
+% Build x in R^8 = [r_body, r_gust, s_tilt, s_descent, s_lateral, s_visual, s_align, s_context]
+% from ontology interpretation rather than direct raw-sensor usage.
+windObs = asv(sensor_data, 'windObs', struct());
+droneObs = asv(sensor_data, 'droneObs', struct());
+tagObs = asv(sensor_data, 'tagObs', struct());
+onto = build_state(windObs, droneObs, tagObs, cfg);
+semantic = reason(onto, cfg);
+vec = build_features(windObs, droneObs, tagObs, semantic, cfg);
 end
 
 function v = asv(s, name, fallback)

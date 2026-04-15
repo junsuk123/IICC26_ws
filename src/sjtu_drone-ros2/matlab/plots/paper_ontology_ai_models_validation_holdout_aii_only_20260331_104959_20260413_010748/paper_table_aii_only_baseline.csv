@@ -1,0 +1,2 @@
+baseline_source,model_path,feature_count,n_samples
+model_inference,/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/models/schema_decision_sensor_single_ai_v1/autosim_model_aii_only_train_only_20260413_010743.mat,16,1000

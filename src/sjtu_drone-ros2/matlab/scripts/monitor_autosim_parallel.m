@@ -11,13 +11,13 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
     tl = tiledlayout(fig, 3, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax1 = nexttile(tl, 1);
-    title(ax1, 'Per-worker Scenario Progress And Unsafe Rate');
-    ylabel(ax1, 'scenario count');
+    title(ax1, 'Worker Progress');
+    ylabel(ax1, 'scenarios');
     grid(ax1, 'on');
 
     ax2 = nexttile(tl, 2);
     hold(ax2, 'on');
-    title(ax2, 'Aggregate Unsafe Landing Rate');
+    title(ax2, 'Aggregate Unsafe Rate');
     xlabel(ax2, 'time [s]');
     ylabel(ax2, 'rate');
     ylim(ax2, [0 1]);
@@ -25,26 +25,25 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
     aggLine = animatedline(ax2, 'Color', [0.82 0.22 0.18], 'LineWidth', 1.8);
 
     ax3 = nexttile(tl, 3);
-    title(ax3, 'Per-worker Policy Mix (recent)');
-    ylabel(ax3, 'ratio');
+    title(ax3, 'Policy Mix');
+    ylabel(ax3, 'mix');
     ylim(ax3, [0 1]);
     grid(ax3, 'on');
 
     ax4 = nexttile(tl, 4);
-    title(ax4, 'Per-worker Learning Progress');
-    ylabel(ax4, 'sample count');
+    title(ax4, 'Learning Progress');
+    ylabel(ax4, 'samples');
     grid(ax4, 'on');
 
     ax5 = nexttile(tl, 5);
-    title(ax5, 'Multi-Drone State And Tag Detection Rate');
-    ylabel(ax5, 'tag detect rate');
+    title(ax5, 'Multi-Drone Status');
+    ylabel(ax5, 'tag rate');
     ylim(ax5, [0 1]);
     grid(ax5, 'on');
 
     ax6 = nexttile(tl, 6);
-    title(ax6, 'Per-worker Scenario Completion');
-    ylabel(ax6, 'progress ratio');
-    ylim(ax6, [0 1]);
+    title(ax6, 'Worker Scenario Completion');
+    ylabel(ax6, 'done');
     grid(ax6, 'on');
 
     t0 = tic;
@@ -61,8 +60,8 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             workerNames = strings(0, 1);
             counts = [];
             unsafeRates = [];
-            totalUnsafe = 0;
-            totalValid = 0;
+            totalFp = 0;
+            totalUnsafeDen = 0;
 
             for i = 1:numel(workerDirs)
                 wdir = fullfile(workerDirs(i).folder, workerDirs(i).name);
@@ -87,33 +86,19 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
                 end
 
                 nRows = height(T);
-                nUnsafe = 0;
-                nValid = 0;
-                if ismember('gt_safe_to_land', T.Properties.VariableNames)
-                    gt = string(T.gt_safe_to_land);
-                    validMask = (gt == "stable") | (gt == "unsafe") | (gt == "unstable");
-                    unsafeMask = (gt == "unsafe") | (gt == "unstable");
-                    nValid = sum(validMask);
-                    nUnsafe = sum(unsafeMask & validMask);
-                elseif ismember('label', T.Properties.VariableNames)
-                    gt = string(T.label);
-                    validMask = (gt == "stable") | (gt == "unstable");
-                    unsafeMask = (gt == "unstable");
-                    nValid = sum(validMask);
-                    nUnsafe = sum(unsafeMask & validMask);
-                end
+                [fp, unsafeDen] = autosimMonitorComputeUnsafeLandingRateCounts(T);
 
                 wName = string(workerDirs(i).name);
                 workerNames(end+1, 1) = wName; %#ok<AGROW>
                 counts(end+1, 1) = nRows; %#ok<AGROW>
-                if nValid > 0
-                    unsafeRates(end+1, 1) = nUnsafe / nValid; %#ok<AGROW>
+                if unsafeDen > 0
+                    unsafeRates(end+1, 1) = fp / unsafeDen; %#ok<AGROW>
                 else
                     unsafeRates(end+1, 1) = nan; %#ok<AGROW>
                 end
 
-                totalUnsafe = totalUnsafe + nUnsafe;
-                totalValid = totalValid + nValid;
+                totalFp = totalFp + fp;
+                totalUnsafeDen = totalUnsafeDen + unsafeDen;
             end
 
             simStats = autosimMonitorReadWorkerStatsFromLogs(workerMeta);
@@ -122,7 +107,7 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             if ~isempty(simStats.workerIds)
             yyaxis(ax1, 'left');
             b1 = bar(ax1, simStats.scenarioNow, 0.55, 'FaceColor', [0.14 0.44 0.72]); %#ok<NASGU>
-            ylabel(ax1, 'scenario count');
+            ylabel(ax1, 'scenarios');
 
             yyaxis(ax1, 'right');
             if numel(unsafeRates) == numel(simStats.workerIds)
@@ -137,12 +122,12 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             workerNames = arrayfun(@(x) sprintf('worker_%02d', x), simStats.workerIds, 'UniformOutput', false);
             xticks(ax1, 1:numel(workerNames));
             xticklabels(ax1, workerNames);
-            legend(ax1, {'scenario count', 'unsafe rate'}, 'Location', 'best');
+            legend(ax1, {'scenarios', 'unsafe rate'}, 'Location', 'northoutside', 'Orientation', 'horizontal');
             end
             grid(ax1, 'on');
 
-            if totalValid > 0
-                addpoints(aggLine, toc(t0), totalUnsafe / totalValid);
+            if totalUnsafeDen > 0
+                addpoints(aggLine, toc(t0), totalFp / totalUnsafeDen);
             end
 
             cla(ax3);
@@ -152,10 +137,10 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             ylim(ax3, [0 1]);
             xticks(ax3, 1:numel(simStats.workerIds));
             xticklabels(ax3, arrayfun(@(x) sprintf('w%02d', x), simStats.workerIds, 'UniformOutput', false));
-            mixLabels = {'exploit', 'boundary', 'hard_negative'};
+            mixLabels = {'exploit', 'boundary', 'hard-neg'};
             nLegend = min(numel(hMix), numel(mixLabels));
             if nLegend > 0
-                legend(ax3, hMix(1:nLegend), mixLabels(1:nLegend), 'Location', 'best');
+                legend(ax3, hMix(1:nLegend), mixLabels(1:nLegend), 'Location', 'northoutside', 'Orientation', 'horizontal');
             end
             end
             grid(ax3, 'on');
@@ -164,16 +149,16 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             if ~isempty(simStats.workerIds)
             yyaxis(ax4, 'left');
             bar(ax4, simStats.learnN, 0.55, 'FaceColor', [0.20 0.60 0.20]);
-            ylabel(ax4, 'n samples');
+            ylabel(ax4, 'samples');
 
             yyaxis(ax4, 'right');
             plot(ax4, 1:numel(simStats.workerIds), simStats.learnStableRatio, 'o-', 'Color', [0.49 0.18 0.56], 'LineWidth', 1.4);
-            ylabel(ax4, 'stable ratio');
+            ylabel(ax4, 'stable');
             ylim(ax4, [0 1]);
 
             xticks(ax4, 1:numel(simStats.workerIds));
             xticklabels(ax4, arrayfun(@(x) sprintf('w%02d', x), simStats.workerIds, 'UniformOutput', false));
-            legend(ax4, {'learning n', 'stable ratio'}, 'Location', 'best');
+            legend(ax4, {'samples', 'stable'}, 'Location', 'northoutside', 'Orientation', 'horizontal');
             end
             grid(ax4, 'on');
 
@@ -182,17 +167,17 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
             if ~isempty(multiStats.namespaces)
             yyaxis(ax5, 'left');
             bar(ax5, multiStats.tagDetectRate, 0.55, 'FaceColor', [0.20 0.58 0.86]);
-            ylabel(ax5, 'tag detect rate');
+            ylabel(ax5, 'tag rate');
             ylim(ax5, [0 1]);
 
             yyaxis(ax5, 'right');
             plot(ax5, 1:numel(multiStats.namespaces), multiStats.stateValue, 'o-', 'Color', [0.86 0.33 0.20], 'LineWidth', 1.4);
-            ylabel(ax5, 'latest state');
+            ylabel(ax5, 'state');
 
             xticks(ax5, 1:numel(multiStats.namespaces));
             xticklabels(ax5, multiStats.namespaces);
             xtickangle(ax5, 20);
-            legend(ax5, {'tag detect rate', 'state'}, 'Location', 'best');
+            legend(ax5, {'tag rate', 'state'}, 'Location', 'northoutside', 'Orientation', 'horizontal');
             else
                 text(ax5, 0.5, 0.5, 'No multi-drone telemetry yet', ...
                     'Units', 'normalized', 'HorizontalAlignment', 'center');
@@ -202,33 +187,35 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
 
             cla(ax6);
             if ~isempty(simStats.workerIds)
-            scenarioNow = simStats.scenarioNow(:);
-            scenarioTotal = simStats.scenarioTotal(:);
-            scenarioTotal(scenarioTotal < 0) = 0;
-
-            progressRatio = zeros(size(scenarioNow));
-            hasTotal = scenarioTotal > 0;
-            progressRatio(hasTotal) = scenarioNow(hasTotal) ./ scenarioTotal(hasTotal);
-            progressRatio = min(1, max(0, progressRatio));
-
-            bar(ax6, progressRatio, 0.55, 'FaceColor', [0.25 0.67 0.42]);
-            ylim(ax6, [0 1]);
-
-            xticks(ax6, 1:numel(simStats.workerIds));
-            xticklabels(ax6, arrayfun(@(x) sprintf('w%02d', x), simStats.workerIds, 'UniformOutput', false));
-            ylabel(ax6, 'progress ratio');
-
-            for i = 1:numel(simStats.workerIds)
-                if scenarioTotal(i) > 0
-                    labelTxt = sprintf('%d/%d', scenarioNow(i), scenarioTotal(i));
-                else
-                    labelTxt = sprintf('%d/?', scenarioNow(i));
-                end
-                yTxt = min(0.97, progressRatio(i) + 0.04);
-                text(ax6, i, yTxt, labelTxt, 'HorizontalAlignment', 'center', 'FontSize', 8);
+            scenarioNow = max(0, simStats.scenarioNow(:)');
+            scenarioTotal = max(0, simStats.scenarioTotal(:)');
+            totalDone = sum(scenarioNow);
+            totalTarget = max(scenarioTotal);
+            if ~(isfinite(totalTarget) && totalTarget > 0)
+                totalTarget = max(totalDone, 1);
             end
+
+            hStack = bar(ax6, 1, scenarioNow, 'stacked', 'BarWidth', 0.55);
+            cmap = lines(numel(simStats.workerIds));
+            for i = 1:numel(hStack)
+                hStack(i).FaceColor = cmap(i, :);
+            end
+
+            xlim(ax6, [0.4 1.6]);
+            xticks(ax6, 1);
+            xticklabels(ax6, {'completed / total'});
+            ylim(ax6, [0, max(totalTarget, 1)]);
+
+            workerLabels = arrayfun(@(x) sprintf('w%02d', x), simStats.workerIds, 'UniformOutput', false);
+            if numel(workerLabels) <= 8
+                legend(ax6, hStack, workerLabels, 'Location', 'northoutside', 'Orientation', 'horizontal');
+            end
+
+            text(ax6, 1, min(totalTarget, totalDone) + 0.02 * max(totalTarget, 1), ...
+                sprintf('%d / %d', round(totalDone), round(totalTarget)), ...
+                'HorizontalAlignment', 'center', 'FontWeight', 'bold');
             else
-                text(ax6, 0.5, 0.5, 'No scenario progress data yet', ...
+                text(ax6, 0.5, 0.5, 'No progress yet', ...
                     'Units', 'normalized', 'HorizontalAlignment', 'center');
                 ylim(ax6, [0 1]);
             end
@@ -276,6 +263,85 @@ function monitor_autosim_parallel(sessionRoot, pollSec)
     if isgraphics(fig)
         close(fig);
     end
+end
+
+function [fp, unsafeDen] = autosimMonitorComputeUnsafeLandingRateCounts(T)
+    fp = 0;
+    unsafeDen = 0;
+    if isempty(T)
+        return;
+    end
+
+    n = height(T);
+    gtSafe = false(n, 1);
+    gtUnsafe = false(n, 1);
+    if ismember('gt_safe_to_land', T.Properties.VariableNames)
+        gtLbl = autosimMonitorNormalizeActionLabel(T.gt_safe_to_land);
+        gtSafe = (gtLbl == "AttemptLanding");
+        gtUnsafe = (gtLbl == "HoldLanding");
+    elseif ismember('label', T.Properties.VariableNames)
+        gtLbl = autosimMonitorNormalizeActionLabel(T.label);
+        gtSafe = (gtLbl == "AttemptLanding");
+        gtUnsafe = (gtLbl == "HoldLanding");
+    end
+
+    predLand = false(n, 1);
+    predValid = false(n, 1);
+    if ismember('pred_decision', T.Properties.VariableNames)
+        predLbl = autosimMonitorNormalizeActionLabel(T.pred_decision);
+        predLand = (predLbl == "AttemptLanding");
+        predValid = (predLbl == "AttemptLanding") | (predLbl == "HoldLanding");
+    elseif ismember('landing_cmd_time', T.Properties.VariableNames)
+        lct = T.landing_cmd_time;
+        predLand = isfinite(lct);
+        predValid = true(n, 1);
+    end
+
+    executionValid = true(n, 1);
+    if ismember('success', T.Properties.VariableNames)
+        executionValid = executionValid & logical(T.success);
+    end
+    if ismember('failure_reason', T.Properties.VariableNames)
+        fr = lower(strtrim(string(T.failure_reason)));
+        executionValid = executionValid & ~(fr == "runtime_exception" | fr == "launch_failure" | fr == "user_interrupt" | fr == "not_run");
+    end
+
+    interventionCase = false(n, 1);
+    if ismember('target_case', T.Properties.VariableNames)
+        tc = string(T.target_case);
+        interventionCase = interventionCase | ...
+            (tc == "safe_hover_timeout") | (tc == "unsafe_hover_timeout") | (tc == "unsafe_forced_land");
+    end
+    if ismember('action_source', T.Properties.VariableNames)
+        as = string(T.action_source);
+        interventionCase = interventionCase | (as == "timeout_hover_abort") | (as == "timeout_hover_hold") | (as == "timeout_forced_land");
+    end
+
+    valid = (gtSafe | gtUnsafe) & predValid & executionValid & ~interventionCase;
+    fp = sum(predLand & gtUnsafe & valid);
+    tn = sum((~predLand) & gtUnsafe & valid);
+    unsafeDen = fp + tn;
+end
+
+function label = autosimMonitorNormalizeActionLabel(x)
+    s = lower(strtrim(string(x)));
+    label = repmat("Unknown", size(s));
+
+    attemptMask = (s == "attemptlanding") | (s == "attempt_landing") | (s == "land") | ...
+        (s == "landing") | (s == "safe") | (s == "stable") | (s == "safetoland") | ...
+        (s == "attempt_landing_recommended") | (s == "clear_to_land") | ...
+        (s == "proceed") | (s == "1") | (s == "true");
+
+    holdMask = (s == "holdlanding") | (s == "hold_landing") | (s == "hold") | ...
+        (s == "abort") | (s == "abortlanding") | (s == "delaylanding") | ...
+        (s == "continuehover") | (s == "reapproach") | (s == "descend") | ...
+        (s == "cancellanding") | (s == "goaround") | (s == "unsafe") | ...
+        (s == "unstable") | (s == "unsafetoland") | (s == "stop") | ...
+        (s == "hold_landing_recommended") | (s == "abort_recommended") | ...
+        (s == "monitor_and_reassess") | (s == "0") | (s == "false");
+
+    label(attemptMask) = "AttemptLanding";
+    label(holdMask) = "HoldLanding";
 end
 
 function tf = autosimMonitorIsUserTermination(ME)
@@ -434,8 +500,10 @@ function [nowN, totalN] = autosimMonitorParseScenarioProgress(txt)
     if isempty(tok)
         return;
     end
+    % Use the number of scenario entries in this worker log as progress.
+    % Using the last scenario ID can overcount in queue mode because IDs are global.
+    nowN = numel(tok);
     lastTok = tok{end};
-    nowN = str2double(lastTok{1});
     totalN = str2double(lastTok{2});
     if ~isfinite(nowN), nowN = 0; end
     if ~isfinite(totalN), totalN = 0; end

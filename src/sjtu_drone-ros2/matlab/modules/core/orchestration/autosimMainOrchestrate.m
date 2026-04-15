@@ -58,7 +58,9 @@ envPrefix = sprintf(['SCENARIO_COUNT=%d DOMAIN_BASE=%d GAZEBO_PORT_BASE=%d ' ...
 launchCmd = sprintf('cd "%s" && %s "%s" "%s"', matlabDir, envPrefix, runScript, cfg.workersArg);
 fprintf('[AUTOSIM MAIN] Launch command: %s\n', launchCmd);
 
-[st, out] = system(launchCmd);
+% Echo launcher output in real time so long-running stage-1 orchestration
+% does not look frozen in MATLAB command window.
+[st, out] = system(launchCmd, '-echo');
 if st ~= 0
     if autosimMainIsLaunchInterrupted(st, out)
         fprintf('[AUTOSIM MAIN] Launch interrupted by user. Skipping parallel orchestration.\n');

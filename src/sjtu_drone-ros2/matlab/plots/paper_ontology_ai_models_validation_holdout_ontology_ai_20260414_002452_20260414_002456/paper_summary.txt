@@ -1,0 +1,57 @@
+run_dir: /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/validation_holdout_ontology_ai_20260414_002452
+dataset: /home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/data/validation_holdout_ontology_ai_20260414_002452/autosim_dataset_latest.csv
+trace: 
+performance: 
+decision_metrics: 
+
+[Ontology Threshold Policy]
+n_valid: 300
+n_executed: 0
+execution_rate: 0.0000
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.0000
+trajectory_success_rate: NaN
+trajectory_xyz_rmse_m: NaN
+trajectory_xy_rmse_m: NaN
+trajectory_z_rmse_m: NaN
+trajectory_xy_mae_m: NaN
+trajectory_z_mae_m: NaN
+trajectory_quality_mean: NaN
+trajectory_quality_std: NaN
+
+[Ontology Threshold Policy | legacy decision]
+n_valid: 300
+accuracy: 0.5000
+precision: NaN
+safe_recall: 0.0000
+unsafe_reject: 1.0000
+balanced_accuracy: 0.5000
+f1: NaN
+unsafe_landing_rate: 0.0000
+TP=0 FP=0 FN=150 TN=150
+
+[Physics Threshold Baseline]
+n_valid: 300
+n_executed: 106
+execution_rate: 0.3533
+trajectory_metric_mode: proxy_tag_stability
+trajectory_follow_score: 0.7125
+trajectory_success_rate: 0.9906
+trajectory_xyz_rmse_m: 0.1984
+trajectory_xy_rmse_m: 0.1645
+trajectory_z_rmse_m: 0.1110
+trajectory_xy_mae_m: 0.1567
+trajectory_z_mae_m: 0.0793
+trajectory_quality_mean: 0.7703
+trajectory_quality_std: 0.0970
+
+[Physics Threshold Baseline | legacy decision]
+n_valid: 300
+accuracy: 0.8533
+precision: 1.0000
+safe_recall: 0.7067
+unsafe_reject: 1.0000
+balanced_accuracy: 0.8533
+f1: 0.8281
+unsafe_landing_rate: 0.0000
+TP=106 FP=0 FN=44 TN=150

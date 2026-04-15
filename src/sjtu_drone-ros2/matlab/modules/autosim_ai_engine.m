@@ -37,6 +37,9 @@ feat.max_tag_error = nanmax_safe(tagErr);
 
 feat.final_altitude = nanlast_safe(z);
 feat.final_abs_speed = nanlast_safe(speedAbs);
+feat.final_roll_deg = nanlast_safe(rollDeg);
+feat.final_pitch_deg = nanlast_safe(pitchDeg);
+feat.final_vz = nanlast_safe(vz);
 feat.final_abs_roll_deg = nanlast_safe(abs(rollDeg));
 feat.final_abs_pitch_deg = nanlast_safe(abs(pitchDeg));
 feat.final_tag_error = nanlast_safe(tagErr);
@@ -57,12 +60,22 @@ feat.arm_force_imbalance = nanmax_safe([abs(armFL-armFR), abs(armRL-armRR)]);
 
 if nargin >= 17 && ~isempty(semVec) && nargin >= 18 && isfield(cfg, 'ontology') && isfield(cfg.ontology, 'semantic_feature_names')
     semNames = string(cfg.ontology.semantic_feature_names);
-    feat.wind_risk_enc = sem_get(semVec, semNames, "wind_risk_enc", 0.0);
-    feat.alignment_enc = sem_get(semVec, semNames, "alignment_enc", 0.0);
-    feat.visual_enc = sem_get(semVec, semNames, "visual_enc", 0.0);
-    feat.wind_body_risk_enc = sem_get(semVec, semNames, "wind_body_risk_enc", feat.wind_risk_enc);
-    feat.wind_gust_risk_enc = sem_get(semVec, semNames, "wind_gust_risk_enc", 0.0);
-    feat.wind_dir_change_risk_enc = sem_get(semVec, semNames, "wind_dir_change_risk_enc", 0.0);
+    feat.r_body = sem_get(semVec, semNames, "r_body", sem_get(semVec, semNames, "wind_body_risk_enc", 0.0));
+    feat.r_gust = sem_get(semVec, semNames, "r_gust", sem_get(semVec, semNames, "wind_gust_risk_enc", 0.0));
+    feat.s_tilt = sem_get(semVec, semNames, "s_tilt", 0.0);
+    feat.s_descent = sem_get(semVec, semNames, "s_descent", 0.0);
+    feat.s_lateral = sem_get(semVec, semNames, "s_lateral", 0.0);
+    feat.s_visual = sem_get(semVec, semNames, "s_visual", sem_get(semVec, semNames, "visual_enc", 0.0));
+    feat.s_align = sem_get(semVec, semNames, "s_align", sem_get(semVec, semNames, "alignment_enc", 0.0));
+    feat.s_context = sem_get(semVec, semNames, "s_context", 0.0);
+
+    % Legacy aliases for downstream compatibility.
+    feat.wind_risk_enc = max(feat.r_body, feat.r_gust);
+    feat.alignment_enc = feat.s_align;
+    feat.visual_enc = feat.s_visual;
+    feat.wind_body_risk_enc = feat.r_body;
+    feat.wind_gust_risk_enc = feat.r_gust;
+    feat.wind_dir_change_risk_enc = 0.0;
 end
 
 if nargin >= 17 && ~isempty(cfg)

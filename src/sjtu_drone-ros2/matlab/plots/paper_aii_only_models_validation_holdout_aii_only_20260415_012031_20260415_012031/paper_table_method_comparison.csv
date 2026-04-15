@@ -1,0 +1,3 @@
+method,n_valid,n_executed,execution_rate,trajectory_follow_score,trajectory_success_rate,trajectory_xyz_rmse_m,trajectory_xy_rmse_m,trajectory_z_rmse_m,trajectory_xy_mae_m,trajectory_z_mae_m,trajectory_quality_mean,trajectory_quality_std,trajectory_metric_mode
+Ontology Threshold Policy,10000,7590,0.759,0.778224855930595,0.992753623188406,0.19975967246299,0.142493051674113,0.139998774877209,0.139791834799263,0.1253206329756,0.726856013114447,0.0847433487620379,proxy_tag_stability
+Physics Threshold Baseline,10000,5261,0.5261,0.72082098779238,0.994487739973389,0.207271994142295,0.139747764775602,0.153075934738111,0.13708391661767,0.149314740553719,0.699119977126459,0.0495885412006621,proxy_tag_stability

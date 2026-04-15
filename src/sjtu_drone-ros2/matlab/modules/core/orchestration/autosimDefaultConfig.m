@@ -43,7 +43,7 @@ function cfg = autosimDefaultConfig()
     cfg.visualization.enable_scenario_live_view = false;
 
     cfg.launch = struct();
-    cfg.launch.use_gui = true;
+    cfg.launch.use_gui = false;
     cfg.launch.use_rviz = true;
     cfg.launch.use_teleop = false;
     cfg.launch.command_template = [ ...
@@ -316,6 +316,8 @@ function cfg = autosimDefaultConfig()
     cfg.learning.min_unstable_samples_for_update = 1;
     cfg.learning.minority_ratio_floor_for_update = 0.05;
     cfg.learning.force_update_after_stale_scenarios = 15;
+    cfg.learning.threshold_tune_enable = true;
+    cfg.learning.threshold_tune_min_hold_recall = 0.50;
     cfg.learning.tag_lock_error_max = 0.16;
     cfg.learning.tag_lock_hold_sec = 1.2;
     cfg.learning.random_landing_wait_min_sec = 1.0;
@@ -522,13 +524,10 @@ function cfg = autosimDefaultConfig()
     cfg.ontology.relation_wind_control_weight = 0.55;
     cfg.ontology.relation_visual_alignment_weight = 0.30;
     cfg.ontology.relation_estimation_conflict_weight = 0.15;
+    cfg.ontology.context_alpha = 0.5;
+    cfg.ontology.context_beta = 0.5;
     cfg.ontology.semantic_feature_names = [ ...
-        "wind_speed", "wind_velocity", "wind_acceleration", "wind_dir_norm", "roll_abs", "pitch_abs", ...
-        "tag_u", "tag_v", "jitter", "stability_score", ...
-        "wind_risk_enc", "alignment_enc", "visual_enc", ...
-        "wind_body_risk_enc", "wind_gust_risk_enc", "wind_dir_change_risk_enc", ...
-        "estimation_uncertainty_enc", "relation_wind_control_enc", "relation_visual_alignment_enc", "relation_estimation_conflict_enc", ...
-        "pad_motion_risk_enc", "trajectory_interceptability_enc", "wind_alignment_to_pad_enc" ...
+        "r_body", "r_gust", "s_tilt", "s_descent", "s_lateral", "s_visual", "s_align", "s_context" ...
     ];
 
     % Ontology-AI fusion: ontology concepts are preserved, but concept scores are

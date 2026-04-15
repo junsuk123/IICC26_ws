@@ -63,4 +63,26 @@ while IFS=$'\t' read -r pid worker_id from_domain to_domain config_file log_file
   fi
 done < "$BRIDGE_TABLE"
 
+MONITOR_TABLE="$BRIDGE_ROOT/monitor.tsv"
+if [[ -f "$MONITOR_TABLE" ]]; then
+  while IFS=$'\t' read -r pid kind worker_id target log_file; do
+    if [[ "$pid" == "pid" || -z "$pid" ]]; then
+      continue
+    fi
+    if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+
+    if kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      sleep 0.1
+      if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+      echo "[AUTOSIM-BRIDGE] Stopped monitor pid=$pid kind=$kind worker=$worker_id target=$target"
+      stopped=$((stopped + 1))
+    fi
+  done < "$MONITOR_TABLE"
+fi
+
 echo "[AUTOSIM-BRIDGE] stop complete: $stopped process(es)."

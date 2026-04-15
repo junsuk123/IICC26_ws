@@ -69,6 +69,12 @@ matlab/scripts/stop_autosim_parallel.sh
 monitor_autosim_parallel('/home/j/INCSL/IICC26_ws/src/sjtu_drone-ros2/matlab/parallel_runs/<session_root>', 2.0)
 ```
 
+관찰용 RViz를 하나만 띄우고 싶으면 도메인 브리지를 함께 실행하세요.
+
+```bash
+OBSERVE_DOMAIN=90 matlab/scripts/run_autosim_domain_bridge.sh matlab/parallel_runs/<session_root>
+```
+
 ## 병렬 결과 병합
 
 ```bash

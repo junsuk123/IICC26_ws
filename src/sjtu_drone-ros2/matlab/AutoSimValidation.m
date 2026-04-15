@@ -51,10 +51,18 @@ end
 if isempty(allTbl)
     error('AutoSimValidation:NoFinalDataset', 'No FinalDataset CSV found under %s', finalRoot);
 end
+[allTbl, filterInfo] = autosimValidationFilterDatasetQuality(allTbl);
+fprintf('[AutoSimValidation] quality filter: drop_failed_or_interrupted=%d drop_missing_wind=%d kept=%d\n', ...
+    round(filterInfo.n_drop_failed_or_interrupted), round(filterInfo.n_drop_missing_wind), round(height(allTbl)));
+if isempty(allTbl)
+    error('AutoSimValidation:NoUsableDataset', ...
+        'No usable rows remain after dataset quality filtering under %s', finalRoot);
+end
 allTblRawCount = height(allTbl);
 [allTbl, recentNUsed] = autosimValidationApplyRecentWindow(allTbl);
 allTbl = autosimEnsureOntologyFeatureColumns(allTbl, cfg);
 droneMeta = autosimValidationResolveDroneMeta(cfg, allTbl);
+allLabelStats = autosimValidationLabelStats(allTbl);
 
 if logical(validationUseFullWindow)
     trainTbl = allTbl([],:);
@@ -66,6 +74,7 @@ else
         error('AutoSimValidation:EmptyValidationSplit', 'Validation split is empty.');
     end
 end
+valLabelStats = autosimValidationLabelStats(valTbl);
 
 validationModelTypes = string(validationModelTypes(:));
 allValidationResults = struct();
@@ -81,6 +90,19 @@ for iModel = 1:numel(validationModelTypes)
     if strlength(modelPath) > 0
         % Use explicit model path
         modelPathFull = modelPath;
+    elseif evalin('base', 'exist(''trainedModelPaths'', ''var'')')
+        trainedModelPaths = evalin('base', 'trainedModelPaths');
+        if isstruct(trainedModelPaths) && isfield(trainedModelPaths, char(modelType))
+            candidatePath = string(trainedModelPaths.(char(modelType)));
+            if strlength(candidatePath) > 0 && isfile(char(candidatePath))
+                modelPathFull = candidatePath;
+                fprintf('[AutoSimValidation] Using trained model path from workspace: %s\n', char(modelPathFull));
+            else
+                modelPathFull = autosimValidationResolveModelPath("", rootDir, cfgModel.paths.model_dir, modelType);
+            end
+        else
+            modelPathFull = autosimValidationResolveModelPath("", rootDir, cfgModel.paths.model_dir, modelType);
+        end
     else
         % Search for model with specified type in filename
         modelPathFull = autosimValidationResolveModelPath("", rootDir, cfgModel.paths.model_dir, modelType);
@@ -96,12 +118,14 @@ for iModel = 1:numel(validationModelTypes)
         error('AutoSimValidation:InvalidModelFile', 'Model file does not contain variable "model": %s', char(modelPathFull));
     end
     model = S.model;
-    
+
+    [cfgModel, decisionThreshold, thresholdSource] = autosimValidationResolveDecisionThreshold(cfgModel, model, modelType);
+
     featureNames = string(cfgModel.model.feature_names(:));
     if isfield(model, 'feature_names') && ~isempty(model.feature_names)
         featureNames = string(model.feature_names(:));
     end
-    
+
     X = zeros(height(valTbl), numel(featureNames));
     for i = 1:numel(featureNames)
         fn = char(featureNames(i));
@@ -112,12 +136,14 @@ for iModel = 1:numel(validationModelTypes)
             else
                 X(:, i) = str2double(string(col));
             end
+        else
+            X(:, i) = autosimValidationResolveFeatureFallback(valTbl, fn);
         end
     end
     X(~isfinite(X)) = 0.0;
-    
+
     [predLabel, predScore] = autosimPredictGaussianNB(model, X, cfgModel);
-    
+
     valTblModel = valTbl;
     valTblModel.pred_decision = autosimNormalizeActionLabel(predLabel);
     valTblModel.pred_score = double(predScore(:));
@@ -158,7 +184,13 @@ for iModel = 1:numel(validationModelTypes)
     end
     sumTbl.n_train = height(trainTbl);
     sumTbl.n_val = height(valTblModel);
+    sumTbl.n_all_safe = allLabelStats.n_safe;
+    sumTbl.n_all_hold = allLabelStats.n_hold;
+    sumTbl.n_val_safe = valLabelStats.n_safe;
+    sumTbl.n_val_hold = valLabelStats.n_hold;
     sumTbl.seed = splitSeed;
+    sumTbl.decision_threshold = decisionThreshold;
+    sumTbl.decision_threshold_source = thresholdSource;
     sumTbl.accuracy = metrics.accuracy;
     sumTbl.precision = metrics.precision;
     sumTbl.safe_recall = metrics.recall;
@@ -219,7 +251,10 @@ for iModel = 1:numel(validationModelTypes)
     end
     fprintf('[AutoSimValidation] all=%d train=%d val=%d (seed=%d, mode=%s)\n', ...
         height(allTbl), height(trainTbl), height(valTblModel), round(splitSeed), char(string(splitTbl.split_mode(1))));
+    fprintf('[AutoSimValidation] label balance all(safe=%d,hold=%d) val(safe=%d,hold=%d)\n', ...
+        round(allLabelStats.n_safe), round(allLabelStats.n_hold), round(valLabelStats.n_safe), round(valLabelStats.n_hold));
     fprintf('[AutoSimValidation] summary (%s): %s\n', modelType, summaryCsv);
+    fprintf('[AutoSimValidation] decision threshold=%.4f (source=%s)\n', decisionThreshold, char(thresholdSource));
     fprintf('[AutoSimValidation] trajectory score=%.4f xyz_rmse=%.4f xy_rmse=%.4f z_rmse=%.4f success=%.4f mode=%s n=%d\n', ...
         trajMetrics.follow_score, trajMetrics.xyz_rmse_m, trajMetrics.xy_rmse_m, trajMetrics.z_rmse_m, ...
         trajMetrics.success_rate, char(trajMetrics.mode), round(trajMetrics.n_valid));
@@ -233,10 +268,82 @@ for iModel = 1:numel(validationModelTypes)
     validationResult.summaryCsv = string(summaryCsv);
     validationResult.splitCsv = string(splitCsv);
     validationResult.modelPath = string(modelPathFull);
+    validationResult.decision_threshold = decisionThreshold;
+    validationResult.decision_threshold_source = thresholdSource;
     validationResult.metrics = metrics;
     validationResult.trajectory_metrics = trajMetrics;
     
     allValidationResults.(char(modelType)) = validationResult;
+end
+
+function v = autosimValidationResolveFeatureFallback(T, featureName)
+fallbackMap = struct( ...
+    'final_roll_deg', {{'mean_abs_roll_deg', 'final_abs_roll_deg'}}, ...
+    'final_pitch_deg', {{'mean_abs_pitch_deg', 'final_abs_pitch_deg'}}, ...
+    'final_vz', {{'mean_abs_vz', 'max_abs_vz'}}, ...
+    'final_tag_error', {{'mean_tag_error', 'max_tag_error'}}, ...
+    'wind_velocity_x', {{'wind_velocity'}}, ...
+    'wind_velocity_y', {{'wind_velocity'}}, ...
+    'wind_acceleration_x', {{'wind_acceleration'}}, ...
+    'wind_acceleration_y', {{'wind_acceleration'}} ...
+    );
+
+if ~isfield(fallbackMap, featureName)
+    v = zeros(height(T), 1);
+    return;
+end
+
+alts = fallbackMap.(featureName);
+for iAlt = 1:numel(alts)
+    fn = alts{iAlt};
+    if ismember(fn, T.Properties.VariableNames)
+        col = T.(fn);
+        if isnumeric(col) || islogical(col)
+            v = double(col);
+        else
+            v = str2double(string(col));
+        end
+        v(~isfinite(v)) = 0.0;
+        return;
+    end
+end
+
+v = zeros(height(T), 1);
+end
+
+function [cfgOut, threshold, source] = autosimValidationResolveDecisionThreshold(cfgIn, model, modelType)
+cfgOut = cfgIn;
+source = "config";
+threshold = 0.5;
+
+if isfield(cfgOut, 'agent') && isstruct(cfgOut.agent) && isfield(cfgOut.agent, 'prob_land_threshold')
+    thCfg = double(cfgOut.agent.prob_land_threshold);
+    if isfinite(thCfg)
+        threshold = thCfg;
+    end
+end
+
+if isstruct(model) && isfield(model, 'decision_threshold')
+    thModel = double(model.decision_threshold);
+    if isfinite(thModel)
+        threshold = thModel;
+        source = "model";
+    end
+end
+
+if source == "config"
+    mt = lower(strtrim(string(modelType)));
+    if mt == "ontology_ai"
+        threshold = 0.20;
+        source = "validation_tp_priority_default";
+    end
+end
+
+threshold = max(0.01, min(0.99, threshold));
+if ~isfield(cfgOut, 'agent') || ~isstruct(cfgOut.agent)
+    cfgOut.agent = struct();
+end
+cfgOut.agent.prob_land_threshold = threshold;
 end
 
 assignin('base', 'allValidationResults', allValidationResults);
@@ -336,7 +443,66 @@ if n <= 0
     return;
 end
 k = min(n, round(recentN));
-T = T(n - k + 1:n, :);
+if autosimValidationUseStrictTailWindow()
+    T = T(n - k + 1:n, :);
+else
+    T = autosimValidationSelectRecentWindow(T, k);
+end
+end
+
+
+function Tsel = autosimValidationSelectRecentWindow(T, k)
+n = height(T);
+if k >= n
+    Tsel = T;
+    return;
+end
+
+label = strings(n, 1);
+if ismember('gt_safe_to_land', T.Properties.VariableNames)
+    label = autosimNormalizeActionLabel(T.gt_safe_to_land);
+elseif ismember('label', T.Properties.VariableNames)
+    label = autosimNormalizeActionLabel(T.label);
+else
+    Tsel = T(n - k + 1:n, :);
+    return;
+end
+
+safeIdx = find(label == "AttemptLanding");
+holdIdx = find(label == "HoldLanding");
+if isempty(safeIdx) || isempty(holdIdx)
+    Tsel = T(n - k + 1:n, :);
+    return;
+end
+
+safeQuota = floor(k / 2);
+holdQuota = k - safeQuota;
+safeTake = min(numel(safeIdx), safeQuota);
+holdTake = min(numel(holdIdx), holdQuota);
+
+sel = [safeIdx(max(1, end - safeTake + 1):end); holdIdx(max(1, end - holdTake + 1):end)];
+sel = unique(sel, 'stable');
+
+if numel(sel) < k
+    need = k - numel(sel);
+    tailIdx = (n - k + 1:n)';
+    tailIdx = setdiff(tailIdx, sel, 'stable');
+    if ~isempty(tailIdx)
+        addIdx = tailIdx(max(1, end - need + 1):end);
+        sel = [sel; addIdx]; %#ok<AGROW>
+    end
+end
+
+if isempty(sel)
+    Tsel = T(n - k + 1:n, :);
+    return;
+end
+
+sel = sort(sel);
+if numel(sel) > k
+    sel = sel(end-k+1:end);
+end
+Tsel = T(sel, :);
 end
 
 
@@ -349,6 +515,7 @@ if exist('recentDatasetN', 'var')
         return;
     end
 end
+
 raw = string(getenv('AUTOSIM_RECENT_DATASET_N'));
 if strlength(raw) == 0
     return;
@@ -357,6 +524,89 @@ v = str2double(raw);
 if isfinite(v) && v > 0
     recentN = round(v);
 end
+end
+
+
+function tf = autosimValidationUseStrictTailWindow()
+raw = strtrim(lower(char(string(getenv('AUTOSIM_VALIDATION_RECENT_STRICT_TAIL')))));
+tf = any(strcmp(raw, {'1', 'true', 'yes', 'on'}));
+end
+
+
+function s = autosimValidationLabelStats(T)
+s = struct('n_safe', 0, 'n_hold', 0);
+if isempty(T)
+    return;
+end
+
+lbl = strings(height(T), 1);
+if ismember('gt_safe_to_land', T.Properties.VariableNames)
+    lbl = autosimNormalizeActionLabel(T.gt_safe_to_land);
+elseif ismember('label', T.Properties.VariableNames)
+    lbl = autosimNormalizeActionLabel(T.label);
+else
+    return;
+end
+
+s.n_safe = sum(lbl == "AttemptLanding");
+s.n_hold = sum(lbl == "HoldLanding");
+end
+
+
+function [T, info] = autosimValidationFilterDatasetQuality(T)
+info = struct();
+info.n_input = height(T);
+info.n_drop_failed_or_interrupted = 0;
+info.n_drop_missing_wind = 0;
+
+if isempty(T)
+    return;
+end
+
+dropFailedInterrupted = true;
+rawDropFailed = strtrim(lower(char(string(getenv('AUTOSIM_VALIDATION_DROP_FAILED_ROWS')))));
+if ~isempty(rawDropFailed)
+    dropFailedInterrupted = any(strcmp(rawDropFailed, {'1', 'true', 'yes', 'on'}));
+end
+
+dropMissingWind = true;
+rawDropWind = strtrim(lower(char(string(getenv('AUTOSIM_VALIDATION_DROP_MISSING_WIND')))));
+if ~isempty(rawDropWind)
+    dropMissingWind = any(strcmp(rawDropWind, {'1', 'true', 'yes', 'on'}));
+end
+
+keep = true(height(T), 1);
+
+if dropFailedInterrupted && ismember('source_file', T.Properties.VariableNames)
+    src = lower(string(T.source_file));
+    badSrc = contains(src, '_failed.csv') | contains(src, '_interrupted.csv');
+    info.n_drop_failed_or_interrupted = sum(badSrc);
+    keep = keep & ~badSrc;
+end
+
+if dropMissingWind
+    windCols = {'wind_speed_cmd', 'mean_wind_speed', 'max_wind_speed', 'wind_velocity'};
+    hasWind = false(height(T), 1);
+    for i = 1:numel(windCols)
+        vn = windCols{i};
+        if ~ismember(vn, T.Properties.VariableNames)
+            continue;
+        end
+        col = T.(vn);
+        if isnumeric(col) || islogical(col)
+            v = double(col);
+        else
+            v = str2double(string(col));
+        end
+        hasWind = hasWind | isfinite(v);
+    end
+    badWind = ~hasWind;
+    info.n_drop_missing_wind = sum(badWind & keep);
+    keep = keep & ~badWind;
+end
+
+T = T(keep, :);
+info.n_output = height(T);
 end
 
 
@@ -392,15 +642,13 @@ if isfolder(parallelRoot)
 end
 roots = unique(roots, 'stable');
 
-files = struct('folder', {}, 'name', {}, 'datenum', {});
-for i = 1:numel(roots)
+files = autosimValidationCollectModelFiles(char(roots(1)), modelType);
+for i = 2:numel(roots)
     root = char(roots(i));
     if ~isfolder(root)
         continue;
     end
-    d1 = dir(fullfile(root, '**', 'autosim_model_final_*.mat'));
-    d2 = dir(fullfile(root, '**', 'autosim_model_*.mat'));
-    d = [d1; d2]; %#ok<AGROW>
+    d = autosimValidationCollectModelFiles(root, modelType);
     if isempty(d)
         continue;
     end
@@ -440,6 +688,38 @@ end
 
 [~, idx] = max([files.datenum]);
 modelPathOut = string(fullfile(files(idx).folder, files(idx).name));
+end
+
+function files = autosimValidationCollectModelFiles(root, modelType)
+files = struct('folder', {}, 'name', {}, 'datenum', {});
+if ~isfolder(root)
+    return;
+end
+
+d1 = dir(fullfile(root, '**', 'autosim_model_final_*.mat'));
+d2 = dir(fullfile(root, '**', 'autosim_model_*.mat'));
+d = [d1; d2];
+if isempty(d)
+    return;
+end
+
+if strlength(string(modelType)) > 0
+    modelType = lower(string(modelType));
+    modelTypePattern = sprintf('autosim_model_%s_', modelType);
+    filtered = struct('folder', {}, 'name', {}, 'datenum', {});
+    for i = 1:numel(d)
+        if contains(d(i).name, modelTypePattern)
+            if isempty(filtered)
+                filtered = d(i);
+            else
+                filtered(end+1) = d(i); %#ok<AGROW>
+            end
+        end
+    end
+    d = filtered;
+end
+
+files = d;
 end
 
 function meta = autosimValidationResolveDroneMeta(cfg, T)

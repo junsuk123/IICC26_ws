@@ -227,11 +227,16 @@ def rviz_node_generator(context, rviz_path):
     if fixed_frame_value:
         rviz_arguments.extend(['--fixed-frame', fixed_frame_value])
 
+    worker_id_raw = os.environ.get('AUTOSIM_WORKER_ID', '').strip()
+    rviz_node_name = 'rviz2'
+    if worker_id_raw.isdigit():
+        rviz_node_name = f'rviz2_w{int(worker_id_raw):02d}'
+
     return [
         Node(
             package='rviz2',
             executable='rviz2',
-            name='rviz2',
+            name=rviz_node_name,
             arguments=rviz_arguments,
             output='screen',
         )

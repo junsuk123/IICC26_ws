@@ -199,10 +199,16 @@ for i = 1:numel(featNames)
     col = featNames{i};
     if ismember(col, trainTbl.Properties.VariableNames)
         X(:, i) = to_numeric(trainTbl.(col));
+    else
+        X(:, i) = to_numeric(resolve_feature_fallback(trainTbl, col));
     end
 end
 
 model = train_gnb(X, y, cfg.model.feature_names, cfg.model.prior_uniform_blend);
+[bestThreshold, tuneStats] = tune_decision_threshold(model, X, y, cfg);
+model.decision_threshold = bestThreshold;
+model.decision_threshold_source = "train_tuned";
+model.decision_threshold_tuning = tuneStats;
 model.schema_version = string(cfg.model.schema_version);
 model.n_train = nTrain;
 model.n_stable = nStable;
@@ -221,6 +227,140 @@ save(modelPath, "model");
 info = make_learn_info(scenarioId, "", nTrain, nStable, nUnstable);
 info.model_updated = true;
 info.model_path = string(modelPath);
+end
+
+function [bestThreshold, stats] = tune_decision_threshold(model, X, y, cfg)
+defaultThreshold = 0.50;
+if isfield(cfg, "agent") && isfield(cfg.agent, "prob_land_threshold") && isfinite(cfg.agent.prob_land_threshold)
+    defaultThreshold = cfg.agent.prob_land_threshold;
+end
+
+enableTune = true;
+if isfield(cfg, "learning") && isfield(cfg.learning, "threshold_tune_enable")
+    enableTune = logical(cfg.learning.threshold_tune_enable);
+end
+
+if ~enableTune || isempty(X) || isempty(y)
+    bestThreshold = defaultThreshold;
+    stats = struct("enabled", enableTune, "selected_threshold", bestThreshold, "objective", nan, "tpr", nan, "tnr", nan, "f1", nan);
+    return;
+end
+
+scores = gnb_attempt_scores(model, X);
+gtAttempt = (string(y(:)) == "AttemptLanding");
+gtHold = ~gtAttempt;
+P = sum(gtAttempt);
+N = sum(gtHold);
+if P < 1 || N < 1
+    bestThreshold = defaultThreshold;
+    stats = struct("enabled", enableTune, "selected_threshold", bestThreshold, "objective", nan, "tpr", nan, "tnr", nan, "f1", nan);
+    return;
+end
+
+minHoldRecall = 0.55;
+if isfield(cfg, "learning") && isfield(cfg.learning, "threshold_tune_min_hold_recall") && isfinite(cfg.learning.threshold_tune_min_hold_recall)
+    minHoldRecall = max(0.0, min(1.0, cfg.learning.threshold_tune_min_hold_recall));
+end
+
+candidates = unique([0.30:0.01:0.80, defaultThreshold, quantile(scores, [0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90])]); %#ok<NBRAK>
+candidates = candidates(isfinite(candidates));
+candidates = min(max(candidates, 0.01), 0.99);
+candidates = unique(candidates);
+
+bestObj = -inf;
+bestThreshold = defaultThreshold;
+bestStats = [nan, nan, nan];
+hasFeasible = false;
+bestRank = [-inf, -inf, -inf];
+for i = 1:numel(candidates)
+    th = candidates(i);
+    predAttempt = scores >= th;
+
+    tp = sum(predAttempt & gtAttempt);
+    tn = sum((~predAttempt) & gtHold);
+    fp = sum(predAttempt & gtHold);
+    fn = sum((~predAttempt) & gtAttempt);
+
+    tpr = tp / max(P, 1);
+    tnr = tn / max(N, 1);
+    f1 = (2.0 * tp) / max(2.0 * tp + fp + fn, 1);
+
+    isFeasible = (tnr >= minHoldRecall);
+    if isFeasible
+        hasFeasible = true;
+    elseif hasFeasible
+        continue;
+    end
+
+    % TP-priority: maximize AttemptLanding recall first, then F1, then Hold recall.
+    rankNow = [tpr, f1, tnr];
+    objective = tpr;
+    if lexicographic_better(rankNow, bestRank)
+        bestObj = objective;
+        bestThreshold = th;
+        bestStats = [tpr, tnr, f1];
+        bestRank = rankNow;
+    end
+end
+
+bestThreshold = min(max(bestThreshold, 0.01), 0.99);
+stats = struct();
+stats.enabled = enableTune;
+stats.selected_threshold = bestThreshold;
+stats.objective = bestObj;
+stats.tpr = bestStats(1);
+stats.tnr = bestStats(2);
+stats.f1 = bestStats(3);
+stats.rank_tpr_f1_tnr = bestRank;
+stats.min_hold_recall = minHoldRecall;
+stats.n_candidates = numel(candidates);
+end
+
+function tf = lexicographic_better(a, b)
+tf = false;
+if numel(a) ~= numel(b)
+    tf = false;
+    return;
+end
+for i = 1:numel(a)
+    if a(i) > b(i)
+        tf = true;
+        return;
+    elseif a(i) < b(i)
+        tf = false;
+        return;
+    end
+end
+end
+
+function scores = gnb_attempt_scores(model, X)
+X = to_numeric(X);
+if isvector(X)
+    X = reshape(X, 1, []);
+end
+X(~isfinite(X)) = 0.0;
+
+cls = string(model.class_names(:));
+attemptIdx = find(cls == "AttemptLanding", 1, 'first');
+if isempty(attemptIdx)
+    attemptIdx = find(cls == "stable", 1, 'first');
+end
+if isempty(attemptIdx)
+    scores = 0.5 * ones(size(X, 1), 1);
+    return;
+end
+
+logPost = zeros(size(X, 1), numel(cls));
+for i = 1:numel(cls)
+    mu = model.mu(i,:);
+    sg = model.sigma2(i,:);
+    lp = -0.5 * sum(log(2.0*pi*sg) + ((X - mu).^2) ./ sg, 2);
+    logPost(:,i) = log(max(model.prior(i), eps)) + lp;
+end
+ex = exp(logPost - max(logPost, [], 2));
+post = ex ./ max(sum(ex, 2), eps);
+scores = post(:, attemptIdx);
+scores(~isfinite(scores)) = 0.5;
 end
 
 function y = build_action_target_labels(trainTbl)
@@ -300,6 +440,43 @@ else
     end
 end
 v(~isfinite(v)) = 0.0;
+end
+
+function v = resolve_feature_fallback(T, featureName)
+featureName = string(featureName);
+fallbackMap = struct( ...
+    'final_roll_deg', {{'mean_abs_roll_deg', 'final_abs_roll_deg'}}, ...
+    'final_pitch_deg', {{'mean_abs_pitch_deg', 'final_abs_pitch_deg'}}, ...
+    'final_vz', {{'mean_abs_vz', 'max_abs_vz'}}, ...
+    'final_tag_error', {{'mean_tag_error', 'max_tag_error'}}, ...
+    'wind_velocity_x', {{'wind_velocity'}}, ...
+    'wind_velocity_y', {{'wind_velocity'}}, ...
+    'wind_acceleration_x', {{'wind_acceleration'}}, ...
+    'wind_acceleration_y', {{'wind_acceleration'}} ...
+    );
+
+key = char(featureName);
+if ~isfield(fallbackMap, key)
+    v = zeros(height(T), 1);
+    return;
+end
+
+alts = fallbackMap.(key);
+for iAlt = 1:numel(alts)
+    fn = string(alts{iAlt});
+    if ismember(fn, string(T.Properties.VariableNames))
+        col = T.(char(fn));
+        if isnumeric(col) || islogical(col)
+            v = double(col);
+        else
+            v = str2double(string(col));
+        end
+        v(~isfinite(v)) = 0.0;
+        return;
+    end
+end
+
+v = zeros(height(T), 1);
 end
 
 function model = train_gnb(X, y, featureNames, priorUniformBlend)

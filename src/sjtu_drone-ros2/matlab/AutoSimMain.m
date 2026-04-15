@@ -3,6 +3,7 @@ function AutoSimMain()
 % Main integrated pipeline entrypoint.
 % Always runs: data collection -> training -> validation -> plotting.
 % Supports both "aii_only" (AI-only) and "ontology_ai" (Ontology+AI) models.
+clear; clear function;close all; clc;
 
 % ================= USER SETTINGS (edit here) =================
 mainCfg = struct();
@@ -10,23 +11,31 @@ mainCfg = struct();
 % Use up to recent N rows for training.
 % If total data is insufficient, training rows are reduced automatically
 % after reserving validation_recent_n rows for validation.
-mainCfg.dataset_recent_n = 5000;
+mainCfg.dataset_recent_n = inf;
 % Validation is fixed to this many recent scenarios.
-mainCfg.validation_recent_n = 1000;
+mainCfg.validation_recent_n = 10000;
+% Validation window mode:
+%   false -> validate on last validation_recent_n rows
+%   true  -> validate on full available window
+mainCfg.validation_use_full_window = true;
 
 % Model types to train and validate: "aii_only" (sensor-only AI) or "ontology_ai" (ontology+AI)
 mainCfg.model_types_to_train = ["aii_only", "ontology_ai"];
 mainCfg.model_types_to_validate = ["aii_only", "ontology_ai"];
+% Paper plot baseline comparators: one or more of ["threshold", "aii_only"].
+% Default comparison target is threshold-based inference.
+mainCfg.paper_baseline_methods = ["threshold"];
 
 % Data collection settings (editable in main).
 mainCfg.collection = struct();
-mainCfg.collection.scenario_count = 500;
+mainCfg.collection.scenario_count = 5;
 mainCfg.collection.drone_count = 5;
 mainCfg.collection.independent_per_drone = true;
 mainCfg.collection.merge_last_runs = 5;
 mainCfg.collection.launch_use_gui = false;
-% RViz mode: 'off' (disabled), 'single' (one RViz), 'multi' (one RViz per worker)
-mainCfg.collection.rviz_mode = 'off';
+% RViz mode: 'off' (disabled), 'single' (worker1 RViz), 'multi' (per-worker RViz),
+%            'unified' (one monitor RViz with domain bridge for all workers)
+mainCfg.collection.rviz_mode = 'unified';
 mainCfg.collection.launch_use_teleop = false;
 mainCfg.collection.multi_drone_spacing_m = 10.0;
 mainCfg.collection.multi_drone_namespace_prefix = 'drone_w';
@@ -36,7 +45,7 @@ mainCfg.collection.primary_drone_index = 1;
 % Parallel autoscaling controls (applied by run_autosim_parallel.sh).
 mainCfg.collection.dynamic_worker_scale = true;
 mainCfg.collection.memory_probe_wait_sec = 8;
-mainCfg.collection.allow_scale_above_requested = true;
+mainCfg.collection.allow_scale_above_requested = false;
 mainCfg.collection.enable_progress_plot = false;
 mainCfg.collection.enable_scenario_live_viz = false;
 
@@ -45,6 +54,28 @@ mainCfg.run_collection = true;
 mainCfg.run_training = true;
 mainCfg.run_validation = true;
 mainCfg.run_plots = true;
+
+plotsEnv = strtrim(lower(getenv('AUTOSIM_MAIN_RUN_PLOTS')));
+if ~isempty(plotsEnv)
+    mainCfg.run_plots = any(strcmp(plotsEnv, {'1', 'true', 'yes', 'y', 'on'}));
+end
+
+paperBaselinesEnv = strtrim(string(getenv('AUTOSIM_PAPER_BASELINES')));
+if strlength(paperBaselinesEnv) > 0
+    toks = split(lower(paperBaselinesEnv), {',', ';', ' '});
+    toks = strtrim(toks);
+    toks = toks(strlength(toks) > 0);
+    allowed = ["threshold", "aii_only"];
+    valid = strings(0,1);
+    for iTok = 1:numel(toks)
+        if any(toks(iTok) == allowed)
+            valid(end+1,1) = toks(iTok); %#ok<AGROW>
+        end
+    end
+    if ~isempty(valid)
+        mainCfg.paper_baseline_methods = unique(valid, 'stable');
+    end
+end
 
 % Safety cleanup guards: kill stale sim/ROS viewers before start and on abnormal end.
 mainCfg.safe_cleanup_on_start = true;
@@ -106,16 +137,36 @@ try
     end
 
     if mainCfg.run_validation
-        setenv('AUTOSIM_RECENT_DATASET_N', sprintf('%d', validationRecentN));
-        fprintf('[AutoSimMain] Validation dataset fixed: last %d rows\n', validationRecentN);
+        useFullValidationWindow = false;
+        if isfield(mainCfg, 'validation_use_full_window')
+            useFullValidationWindow = logical(mainCfg.validation_use_full_window);
+        end
+
+        % Enforce disjoint train/eval split by default:
+        % - training uses all rows except reserved tail (AUTOSIM_VALIDATION_FIXED_N)
+        % - validation uses strict recent tail window only.
+        setenv('AUTOSIM_VALIDATION_RECENT_STRICT_TAIL', 'true');
+
+        if useFullValidationWindow
+            % Evaluate on the full fixed recent window (default: last 1000 rows),
+            % not on the entire historical dataset.
+            setenv('AUTOSIM_RECENT_DATASET_N', sprintf('%d', validationRecentN));
+            fprintf('[AutoSimMain] Validation dataset uses full fixed window: last %d rows\n', validationRecentN);
+        else
+            setenv('AUTOSIM_RECENT_DATASET_N', sprintf('%d', validationRecentN));
+            fprintf('[AutoSimMain] Validation dataset fixed: last %d rows\n', validationRecentN);
+        end
 
         fprintf('[AutoSimMain] Stage 3/4: validation start (fixed recent window, no split)\n');
         autosim_keep_workspace = true; %#ok<NASGU>
-        validationUseFullWindow = true; %#ok<NASGU>
+        validationUseFullWindow = useFullValidationWindow; %#ok<NASGU>
         run(fullfile(thisDir, 'AutoSimValidation.m'));
     end
 
     if mainCfg.run_plots
+        setenv('AUTOSIM_RECENT_DATASET_N', '');
+        setenv('AUTOSIM_PAPER_DECISION_MODE', 'threshold_all');
+        setenv('AUTOSIM_PAPER_BASELINES', strjoin(string(mainCfg.paper_baseline_methods(:))', ','));
         fprintf('[AutoSimMain] Stage 4/4: plotting start\n');
         if evalin('base', 'exist(''allValidationResults'',''var'')')
             allResults = evalin('base', 'allValidationResults');
@@ -128,6 +179,9 @@ try
                     if isstruct(vr) && isfield(vr, 'runDir')
                         runDir = char(string(vr.runDir)); %#ok<NASGU>
                         outputDir = ""; %#ok<NASGU>
+                        paperPlotRunDir = runDir; %#ok<NASGU>
+                        modelTypesToPlot = string(mt); %#ok<NASGU>
+                        baselineComparatorsToPlot = string(mainCfg.paper_baseline_methods(:)); %#ok<NASGU>
                         fprintf('[AutoSimMain] Plotting validation result for model type: %s\n', char(mt));
                         run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
                         plottedAny = true;
@@ -137,11 +191,17 @@ try
             if ~plottedAny
                 runDir = ""; %#ok<NASGU>
                 outputDir = ""; %#ok<NASGU>
+                paperPlotRunDir = ""; %#ok<NASGU>
+                modelTypesToPlot = string(mainCfg.model_types_to_validate(:)); %#ok<NASGU>
+                baselineComparatorsToPlot = string(mainCfg.paper_baseline_methods(:)); %#ok<NASGU>
                 run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
             end
         else
             runDir = ""; %#ok<NASGU>
             outputDir = ""; %#ok<NASGU>
+            paperPlotRunDir = ""; %#ok<NASGU>
+            modelTypesToPlot = string(mainCfg.model_types_to_validate(:)); %#ok<NASGU>
+            baselineComparatorsToPlot = string(mainCfg.paper_baseline_methods(:)); %#ok<NASGU>
             run(fullfile(thisDir, 'AutoSimPaperPlots.m'));
         end
     end

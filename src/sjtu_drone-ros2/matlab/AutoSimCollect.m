@@ -250,7 +250,7 @@ end
 if isfield(cfg, 'launch_use_gui')
     setenv('AUTOSIM_USE_GUI', autosimCollectBoolText(logical(cfg.launch_use_gui)));
 end
-% Unified RViz control. Supported values: off | single | multi
+% Unified RViz control. Supported values: off | single | multi | unified
 rvizMode = "off";
 if isfield(cfg, 'rviz_mode') && strlength(string(cfg.rviz_mode)) > 0
     rvizMode = lower(strtrim(string(cfg.rviz_mode)));
@@ -260,19 +260,30 @@ switch rvizMode
         setenv('AUTOSIM_USE_RVIZ', 'false');
         setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
         setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
+        setenv('AUTOSIM_ENABLE_DOMAIN_BRIDGE', 'false');
     case "single"
         setenv('AUTOSIM_USE_RVIZ', 'true');
         setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
         setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
+        setenv('AUTOSIM_ENABLE_DOMAIN_BRIDGE', 'false');
     case "multi"
         setenv('AUTOSIM_USE_RVIZ', 'true');
         setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'multi');
         setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'true');
+        setenv('AUTOSIM_ENABLE_DOMAIN_BRIDGE', 'false');
+    case "unified"
+        % One integrated monitor RViz in OBSERVE_DOMAIN with worker topics bridged in.
+        setenv('AUTOSIM_USE_RVIZ', 'false');
+        setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
+        setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
+        setenv('AUTOSIM_ENABLE_DOMAIN_BRIDGE', 'true');
+        setenv('AUTOSIM_BRIDGE_LAUNCH_RVIZ', 'true');
     otherwise
         warning('[AutoSimCollect] Unknown rviz_mode=%s, fallback to off', char(rvizMode));
         setenv('AUTOSIM_USE_RVIZ', 'false');
         setenv('AUTOSIM_PARALLEL_RVIZ_MODE', 'single');
         setenv('AUTOSIM_ALLOW_PARALLEL_RVIZ', 'false');
+        setenv('AUTOSIM_ENABLE_DOMAIN_BRIDGE', 'false');
 end
 if isfield(cfg, 'domain_base') && isfinite(cfg.domain_base)
     setenv('DOMAIN_BASE', num2str(round(double(cfg.domain_base))));

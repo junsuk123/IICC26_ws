@@ -20,6 +20,7 @@ AUTOSIM_ENABLE_PROGRESS_PLOT="${AUTOSIM_ENABLE_PROGRESS_PLOT:-false}"
 AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ="${AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ:-false}"
 AUTOSIM_USE_GUI="${AUTOSIM_USE_GUI:-auto}"
 AUTOSIM_USE_RVIZ="${AUTOSIM_USE_RVIZ:-auto}"
+AUTOSIM_FORCE_HEADLESS="${AUTOSIM_FORCE_HEADLESS:-false}"
 AUTOSIM_ROS_LOCALHOST_ONLY="${AUTOSIM_ROS_LOCALHOST_ONLY:-0}"
 AUTOSIM_ENABLE_DOMAIN_BRIDGE="${AUTOSIM_ENABLE_DOMAIN_BRIDGE:-false}"
 OBSERVE_DOMAIN="${OBSERVE_DOMAIN:-90}"
@@ -33,7 +34,7 @@ AUTOSIM_WORKER_LAUNCH_STAGGER_SEC="${AUTOSIM_WORKER_LAUNCH_STAGGER_SEC:-4}"
 AUTOSIM_FORCE_SOFTWARE_GL="${AUTOSIM_FORCE_SOFTWARE_GL:-auto}"
 AUTOSIM_ALLOW_PARALLEL_RVIZ="${AUTOSIM_ALLOW_PARALLEL_RVIZ:-false}"
 AUTOSIM_PARALLEL_RVIZ_MODE="${AUTOSIM_PARALLEL_RVIZ_MODE:-single}"
-AUTOSIM_DYNAMIC_WORKER_SCALE="${AUTOSIM_DYNAMIC_WORKER_SCALE:-true}"
+AUTOSIM_DYNAMIC_WORKER_SCALE="${AUTOSIM_DYNAMIC_WORKER_SCALE:-false}"
 AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED="${AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED:-false}"
 AUTOSIM_SPLIT_SCENARIOS_ACROSS_WORKERS="${AUTOSIM_SPLIT_SCENARIOS_ACROSS_WORKERS:-true}"
 AUTOSIM_MEMORY_PROBE_WAIT_SEC="${AUTOSIM_MEMORY_PROBE_WAIT_SEC:-8}"
@@ -200,28 +201,20 @@ if [[ -n "$SCENARIO_COUNT" ]] && ! [[ "$SCENARIO_COUNT" =~ ^[0-9]+$ ]]; then
 fi
 
 if [[ -n "$SCENARIO_COUNT" ]]; then
-  split_enabled="false"
-  case "${AUTOSIM_SPLIT_SCENARIOS_ACROSS_WORKERS,,}" in
-    1|true|yes|y|on) split_enabled="true" ;;
-  esac
+  # Queue mode uses a global scenario counter; dynamic scaling remains safe.
+  # Keep growth bounded unless explicitly overridden by operator intent.
+  if [[ "$AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED" != "1" && "$AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED" != "true" && "$AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED" != "yes" ]]; then
+    AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED="false"
+  fi
+fi
 
-  if [[ "$split_enabled" == "true" ]]; then
-    if (( SCENARIO_COUNT < REQUESTED_WORKERS )); then
-      echo "[AUTOSIM] Scenario split: total scenarios($SCENARIO_COUNT) < requested workers($REQUESTED_WORKERS)."
-      echo "[AUTOSIM] Clamping workers to $SCENARIO_COUNT so each worker runs at least one scenario."
-      REQUESTED_WORKERS="$SCENARIO_COUNT"
-      if (( REQUESTED_WORKERS < 1 )); then
-        REQUESTED_WORKERS=1
-      fi
-    fi
-
-    dyn_enabled="false"
-    case "${AUTOSIM_DYNAMIC_WORKER_SCALE,,}" in
-      1|true|yes|y|on) dyn_enabled="true" ;;
-    esac
-    if [[ "$dyn_enabled" == "true" ]]; then
-      echo "[AUTOSIM] Scenario split mode active: forcing AUTOSIM_DYNAMIC_WORKER_SCALE=false (no worker replenishment)."
-      AUTOSIM_DYNAMIC_WORKER_SCALE="false"
+if [[ -n "$SCENARIO_COUNT" ]]; then
+  if (( SCENARIO_COUNT < REQUESTED_WORKERS )); then
+    echo "[AUTOSIM] Global queue mode: total scenarios($SCENARIO_COUNT) < requested workers($REQUESTED_WORKERS)."
+    echo "[AUTOSIM] Clamping workers to $SCENARIO_COUNT to avoid idle over-provisioning."
+    REQUESTED_WORKERS="$SCENARIO_COUNT"
+    if (( REQUESTED_WORKERS < 1 )); then
+      REQUESTED_WORKERS=1
     fi
   fi
 fi
@@ -266,8 +259,12 @@ if [[ "$AUTOSIM_USE_GUI" == "auto" ]]; then
   if (( REQUESTED_WORKERS > 1 )); then
     AUTOSIM_USE_GUI="false"
   else
-    AUTOSIM_USE_GUI="true"
+    AUTOSIM_USE_GUI=""
   fi
+fi
+
+if [[ "$AUTOSIM_FORCE_HEADLESS" == "1" || "$AUTOSIM_FORCE_HEADLESS" == "true" || "$AUTOSIM_FORCE_HEADLESS" == "yes" ]]; then
+  AUTOSIM_USE_GUI="false"
 fi
 
 if [[ "$AUTOSIM_USE_RVIZ" == "auto" ]]; then
@@ -333,6 +330,62 @@ is_port_listening() {
   fi
 
   return 1
+}
+
+autosim_position_rviz_window() {
+  local worker_id="$1"
+  local total_workers="$2"
+
+  if ! command -v wmctrl >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! command -v xdpyinfo >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local dims
+  dims="$(xdpyinfo 2>/dev/null | awk '/dimensions:/ {print $2; exit}')"
+  if [[ -z "$dims" || "$dims" != *x* ]]; then
+    return 0
+  fi
+
+  local sw="${dims%x*}"
+  local sh="${dims#*x}"
+  if ! [[ "$sw" =~ ^[0-9]+$ && "$sh" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+
+  local cols=1
+  while (( cols * cols < total_workers )); do
+    cols=$((cols + 1))
+  done
+  local rows=$(((total_workers + cols - 1) / cols))
+  if (( rows < 1 )); then rows=1; fi
+
+  local idx=$((worker_id - 1))
+  if (( idx < 0 )); then idx=0; fi
+  local col=$((idx % cols))
+  local row=$((idx / cols))
+
+  local ww=$((sw / cols))
+  local wh=$((sh / rows))
+  local x=$((col * ww))
+  local y=$((row * wh))
+
+  local title="rviz2_w$(printf '%02d' "$worker_id")"
+  local wid=""
+  for _ in {1..80}; do
+    wid="$(wmctrl -lx 2>/dev/null | awk -v t="$title" 'index($0,t)>0 {print $1; exit}')"
+    if [[ -n "$wid" ]]; then
+      break
+    fi
+    sleep 0.25
+  done
+
+  if [[ -n "$wid" ]]; then
+    wmctrl -i -r "$wid" -e "0,$x,$y,$ww,$wh" >/dev/null 2>&1 || true
+  fi
 }
 
 preflight_cleanup_and_verify() {
@@ -417,14 +470,11 @@ preflight_cleanup_and_verify() {
 }
 
 WORKERS="$REQUESTED_WORKERS"
-SCENARIO_PER_WORKER_BASE=""
-SCENARIO_PER_WORKER_REMAINDER=""
 TOTAL_SCENARIOS=""
+QUEUE_STATE_FILE=""
 
 if [[ -n "$SCENARIO_COUNT" ]]; then
   TOTAL_SCENARIOS="$SCENARIO_COUNT"
-  SCENARIO_PER_WORKER_BASE=$((SCENARIO_COUNT / WORKERS))
-  SCENARIO_PER_WORKER_REMAINDER=$((SCENARIO_COUNT % WORKERS))
 fi
 
 preflight_cleanup_and_verify
@@ -435,6 +485,7 @@ OUTPUT_ROOT="$SESSION_ROOT/output"
 LOG_ROOT="$SESSION_ROOT/logs"
 PID_TABLE="$SESSION_ROOT/workers.tsv"
 RECOVERY_LOG="$SESSION_ROOT/recovery_events.log"
+QUEUE_STATE_FILE="$SESSION_ROOT/scenario_queue_state.txt"
 mkdir -p "$OUTPUT_ROOT" "$LOG_ROOT"
 
 cat > "$SESSION_ROOT/session_info.txt" <<EOF
@@ -456,6 +507,13 @@ EOF
 
 printf "pid\tworker_id\tdomain_id\tgazebo_port\tlog_file\n" > "$PID_TABLE"
 echo "# ts_iso event worker_id reason restart_count max_respawn pid domain_id gazebo_port" > "$RECOVERY_LOG"
+if [[ -n "$TOTAL_SCENARIOS" ]]; then
+  {
+    echo "next_id=1"
+    echo "total_count=$TOTAL_SCENARIOS"
+    echo "updated_at=$(date -Iseconds)"
+  } > "$QUEUE_STATE_FILE"
+fi
 
 echo "[AUTOSIM] Session root: $SESSION_ROOT"
 echo "[AUTOSIM] Recovery events log: $RECOVERY_LOG"
@@ -463,11 +521,16 @@ echo "[AUTOSIM] Worker auto-tune: cpu_limit=$cpu_limit mem_limit=$mem_limit -> p
 echo "[AUTOSIM] GPU mode: enable=$AUTOSIM_ENABLE_GPU gpu_count=$gpu_count"
 echo "[AUTOSIM] Requested workers: $REQUESTED_WORKERS"
 if [[ -n "$TOTAL_SCENARIOS" ]]; then
-  echo "[AUTOSIM] Scenario distribution: total=$TOTAL_SCENARIOS workers=$WORKERS base=$SCENARIO_PER_WORKER_BASE remainder=$SCENARIO_PER_WORKER_REMAINDER"
+  echo "[AUTOSIM] Scenario queue target: total=$TOTAL_SCENARIOS workers=$WORKERS (work-stealing queue mode)"
 fi
 echo "[AUTOSIM] Allow scale above requested: $AUTOSIM_ALLOW_SCALE_ABOVE_REQUESTED"
 echo "[AUTOSIM] CPU hybrid policy: target=${AUTOSIM_CPU_TARGET_UTIL_PCT}% hard=${AUTOSIM_CPU_HARD_LIMIT_PCT}%"
-echo "[AUTOSIM] Visualization defaults: use_gui=$AUTOSIM_USE_GUI use_rviz=$AUTOSIM_USE_RVIZ"
+gui_mode_display="$AUTOSIM_USE_GUI"
+if [[ -z "$gui_mode_display" ]]; then
+  gui_mode_display="(matlab_cfg)"
+fi
+echo "[AUTOSIM] Visualization defaults: use_gui=$gui_mode_display use_rviz=$AUTOSIM_USE_RVIZ"
+echo "[AUTOSIM] Force headless: $AUTOSIM_FORCE_HEADLESS"
 echo "[AUTOSIM] Worker launch stagger: ${AUTOSIM_WORKER_LAUNCH_STAGGER_SEC}s"
 echo "[AUTOSIM] Worker health monitor: interval=${AUTOSIM_WORKER_HEALTH_CHECK_INTERVAL_SEC}s spawn_timeout=${AUTOSIM_WORKER_SPAWN_TIMEOUT_SEC}s cooldown=${AUTOSIM_WORKER_RESPAWN_COOLDOWN_SEC}s max_respawn=${AUTOSIM_WORKER_MAX_RESPAWN}"
 echo "[AUTOSIM] Force software GL: $AUTOSIM_FORCE_SOFTWARE_GL"
@@ -485,14 +548,11 @@ launch_worker() {
   local gazebo_port="$((GAZEBO_PORT_BASE + i - 1))"
   local log_file="$LOG_ROOT/worker_${i}.log"
   local gpu_device=""
-  local worker_scenarios=""
+  local gpu_label="none"
   local worker_use_rviz="$AUTOSIM_USE_RVIZ"
 
-  if [[ -n "$TOTAL_SCENARIOS" ]]; then
-    worker_scenarios="$SCENARIO_PER_WORKER_BASE"
-    if (( i <= SCENARIO_PER_WORKER_REMAINDER )); then
-      worker_scenarios="$((worker_scenarios + 1))"
-    fi
+  if [[ "$AUTOSIM_ENABLE_GPU" == "true" ]] && (( gpu_count > 0 )); then
+    gpu_label="$(( (i - 1) % gpu_count ))"
   fi
 
   if [[ "$PARALLEL_SINGLE_RVIZ_ACTIVE" == "true" ]] && (( i > 1 )); then
@@ -501,7 +561,7 @@ launch_worker() {
 
   (
     if [[ "$AUTOSIM_ENABLE_GPU" == "true" ]] && (( gpu_count > 0 )); then
-      gpu_device="$(( (i - 1) % gpu_count ))"
+      gpu_device="$gpu_label"
       export CUDA_VISIBLE_DEVICES="$gpu_device"
       export AUTOSIM_GPU_DEVICE=1
     else
@@ -517,11 +577,20 @@ launch_worker() {
     export GAZEBO_MASTER_URI="http://127.0.0.1:$gazebo_port"
     export GAZEBO_IP="127.0.0.1"
     export AUTOSIM_OUTPUT_ROOT="$OUTPUT_ROOT"
+    export AUTOSIM_SESSION_ROOT="$SESSION_ROOT"
+    export AUTOSIM_SCENARIO_QUEUE_ENABLED="true"
+    export AUTOSIM_SCENARIO_QUEUE_REQUIRED="true"
+    export AUTOSIM_SCENARIO_QUEUE_STATE="$QUEUE_STATE_FILE"
     export AUTOSIM_CLEANUP_SCOPE="instance"
     export AUTOSIM_ENABLE_GPU="$AUTOSIM_ENABLE_GPU"
     export AUTOSIM_ENABLE_PROGRESS_PLOT="$AUTOSIM_ENABLE_PROGRESS_PLOT"
     export AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ="$AUTOSIM_ENABLE_SCENARIO_LIVE_VIZ"
-    export AUTOSIM_USE_GUI="$AUTOSIM_USE_GUI"
+    if [[ -n "$AUTOSIM_USE_GUI" ]]; then
+      export AUTOSIM_USE_GUI="$AUTOSIM_USE_GUI"
+    else
+      unset AUTOSIM_USE_GUI
+    fi
+    export AUTOSIM_FORCE_HEADLESS="$AUTOSIM_FORCE_HEADLESS"
     export AUTOSIM_USE_RVIZ="$worker_use_rviz"
     export AUTOSIM_MULTI_DRONE_COUNT="$AUTOSIM_MULTI_DRONE_COUNT"
     export AUTOSIM_MULTI_DRONE_SPACING_M="$AUTOSIM_MULTI_DRONE_SPACING_M"
@@ -529,8 +598,8 @@ launch_worker() {
     export AUTOSIM_MULTI_DRONE_SPAWN_TAGS="$AUTOSIM_MULTI_DRONE_SPAWN_TAGS"
     export AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST="$AUTOSIM_MULTI_DRONE_USE_WORLD_TAG_AS_FIRST"
     export AUTOSIM_PRIMARY_DRONE_INDEX="$AUTOSIM_PRIMARY_DRONE_INDEX"
-    if [[ -n "$worker_scenarios" ]]; then
-      export AUTOSIM_SCENARIO_COUNT="$worker_scenarios"
+    if [[ -n "$TOTAL_SCENARIOS" ]]; then
+      export AUTOSIM_SCENARIO_COUNT="$TOTAL_SCENARIOS"
     fi
 
     if [[ "$AUTOSIM_FORCE_SOFTWARE_GL" == "1" || "$AUTOSIM_FORCE_SOFTWARE_GL" == "true" || "$AUTOSIM_FORCE_SOFTWARE_GL" == "yes" ]]; then
@@ -545,10 +614,15 @@ launch_worker() {
   printf "%s\t%s\t%s\t%s\t%s\n" "$pid" "$i" "$domain_id" "$gazebo_port" "$log_file" >> "$PID_TABLE"
   LAST_LAUNCHED_PID="$pid"
   LAST_LAUNCHED_WORKER_ID="$i"
-  if [[ -n "$worker_scenarios" ]]; then
-    echo "[AUTOSIM] Worker $i started pid=$pid domain=$domain_id gazebo_port=$gazebo_port gpu=${gpu_device:-none} rviz=$worker_use_rviz scenarios=$worker_scenarios"
+
+  if [[ "$worker_use_rviz" == "1" || "$worker_use_rviz" == "true" || "$worker_use_rviz" == "yes" ]]; then
+    autosim_position_rviz_window "$i" "$total_workers" &
+  fi
+
+  if [[ -n "$TOTAL_SCENARIOS" ]]; then
+    echo "[AUTOSIM] Worker $i started pid=$pid domain=$domain_id gazebo_port=$gazebo_port gpu=$gpu_label rviz=$worker_use_rviz global_scenarios=$TOTAL_SCENARIOS queue=on"
   else
-    echo "[AUTOSIM] Worker $i started pid=$pid domain=$domain_id gazebo_port=$gazebo_port gpu=${gpu_device:-none} rviz=$worker_use_rviz"
+    echo "[AUTOSIM] Worker $i started pid=$pid domain=$domain_id gazebo_port=$gazebo_port gpu=$gpu_label rviz=$worker_use_rviz"
   fi
 }
 
@@ -795,6 +869,28 @@ update_cpu_util_pct() {
   CURRENT_CPU_UTIL_PCT="$smoothed_cpu_util"
 }
 
+queue_unclaimed_remaining() {
+  if [[ -z "$QUEUE_STATE_FILE" || ! -f "$QUEUE_STATE_FILE" ]]; then
+    echo "-1"
+    return
+  fi
+
+  local next_id total_count
+  next_id="$(awk -F= '/^next_id=/ {print $2; exit}' "$QUEUE_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
+  total_count="$(awk -F= '/^total_count=/ {print $2; exit}' "$QUEUE_STATE_FILE" 2>/dev/null | tr -d '[:space:]')"
+
+  if ! [[ "$next_id" =~ ^[0-9]+$ && "$total_count" =~ ^[0-9]+$ ]]; then
+    echo "-1"
+    return
+  fi
+
+  local remain="$((total_count - next_id + 1))"
+  if (( remain < 0 )); then
+    remain=0
+  fi
+  echo "$remain"
+}
+
 compute_target_workers() {
   local active_count="$1"
   local mem_now_kb="$2"
@@ -866,6 +962,9 @@ compute_target_workers() {
   fi
   if [[ -n "$AUTOSIM_MAX_WORKERS" ]] && [[ "$AUTOSIM_MAX_WORKERS" =~ ^[0-9]+$ ]] && (( AUTOSIM_MAX_WORKERS >= 1 )) && (( target > AUTOSIM_MAX_WORKERS )); then
     target="$AUTOSIM_MAX_WORKERS"
+  fi
+  if [[ -n "$TOTAL_SCENARIOS" ]] && [[ "$TOTAL_SCENARIOS" =~ ^[0-9]+$ ]] && (( TOTAL_SCENARIOS >= 1 )) && (( target > TOTAL_SCENARIOS )); then
+    target="$TOTAL_SCENARIOS"
   fi
   printf '%s' "$target"
 }
@@ -963,6 +1062,18 @@ if [[ "$AUTOSIM_DYNAMIC_WORKER_SCALE" == "1" || "$AUTOSIM_DYNAMIC_WORKER_SCALE" 
     update_cpu_util_pct
     mem_now_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
     target_raw="$(compute_target_workers "$active_count" "$mem_now_kb")"
+
+    if [[ -n "$TOTAL_SCENARIOS" ]]; then
+      queue_unclaimed="$(queue_unclaimed_remaining)"
+      if [[ "$queue_unclaimed" =~ ^[0-9]+$ ]]; then
+        # Additional workers are only useful while there are unclaimed queue items.
+        queue_cap="$((active_count + queue_unclaimed))"
+        if (( target_raw > queue_cap )); then
+          target_raw="$queue_cap"
+        fi
+      fi
+    fi
+
     target="$target_raw"
     if (( target > active_count + AUTOSIM_SCALE_STEP )); then
       target="$((active_count + AUTOSIM_SCALE_STEP))"
@@ -1017,8 +1128,6 @@ echo "workers_launched_total=$TOTAL_LAUNCHED" >> "$SESSION_ROOT/session_info.txt
 echo "workers_peak=$PEAK_WORKERS" >> "$SESSION_ROOT/session_info.txt"
 if [[ -n "$TOTAL_SCENARIOS" ]]; then
   echo "scenario_total=$TOTAL_SCENARIOS" >> "$SESSION_ROOT/session_info.txt"
-  echo "scenario_per_worker_base=$SCENARIO_PER_WORKER_BASE" >> "$SESSION_ROOT/session_info.txt"
-  echo "scenario_per_worker_remainder=$SCENARIO_PER_WORKER_REMAINDER" >> "$SESSION_ROOT/session_info.txt"
 fi
 if [[ -n "$WORKER_SUPERVISOR_PID" ]]; then
   echo "worker_supervisor_pid=$WORKER_SUPERVISOR_PID" >> "$SESSION_ROOT/session_info.txt"
@@ -1042,7 +1151,7 @@ if [[ "$AUTOSIM_ENABLE_DOMAIN_BRIDGE" == "1" || "$AUTOSIM_ENABLE_DOMAIN_BRIDGE" 
   (
     export OBSERVE_DOMAIN="$OBSERVE_DOMAIN"
     export AUTOSIM_ROS_LOCALHOST_ONLY="$AUTOSIM_ROS_LOCALHOST_ONLY"
-    "$SCRIPT_DIR/run_autosim_domain_bridge.sh" "$SESSION_ROOT"
+    bash "$SCRIPT_DIR/run_autosim_domain_bridge.sh" "$SESSION_ROOT"
   ) >"$bridge_log" 2>&1 &
   echo "[AUTOSIM] Domain bridge autostart enabled: observe_domain=$OBSERVE_DOMAIN (log: $bridge_log)"
   echo "[AUTOSIM] Observer CLI tip: export ROS_DOMAIN_ID=$OBSERVE_DOMAIN"

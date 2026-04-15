@@ -1,9 +1,10 @@
 #ifndef SJTU_DRONE_DESCRIPTION_WIND_PLUGIN_H
 #define SJTU_DRONE_DESCRIPTION_WIND_PLUGIN_H
 
-#include <gazebo/gazebo.hh>
-#include <gazebo/physics/physics.hh>
-#include <gazebo/common/common.hh>
+#include <gz/sim/System.hh>
+#include <gz/sim/Entity.hh>
+#include <gz/sim/EntityComponentManager.hh>
+#include <gz/transport/Node.hh>
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
@@ -15,29 +16,44 @@
 
 #include <memory>
 #include <mutex>
+#include <string>
 
 namespace sjtu_drone_description
 {
 
-class WindPlugin : public gazebo::WorldPlugin
+class WindPlugin : public gz::sim::System,
+                   public gz::sim::ISystemConfigure,
+                   public gz::sim::ISystemPreUpdate
 {
 public:
   WindPlugin();
-  virtual ~WindPlugin();
+  ~WindPlugin() override;
 
-  void Load(gazebo::physics::WorldPtr _world, sdf::ElementPtr _sdf) override;
+  void Configure(const gz::sim::Entity &_entity,
+                 const std::shared_ptr<const sdf::Element> &_sdf,
+                 gz::sim::EntityComponentManager &_ecm,
+                 gz::sim::EventManager &_eventMgr) override;
+
+  void PreUpdate(const gz::sim::UpdateInfo &_info,
+                 gz::sim::EntityComponentManager &_ecm) override;
 
 private:
-  void OnUpdate();
+  void PublishWindCommandToGazebo();
+  void PublishWindCondition(double simSec);
 
-  gazebo::event::ConnectionPtr updateConnection_;
-  gazebo::physics::WorldPtr world_;
+  gz::sim::Entity world_entity_{gz::sim::kNullEntity};
+  std::string world_name_;
+  std::string wind_topic_world_;
+  std::string wind_topic_global_;
+  gz::transport::Node gz_node_;
+  gz::transport::Node::Publisher gz_wind_pub_world_;
+  gz::transport::Node::Publisher gz_wind_pub_global_;
 
   double wind_speed_;        // m/s
   double wind_direction_;    // degrees, 0 = +X
-  double area_;              // m^2 cross-section to scale force
-  double force_coeff_;       // arbitrary coefficient to scale force
   double publish_rate_hz_;
+  double last_pub_sim_sec_{-1.0};
+  double last_cmd_sim_sec_{-1.0};
 
   // ROS publisher
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_;
@@ -50,7 +66,6 @@ private:
   void SetWindCb(const std::shared_ptr<rmw_request_id_t> request_header,
                  const std::shared_ptr<sjtu_drone_interfaces::srv::SetWind::Request> request,
                  std::shared_ptr<sjtu_drone_interfaces::srv::SetWind::Response> response);
-  rclcpp::Time last_pub_time_;
 
   std::mutex mutex_;
   // executor and thread to allow rclcpp callbacks to run inside Gazebo plugin

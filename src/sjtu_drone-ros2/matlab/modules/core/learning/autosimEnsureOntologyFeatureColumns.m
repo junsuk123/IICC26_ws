@@ -12,6 +12,8 @@ required = [ ...
     "onto_wind_body_risk", "onto_wind_accel_risk", "onto_wind_dir_change_risk" ...
 ];
 
+semantic8 = ["r_body", "r_gust", "s_tilt", "s_descent", "s_lateral", "s_visual", "s_align", "s_context"];
+
 vars = string(T.Properties.VariableNames);
 
 n = height(T);
@@ -89,6 +91,27 @@ T.onto_tag_observation = autosimMerge01Column(T, 'onto_tag_observation', ontoTag
 T.onto_wind_body_risk = autosimMerge01Column(T, 'onto_wind_body_risk', autosimClip01(windBody));
 T.onto_wind_accel_risk = autosimMerge01Column(T, 'onto_wind_accel_risk', autosimClip01(windAccel));
 T.onto_wind_dir_change_risk = autosimMerge01Column(T, 'onto_wind_dir_change_risk', autosimClip01(windDirChange));
+
+rBody = autosimMerge01Column(T, 'r_body', autosimClip01(windBody));
+rGust = autosimMerge01Column(T, 'r_gust', autosimClip01(windAccel));
+sTilt = autosimClip01(1.0 - autosimClip01((rollAbs + pitchAbs) / max(1e-6, 2.0 * attMaxRef)));
+sDescent = autosimClip01(1.0 - autosimClip01(vzAbs / max(1e-6, vzRef)));
+sLateral = autosimClip01(1.0 - autosimClip01(0.5 * autosimClip01(windVel / max(1e-6, windMaxRef)) + 0.5 * autosimClip01(stdVz / max(1e-6, stdVzRef))));
+sVisual = autosimMerge01Column(T, 's_visual', visualEnc);
+sAlign = autosimMerge01Column(T, 's_align', alignEnc);
+
+ctxAlpha = autosimSafeCfgScalar(cfg, {'ontology', 'context_alpha'}, 0.5);
+ctxBeta = autosimSafeCfgScalar(cfg, {'ontology', 'context_beta'}, 0.5);
+sContext = autosimClip01(min(1.0, ctxAlpha * rGust .* (1.0 - sVisual) + ctxBeta * rBody .* (1.0 - sAlign)));
+
+T.r_body = autosimMerge01Column(T, 'r_body', rBody);
+T.r_gust = autosimMerge01Column(T, 'r_gust', rGust);
+T.s_tilt = autosimMerge01Column(T, 's_tilt', sTilt);
+T.s_descent = autosimMerge01Column(T, 's_descent', sDescent);
+T.s_lateral = autosimMerge01Column(T, 's_lateral', sLateral);
+T.s_visual = autosimMerge01Column(T, 's_visual', sVisual);
+T.s_align = autosimMerge01Column(T, 's_align', sAlign);
+T.s_context = autosimMerge01Column(T, 's_context', sContext);
 end
 
 function y = autosimMerge01Column(T, name, computed)

@@ -49,6 +49,7 @@ setup(
             'spawn_apriltag = sjtu_drone_bringup.spawn_apriltag:main',
             'apriltag_state_bridge = sjtu_drone_bringup.apriltag_state_bridge:main',
             'trajectory_guidance_marker_bridge = sjtu_drone_bringup.trajectory_guidance_marker_bridge:main',
+            'landing_pad_marker_publisher = sjtu_drone_bringup.landing_pad_marker_publisher:main',
         ],
     },
 )

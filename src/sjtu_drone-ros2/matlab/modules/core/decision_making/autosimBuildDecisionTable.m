@@ -41,6 +41,20 @@ function dTbl = autosimBuildDecisionTable(summaryTbl, decisionField)
         predValid = true(n, 1);
     end
 
+    hasExplicitGroundTruth = ismember('gt_safe_to_land', summaryTbl.Properties.VariableNames) || ...
+        ismember('label', summaryTbl.Properties.VariableNames);
+
+    executionValid = true(n, 1);
+    % For offline validation datasets, labels already encode safe/unsafe outcomes
+    % and many unsafe samples naturally have success==0. Do not discard them.
+    if ~hasExplicitGroundTruth && ismember('success', summaryTbl.Properties.VariableNames)
+        executionValid = executionValid & logical(summaryTbl.success);
+    end
+    if ismember('failure_reason', summaryTbl.Properties.VariableNames)
+        fr = lower(strtrim(string(summaryTbl.failure_reason)));
+        executionValid = executionValid & ~(fr == "runtime_exception" | fr == "launch_failure" | fr == "user_interrupt" | fr == "not_run");
+    end
+
     interventionCase = false(n, 1);
     if ismember('target_case', summaryTbl.Properties.VariableNames)
         tc = string(summaryTbl.target_case);
@@ -57,8 +71,8 @@ function dTbl = autosimBuildDecisionTable(summaryTbl, decisionField)
     dTbl.pred_land = predLand;
     dTbl.pred_hover = predHover;
     dTbl.intervention_case = interventionCase;
-    dTbl.valid = gtValid & predValid & ~interventionCase;
-    dTbl.valid_raw = gtValid & predValid;
+    dTbl.valid = gtValid & predValid & executionValid & ~interventionCase;
+    dTbl.valid_raw = gtValid & predValid & executionValid;
 end
 
 
